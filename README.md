@@ -6,23 +6,21 @@ This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend
 
 ## 5-minute integration
 
+### Minimum required (6 fields)
+
 ```html
 <!-- 1. Add a mount container anywhere on the page -->
 <div id="getroomly-plugin-container"></div>
 
-<!-- 2. Configure before the script tag runs (all six fields below are required) -->
+<!-- 2. Configure before the script tag runs -->
 <script>
   window.GetRoomlyEmbedConfig = {
-    apiKey:       'grm_pub_YOUR_KEY',
+    apiKey:       'grm_pub_YOUR_KEY',                         // from GetRoomly
     productImage: 'https://cdn.example.com/products/sofa-12345.jpg',
     sku:          'sofa-12345',
     productName:  'Modular sofa',
-    category:     'sofas',
-    measurements: { width: 220, depth: 95, height: 80 },  // cm
-    // optional
-    productPrice: 89900,           // in cents
-    language:     'en',
-    buttonText:   'See it in your room',
+    category:     'sofas',                                    // see "category" notes below
+    measurements: { width: 220, depth: 95, height: 80 },      // cm
   };
 </script>
 
@@ -30,9 +28,47 @@ This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend
 <script type="module" src="https://plugin.getroomly.ai/plugin.js"></script>
 ```
 
-The plugin renders a trigger button inside `#getroomly-plugin-container`. When clicked, it opens a modal where the user uploads a room photo, picks a point on it, and gets the Gemini render back.
+If any required field is missing, the mount container renders a clear init-time error (`"Partner API key is required in GetRoomlyEmbedConfig.apiKey"`, etc.) and the modal never opens. Real partners always pass these six — there is no silent fallback.
 
-Any missing required field surfaces a clear init-time error in the mount container — the modal won't open until the config is valid. See **Authentication** below before going to production.
+### With common optional fields
+
+```html
+<script>
+  window.GetRoomlyEmbedConfig = {
+    // required
+    apiKey:       'grm_pub_YOUR_KEY',
+    productImage: 'https://cdn.example.com/products/sofa-12345.jpg',
+    sku:          'sofa-12345',
+    productName:  'Modular sofa',
+    category:     'sofas',
+    measurements: { width: 220, depth: 95, height: 80 },
+
+    // optional UI
+    productPrice: 89900,                                      // price in cents
+    language:     'en',                                       // 'en' | 'sv'
+    buttonText:   'See it in your room',
+    hideButton:   false,                                      // hide built-in trigger
+    styling:      { buttonColor: '#0d9488', borderRadius: '8px' },
+
+    // optional integrations
+    addToCartSelector: '#add-to-cart-btn',
+    wishlistSelector:  '#wishlist-btn',
+    isFavorite:        false,
+
+    // optional in-modal action toggles (all default true)
+    buttons: { addToBasket: true, favorite: true, feedback: true, showOriginal: true, saveShare: true },
+
+    // optional callbacks (alternative to listening for events)
+    callbacks: {
+      onModalOpen:      () => {},
+      onImageGenerated: (imageUrl) => {},
+      onError:          (err) => console.error(err),
+    },
+  };
+</script>
+```
+
+The plugin renders a trigger button inside `#getroomly-plugin-container`. When clicked, it opens a modal where the user uploads a room photo, picks a point on it, and gets the Gemini render back. See **Authentication** below before going to production.
 
 ## Authentication — read this first
 
@@ -238,7 +274,7 @@ Vite inlines `VITE_*` vars at build time. The runtime values come from `window.G
 | Var | Required | Notes |
 |---|---|---|
 | `VITE_BACKEND_URL` | yes | Where the plugin POSTs `/v1/generate` |
-| `VITE_PARTNER_API_KEY` | dev only | Convenience for local dev; in production the host page provides the key via `GetRoomlyEmbedConfig.apiKey` |
+| `VITE_GETROOMLY_API_KEY` | dev only | Convenience for local plugin dev — when set, the dev demo at `npm run dev` uses it as the partner key. **Never set in production builds.** The published plugin bundle has no fallback key; production host pages must always pass `window.GetRoomlyEmbedConfig.apiKey` themselves. |
 
 ## Architecture
 
