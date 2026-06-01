@@ -19,6 +19,14 @@ export function useEmbedConfig() {
         return;
       }
 
+      // apiKey is required. A `VITE_GETROOMLY_API_KEY` build-time env can satisfy this
+      // for local plugin development, but the published bundle has no key — host pages
+      // must always provide one via window.GetRoomlyEmbedConfig.apiKey.
+      if (!embedConfig.apiKey && !AppConfig.ai.defaultApiKey) {
+        setError('Partner API key is required in GetRoomlyEmbedConfig.apiKey');
+        return;
+      }
+
       if (!embedConfig.productImage) {
         setError('Product image URL is required in GetRoomlyEmbedConfig.productImage');
         return;
@@ -26,6 +34,22 @@ export function useEmbedConfig() {
 
       if (!embedConfig.sku) {
         setError('Product SKU is required in GetRoomlyEmbedConfig.sku');
+        return;
+      }
+
+      if (!embedConfig.productName) {
+        setError('Product name is required in GetRoomlyEmbedConfig.productName');
+        return;
+      }
+
+      if (!embedConfig.category) {
+        setError('Product category is required in GetRoomlyEmbedConfig.category');
+        return;
+      }
+
+      const m = embedConfig.measurements;
+      if (!m || typeof m.width !== 'number' || typeof m.depth !== 'number' || typeof m.height !== 'number') {
+        setError('Product measurements {width, depth, height} in cm are required in GetRoomlyEmbedConfig.measurements');
         return;
       }
 

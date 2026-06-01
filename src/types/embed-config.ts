@@ -11,13 +11,36 @@ export interface ProductMeasurements {
   height: number;
 }
 
+/**
+ * Categories that unlock special backend rendering behavior. Any category
+ * string is accepted — these are just the ones with dedicated handling:
+ *  - `carpets` (or any string containing "carpet") → carpet-replacement prompt
+ *  - small-accessory tokens (`lamp`, `vase`, `decor`, `lighting`, `candle`,
+ *    `plant`, `pot`, `bowl`, `accessory`) → size-aware furniture prompt
+ *
+ * Anything else (e.g. `sofas`, `chairs`, `tables`, `beds`, `armchairs`,
+ * `ottomans`, custom partner taxonomies) goes through the general
+ * furniture-placement prompt.
+ */
+export const KNOWN_CATEGORIES = [
+  'carpets',
+  'sofas',
+  'chairs',
+  'tables',
+  'beds',
+  'tv-benches',
+  'lights',
+  'accessories',
+  'decor',
+] as const;
+
 export interface EmbedConfig {
   /**
-   * GetRoomly partner API key (recommended).
-   * Format: `grm_pub_<48 hex chars>`. If omitted, falls back to the bundled demo key
-   * (only usable from whitelisted dev origins). Production partners must provide their own.
+   * GetRoomly partner API key (required).
+   * Format: `grm_pub_<48 hex chars>`. Issued via the backend `CreatePartner` tool.
+   * The published plugin bundle ships with no key — every host page must provide one.
    */
-  apiKey?: string;
+  apiKey: string;
 
   /** Product image URL (required) */
   productImage: string;
@@ -25,20 +48,20 @@ export interface EmbedConfig {
   /** Product SKU/ID (required) */
   sku: string;
 
-  /** Product name (optional) */
-  productName?: string;
+  /** Product display name (required) */
+  productName: string;
+
+  /** Product category (required) — free-form string; see KNOWN_CATEGORIES for ones with special backend handling */
+  category: string;
+
+  /** Product dimensions in cm (required) */
+  measurements: ProductMeasurements;
 
   /** Product price in cents (optional) */
   productPrice?: number;
 
-  /** Product category (optional) */
-  category?: string;
-
   /** UI language */
   language?: 'en' | 'sv';
-
-  /** Product dimensions in cm (optional) */
-  measurements?: ProductMeasurements;
 
   /** Target DOM selector for "Add to Cart" clicks (optional) */
   addToCartSelector?: string;

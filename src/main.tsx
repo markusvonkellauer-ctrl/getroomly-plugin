@@ -4,8 +4,10 @@ import './index.css'
 import App from './App'
 import { AppConfig } from './config/app-config'
 
-// Set default config for testing if not provided
+// Dev demo config for `npm run dev`. Host pages in production supply their own.
+// apiKey is read from VITE_GETROOMLY_API_KEY via AppConfig.ai.defaultApiKey.
 window.GetRoomlyEmbedConfig = window.GetRoomlyEmbedConfig || {
+  apiKey: AppConfig.ai.defaultApiKey ?? '',
   productImage: AppConfig.demo.chairImageUrl,
   sku: "CHAIR-SCAND-001",
   productName: "Modern Scandinavian Armchair",

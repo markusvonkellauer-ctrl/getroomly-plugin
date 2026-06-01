@@ -137,11 +137,11 @@ function App() {
               </button>
 
               <RoomVisualizationFlow
-                productImages={config.productImage ? [config.productImage] : []}
+                productImages={[config.productImage]}
                 productId={config.sku}
-                category={config.category || 'Furniture'}
-                productName={config.productName || 'Furniture Item'}
-                productPrice={config.productPrice || 0}
+                category={config.category}
+                productName={config.productName}
+                productPrice={config.productPrice ?? 0}
                 measurements={config.measurements}
                 showSteps={config.showSteps}
                 config={config}

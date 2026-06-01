@@ -46,9 +46,11 @@ export const AppConfig = {
 
   // AI Service Configuration
   ai: {
-    // Demo partner API key for plugin development (origin-locked to localhost + plugin.getroomly.ai)
-    // Production partners get their own key via backend CLI - they override via window.GetRoomlyEmbedConfig.apiKey
-    defaultApiKey: getEnvVar('VITE_GETROOMLY_API_KEY', 'grm_pub_fd6c7150cc297be6fc73db3e1edd3b3ff49afc4a80819743'),
+    // Dev-only convenience: when running the plugin's own demo (`npm run dev`), a `.env`
+    // can set VITE_GETROOMLY_API_KEY so the local demo page works without typing the key.
+    // The published bundle has no key — every host page must pass its own via
+    // window.GetRoomlyEmbedConfig.apiKey.
+    defaultApiKey: getEnvVar('VITE_GETROOMLY_API_KEY'),
     fallbackImageUrl: getEnvVar('VITE_FALLBACK_IMAGE_URL', 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800'),
     // Image compression settings before sending to backend
     maxImageDimension: getNumberEnv('VITE_MAX_IMAGE_DIMENSION', 1600),
@@ -140,9 +142,6 @@ export const AppConfig = {
 
 // Validate required configuration in production
 if (AppConfig.isProduction) {
-  if (!AppConfig.ai.defaultApiKey) {
-    console.error('❌ Missing required configuration: GetRoomly Partner API Key');
-  }
   if (!AppConfig.api.baseUrl) {
     console.error('❌ Missing required configuration: GetRoomly Backend Base URL');
   }

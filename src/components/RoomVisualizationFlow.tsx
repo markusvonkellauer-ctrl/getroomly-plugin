@@ -18,7 +18,7 @@ interface RoomVisualizationFlowProps {
   category: string;
   productName: string;
   productPrice: number;
-  measurements?: {
+  measurements: {
     width: number;
     depth: number;
     height: number;

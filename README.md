@@ -10,18 +10,19 @@ This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend
 <!-- 1. Add a mount container anywhere on the page -->
 <div id="getroomly-plugin-container"></div>
 
-<!-- 2. Configure before the script tag runs -->
+<!-- 2. Configure before the script tag runs (all six fields below are required) -->
 <script>
   window.GetRoomlyEmbedConfig = {
-    apiKey: 'grm_pub_YOUR_KEY',
+    apiKey:       'grm_pub_YOUR_KEY',
     productImage: 'https://cdn.example.com/products/sofa-12345.jpg',
-    sku: 'sofa-12345',
-    productName: 'Modular sofa',
-    productPrice: 89900,           // in cents
-    category: 'sofas',
+    sku:          'sofa-12345',
+    productName:  'Modular sofa',
+    category:     'sofas',
     measurements: { width: 220, depth: 95, height: 80 },  // cm
-    language: 'en',
-    buttonText: 'See it in your room',
+    // optional
+    productPrice: 89900,           // in cents
+    language:     'en',
+    buttonText:   'See it in your room',
   };
 </script>
 
@@ -31,7 +32,7 @@ This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend
 
 The plugin renders a trigger button inside `#getroomly-plugin-container`. When clicked, it opens a modal where the user uploads a room photo, picks a point on it, and gets the Gemini render back.
 
-See **Authentication** below before going to production.
+Any missing required field surfaces a clear init-time error in the mount container — the modal won't open until the config is valid. See **Authentication** below before going to production.
 
 ## Authentication — read this first
 
@@ -59,14 +60,14 @@ Full shape (defined in `src/types/embed-config.ts`):
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `apiKey` | `string` | recommended | `grm_pub_...`. If omitted, falls back to a dev demo key with restricted origins. |
+| `apiKey` | `string` | **yes** | `grm_pub_...`. Issued via the backend `CreatePartner` tool. The published plugin bundle ships with no fallback key — every host page must provide one. |
 | `productImage` | `string` | **yes** | Public URL of the product image |
 | `sku` | `string` | **yes** | Product SKU / ID |
-| `productName` | `string` | no | Display name |
+| `productName` | `string` | **yes** | Display name shown in the modal |
+| `category` | `string` | **yes** | Free-form. The backend uses it to pick the render prompt — `carpets` (or any string containing `carpet`) triggers the carpet-replacement path; small-accessory tokens (`lamp`, `vase`, `decor`, `lighting`, `candle`, `plant`, `pot`, `bowl`, `accessory`) get size-aware copy; everything else (`sofas`, `chairs`, `tables`, `beds`, custom taxonomies, ...) goes through the general furniture prompt |
+| `measurements` | `{ width, depth, height }` | **yes** | Product dimensions in cm — backend rejects placement requests without these |
 | `productPrice` | `number` | no | Price in cents |
-| `category` | `string` | no | e.g. `rugs`, `sofas`, `tables` |
 | `language` | `'en' \| 'sv'` | no | UI language (default `en`) |
-| `measurements` | `{ width, depth, height }` | no | Product dimensions in cm |
 | `addToCartSelector` | `string` | no | CSS selector the plugin clicks when the user hits "Add to cart" inside the modal |
 | `wishlistSelector` | `string` | no | Same, for "Wishlist" |
 | `debugCoordinates` | `boolean` | no | Show a coordinate debug overlay (dev only) |
