@@ -7,40 +7,192 @@ This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend
 ## 5-minute integration
 
 ```html
-<script type="module" src="https://plugin.getroomly.ai/plugin.js"></script>
+<!-- 1. Add a mount container anywhere on the page -->
+<div id="getroomly-plugin-container"></div>
 
-<div id="getroomly-mount"
-     data-api-key="grm_pub_YOUR_KEY"
-     data-backend-url="https://api.getroomly.ai"
-     data-product-id="rug-12345"
-     data-category="rugs"></div>
+<!-- 2. Configure before the script tag runs -->
+<script>
+  window.GetRoomlyEmbedConfig = {
+    apiKey: 'grm_pub_YOUR_KEY',
+    productImage: 'https://cdn.example.com/products/sofa-12345.jpg',
+    sku: 'sofa-12345',
+    productName: 'Modular sofa',
+    productPrice: 89900,           // in cents
+    category: 'sofas',
+    measurements: { width: 220, depth: 95, height: 80 },  // cm
+    language: 'en',
+    buttonText: 'See it in your room',
+  };
+</script>
+
+<!-- 3. Load the plugin (auto-mounts when DOM is ready) -->
+<script type="module" src="https://plugin.getroomly.ai/plugin.js"></script>
 ```
 
-The plugin auto-mounts into any element with the data attributes above and renders inside a shadow DOM. See **Authentication** below before you ship.
+The plugin renders a trigger button inside `#getroomly-plugin-container`. When clicked, it opens a modal where the user uploads a room photo, picks a point on it, and gets the Gemini render back.
+
+See **Authentication** below before going to production.
 
 ## Authentication — read this first
 
-You need two things from GetRoomly before you can use the plugin in production:
+You need two things from GetRoomly before going live:
 
-1. **A partner API key** (`grm_pub_...`) — issued by GetRoomly. Treat it like a public API key: it lives in your HTML, but the backend enforces per-domain origin checks so a leaked key can only be abused from approved origins.
+1. **A partner API key** (`grm_pub_...`) — set as `window.GetRoomlyEmbedConfig.apiKey`. Treat it like a public API key: it lives in your HTML, but the backend enforces per-domain origin checks so a leaked key can only be abused from approved origins.
 2. **Your domain on the partner allowlist.** The backend rejects any request whose `Origin` header isn't on your partner record's `allowedOrigins`. Subdomains are covered automatically — if `example.com` is on the list, `shop.example.com` works too.
 
-To get added, ping GetRoomly with your domain(s). For ops detail on the allowlist mechanism, see the backend README.
+To get added, contact GetRoomly with the list of domains you'll embed from.
 
 ### Error semantics
 
-The plugin surfaces backend errors to the host page via callbacks (or events — see the integration API below):
+The plugin surfaces backend errors via the `onError` callback (see below). Status codes:
 
 | Status | Code | What it means | What to do |
 |---|---|---|---|
-| 401 | `unauthorized` | Bad / missing API key | Check `data-api-key` |
+| 401 | `unauthorized` | Bad or missing `apiKey` | Check `GetRoomlyEmbedConfig.apiKey` |
 | 403 | `forbidden` | Your origin isn't on the allowlist for this key | Contact GetRoomly to add your domain |
 | 429 | `quotaExceeded` | Daily render cap exceeded for this partner | Resets at next UTC midnight; contact GetRoomly to raise the cap |
-| 503 | `tooBusy` | Upstream model returned no image (often a content refusal) | Retry once or two times; if persistent, the specific (room photo + product) combo may need a different angle |
+| 503 | `tooBusy` | Upstream model returned no image (often a content refusal) | Retry once or twice; if persistent, the specific (room photo + product) combo may need a different angle |
+
+## Configuration: `window.GetRoomlyEmbedConfig`
+
+Full shape (defined in `src/types/embed-config.ts`):
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `apiKey` | `string` | recommended | `grm_pub_...`. If omitted, falls back to a dev demo key with restricted origins. |
+| `productImage` | `string` | **yes** | Public URL of the product image |
+| `sku` | `string` | **yes** | Product SKU / ID |
+| `productName` | `string` | no | Display name |
+| `productPrice` | `number` | no | Price in cents |
+| `category` | `string` | no | e.g. `rugs`, `sofas`, `tables` |
+| `language` | `'en' \| 'sv'` | no | UI language (default `en`) |
+| `measurements` | `{ width, depth, height }` | no | Product dimensions in cm |
+| `addToCartSelector` | `string` | no | CSS selector the plugin clicks when the user hits "Add to cart" inside the modal |
+| `wishlistSelector` | `string` | no | Same, for "Wishlist" |
+| `debugCoordinates` | `boolean` | no | Show a coordinate debug overlay (dev only) |
+| `showSteps` | `boolean` | no | Show steps progress bar (default `true`) |
+| `hideButton` | `boolean` | no | Hide the built-in trigger button (use when you control opening via `window.GetRoomly.open()`) |
+| `isFavorite` | `boolean` | no | Initial favorite/wishlist state |
+| `buttonText` | `string` | no | Override the trigger button label |
+| `buttons` | `object` | no | Toggle in-modal action buttons individually (see below) |
+| `styling` | `object` | no | `buttonColor`, `buttonTextColor`, `borderRadius` |
+| `callbacks` | `object` | no | Function callbacks for plugin events (see below) |
+
+### `buttons` — toggle in-modal actions
+
+```js
+buttons: {
+  addToBasket:  true,   // default
+  favorite:     true,   // heart / wishlist
+  feedback:     true,   // thumbs up/down
+  showOriginal: true,
+  saveShare:    true,
+}
+```
+
+### `styling` — light theming
+
+```js
+styling: {
+  buttonColor:     '#0d9488',
+  buttonTextColor: '#ffffff',
+  borderRadius:    '8px',
+}
+```
+
+## JavaScript control API: `window.GetRoomly`
+
+Once the plugin script loads it attaches a global with four methods:
+
+```js
+window.GetRoomly.open();   // open the modal programmatically
+window.GetRoomly.close();  // close the modal
+window.GetRoomly.isOpen(); // -> boolean
+window.GetRoomly.init();   // re-init (mounts plugin if container exists)
+```
+
+Useful when you want to trigger the plugin from your own button. Pair with `hideButton: true` to hide the built-in trigger.
+
+## Listening to events
+
+The plugin dispatches `CustomEvent`s on `window`. The host page can listen and react.
+
+### Events dispatched by the plugin
+
+| Event | `detail` payload | When |
+|---|---|---|
+| `getroomly-open-modal` | — | Modal opens |
+| `getroomly-close-modal` | — | Modal closes (user action or `GetRoomly.close()`) |
+| `getroomly-modal-closed` | — | Fired alongside `getroomly-close-modal` (legacy alias) |
+| `getroomly-add-to-cart` | `{ sku, productId, imageUrl }` | User clicks "Add to cart" in the modal |
+| `getroomly-add-to-wishlist` | `{ sku, productId, imageUrl }` | User clicks the heart/wishlist button |
+| `getroomly-like` | `{ sku, productId, imageUrl }` | Thumbs-up feedback |
+| `getroomly-dislike` | `{ sku, productId, imageUrl }` | Thumbs-down feedback |
+| `getroomly-check-favorite` | `{ sku }` | Plugin asks the host page whether this SKU is favorited — respond with `getroomly-set-favorite` |
+
+### Events the plugin listens for
+
+| Event | `detail` payload | What it does |
+|---|---|---|
+| `getroomly-open-modal` | — | Opens the modal (same as `GetRoomly.open()`) |
+| `getroomly-close-modal` | — | Closes the modal |
+| `getroomly-set-favorite` | `{ sku, isFavorite }` | Reply to `getroomly-check-favorite`; updates the heart state |
+
+### Example: hooking your cart and wishlist
+
+```js
+window.addEventListener('getroomly-add-to-cart', (e) => {
+  console.log('Adding to cart:', e.detail.sku);
+  yourCart.add(e.detail.sku, { imageUrl: e.detail.imageUrl });
+});
+
+window.addEventListener('getroomly-add-to-wishlist', (e) => {
+  yourWishlist.toggle(e.detail.sku);
+});
+
+window.addEventListener('getroomly-check-favorite', (e) => {
+  const isFav = yourWishlist.has(e.detail.sku);
+  window.dispatchEvent(
+    new CustomEvent('getroomly-set-favorite', {
+      detail: { sku: e.detail.sku, isFavorite: isFav },
+    })
+  );
+});
+```
+
+## Callback functions (alternative to events)
+
+If you prefer plain function references over events, set them on `GetRoomlyEmbedConfig.callbacks`:
+
+```js
+window.GetRoomlyEmbedConfig = {
+  ...,
+  callbacks: {
+    onModalOpen:       () => console.log('opened'),
+    onModalClose:      () => console.log('closed'),
+    onImageGenerated:  (imageUrl) => console.log('rendered', imageUrl),
+    onError:           (error) => alert(error),
+
+    // Result-screen action callbacks
+    onAddToBasket:  (imageUrl, productId) => { ... },
+    onFavorite:     (imageUrl, productId) => { ... },
+    onLike:         (imageUrl, productId) => { ... },
+    onDislike:      (imageUrl, productId) => { ... },
+    onShowOriginal: (originalImage, productId) => { ... },
+    onSaveShare:    (imageUrl, productId) => { ... },
+
+    // Legacy convenience
+    onAddToCart:  () => { ... },
+    onWishlist:   () => { ... },
+  },
+};
+```
+
+Use whichever model is more convenient: events are decoupled and work well when multiple parts of your page need to react; callbacks keep all the logic in one config object.
 
 ## CORS / cross-origin
 
-The plugin is served with `Access-Control-Allow-Origin: *` so any partner site can embed it. The backend API itself uses a CORS allowlist — your domain must be there too, in addition to the per-partner `allowedOrigins`.
+The plugin file (`plugin.js`) is served with `Access-Control-Allow-Origin: *` so any partner site can embed it. The backend API uses a separate CORS allowlist — your domain must also be in the backend's `CORS_ALLOWED_ORIGINS` env var, in addition to the per-partner `allowedOrigins`.
 
 ## Local development
 
@@ -64,7 +216,7 @@ Demo page at [http://localhost:5173](http://localhost:5173).
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Vite dev server with HMR (root index.html loads the plugin entry) |
+| `npm run dev` | Vite dev server with HMR (root `index.html` loads the plugin entry) |
 | `npm run build` | Library build → `dist/plugin.js` (ES module, ~525 KB) |
 | `npm run preview` | Serve the built artifact locally |
 | `npm run lint` | ESLint |
@@ -73,25 +225,25 @@ Demo page at [http://localhost:5173](http://localhost:5173).
 
 `vite.config.ts` runs in **library mode** with `src/shadow-entry.tsx` as the entry point. Output is a single ES-module file (`dist/plugin.js`) that is what partners ultimately load.
 
-The production Docker image (see `Dockerfile`) wraps that artifact in nginx with:
+The production Docker image wraps that artifact in nginx with:
 - CORS headers (`Access-Control-Allow-Origin: *`) and an OPTIONS preflight short-circuit
 - A demo `index.html` at `/` so you can sanity-check a deploy by opening the root URL
 - A `/health` endpoint for container healthchecks
 
 ## Environment variables
 
-Vite inlines `VITE_*` vars at build time:
+Vite inlines `VITE_*` vars at build time. The runtime values come from `window.GetRoomlyEmbedConfig`, so the `.env` is mostly for local dev:
 
 | Var | Required | Notes |
 |---|---|---|
 | `VITE_BACKEND_URL` | yes | Where the plugin POSTs `/v1/generate` |
-| `VITE_PARTNER_API_KEY` | dev only | Convenience for local dev; in production the host page provides the key via data-attribute |
+| `VITE_PARTNER_API_KEY` | dev only | Convenience for local dev; in production the host page provides the key via `GetRoomlyEmbedConfig.apiKey` |
 
 ## Architecture
 
 Three pieces:
 
-1. **Shadow-DOM mount** — the plugin attaches a shadow root inside the target element so its CSS doesn't bleed into (or get clobbered by) the host page's styles. See [GET-23](https://linear.app/getroomly/issue/GET-23).
+1. **Shadow-DOM mount** — the plugin attaches a shadow root inside `#getroomly-plugin-container` so its CSS doesn't bleed into (or get clobbered by) the host page's styles. See [GET-23](https://linear.app/getroomly/issue/GET-23).
 2. **Room upload + click capture** — user uploads a room photo, clicks the point where they want the product placed. Coordinates are sent along with the product info.
 3. **API call** — POST to `/v1/generate` with the room image, product image, click coordinates, and product metadata. The response is a WebP render that's drawn back into the shadow DOM.
 
