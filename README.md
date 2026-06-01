@@ -2,7 +2,7 @@
 
 Drop-in JavaScript widget that lets your customers preview products in a photo of their own room. Built as an ES module loaded with a single `<script>` tag and mounted inside a shadow DOM so it can't conflict with your existing styles.
 
-This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend**](https://github.com/markusvonkellauer-ctrl/GetRoomly); the showcase demo is [**GetRoomly Frontend**](https://github.com/markusvonkellauer-ctrl/GetRoomly).
+This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend**](https://github.com/markusvonkellauer-ctrl/GetRoomly-Backend); the showcase demo is [**GetRoomly Frontend**](https://github.com/markusvonkellauer-ctrl/GetRoomly).
 
 ## 5-minute integration
 
@@ -107,7 +107,7 @@ Full shape (defined in `src/types/embed-config.ts`):
 | `addToCartSelector` | `string` | no | CSS selector the plugin clicks when the user hits "Add to cart" inside the modal |
 | `wishlistSelector` | `string` | no | Same, for "Wishlist" |
 | `debugCoordinates` | `boolean` | no | Show a coordinate debug overlay (dev only) |
-| `showSteps` | `boolean` | no | Show steps progress bar (default `true`) |
+| `showSteps` | `boolean` | no | Show steps progress bar (default `false`) |
 | `hideButton` | `boolean` | no | Hide the built-in trigger button (use when you control opening via `window.GetRoomly.open()`) |
 | `isFavorite` | `boolean` | no | Initial favorite/wishlist state |
 | `buttonText` | `string` | no | Override the trigger button label |
@@ -161,11 +161,11 @@ The plugin dispatches `CustomEvent`s on `window`. The host page can listen and r
 | `getroomly-open-modal` | — | Modal opens |
 | `getroomly-close-modal` | — | Modal closes (user action or `GetRoomly.close()`) |
 | `getroomly-modal-closed` | — | Fired alongside `getroomly-close-modal` (legacy alias) |
-| `getroomly-add-to-cart` | `{ sku, productId, imageUrl }` | User clicks "Add to cart" in the modal |
-| `getroomly-add-to-wishlist` | `{ sku, productId, imageUrl }` | User clicks the heart/wishlist button |
-| `getroomly-like` | `{ sku, productId, imageUrl }` | Thumbs-up feedback |
-| `getroomly-dislike` | `{ sku, productId, imageUrl }` | Thumbs-down feedback |
-| `getroomly-check-favorite` | `{ sku }` | Plugin asks the host page whether this SKU is favorited — respond with `getroomly-set-favorite` |
+| `getroomly-add-to-cart` | `{ productId, imageUrl, productName, productPrice, product: { id, name, price, category } }` | User clicks "Add to cart" in the modal |
+| `getroomly-add-to-wishlist` | `{ productId, isFavorite, isCurrentlyWishlisted, imageUrl }` | User clicks the heart/wishlist button |
+| `getroomly-like` | `{ imageUrl, productId }` | Thumbs-up feedback |
+| `getroomly-dislike` | `{ imageUrl, productId }` | Thumbs-down feedback |
+| `getroomly-check-favorite` | `{ productId }` | Plugin asks the host page whether this product is favorited — respond with `getroomly-set-favorite` |
 
 ### Events the plugin listens for
 
@@ -173,29 +173,31 @@ The plugin dispatches `CustomEvent`s on `window`. The host page can listen and r
 |---|---|---|
 | `getroomly-open-modal` | — | Opens the modal (same as `GetRoomly.open()`) |
 | `getroomly-close-modal` | — | Closes the modal |
-| `getroomly-set-favorite` | `{ sku, isFavorite }` | Reply to `getroomly-check-favorite`; updates the heart state |
+| `getroomly-set-favorite` | `{ productId, isFavorite }` | Reply to `getroomly-check-favorite`; updates the heart state |
 
 ### Example: hooking your cart and wishlist
 
 ```js
 window.addEventListener('getroomly-add-to-cart', (e) => {
-  console.log('Adding to cart:', e.detail.sku);
-  yourCart.add(e.detail.sku, { imageUrl: e.detail.imageUrl });
+  console.log('Adding to cart:', e.detail.productId);
+  yourCart.add(e.detail.productId, { imageUrl: e.detail.imageUrl });
 });
 
 window.addEventListener('getroomly-add-to-wishlist', (e) => {
-  yourWishlist.toggle(e.detail.sku);
+  yourWishlist.toggle(e.detail.productId, e.detail.isFavorite);
 });
 
 window.addEventListener('getroomly-check-favorite', (e) => {
-  const isFav = yourWishlist.has(e.detail.sku);
+  const isFav = yourWishlist.has(e.detail.productId);
   window.dispatchEvent(
     new CustomEvent('getroomly-set-favorite', {
-      detail: { sku: e.detail.sku, isFavorite: isFav },
+      detail: { productId: e.detail.productId, isFavorite: isFav },
     })
   );
 });
 ```
+
+> The `productId` field carries the value you passed as `GetRoomlyEmbedConfig.sku` — events use `productId` consistently across the surface, even though the config field is named `sku`.
 
 ## Callback functions (alternative to events)
 
@@ -243,7 +245,7 @@ The plugin file (`plugin.js`) is served with `Access-Control-Allow-Origin: *` so
 git clone https://github.com/markusvonkellauer-ctrl/getroomly-plugin.git
 cd getroomly-plugin
 npm install
-cp .env.example .env   # set VITE_BACKEND_URL and dev partner key
+cp .env.example .env   # set VITE_GETROOMLY_API_KEY (dev partner key); VITE_API_BASE_URL has a sensible default
 npm run dev
 ```
 
@@ -271,10 +273,11 @@ The production Docker image wraps that artifact in nginx with:
 
 Vite inlines `VITE_*` vars at build time. The runtime values come from `window.GetRoomlyEmbedConfig`, so the `.env` is mostly for local dev:
 
-| Var | Required | Notes |
-|---|---|---|
-| `VITE_BACKEND_URL` | yes | Where the plugin POSTs `/v1/generate` |
-| `VITE_GETROOMLY_API_KEY` | dev only | Convenience for local plugin dev — when set, the dev demo at `npm run dev` uses it as the partner key. **Never set in production builds.** The published plugin bundle has no fallback key; production host pages must always pass `window.GetRoomlyEmbedConfig.apiKey` themselves. |
+| Var | Required | Default | Notes |
+|---|---|---|---|
+| `VITE_API_BASE_URL` | no | `http://178.105.148.65:3000` | Where the plugin POSTs `/v1/generate`. The built-in default points at the live Hetzner backend. |
+| `VITE_GETROOMLY_API_KEY` | dev only | — | Convenience for local plugin dev — when set, the dev demo at `npm run dev` uses it as the partner key. **Never set in production builds.** The published plugin bundle has no fallback key; production host pages must always pass `window.GetRoomlyEmbedConfig.apiKey` themselves. |
+| `VITE_APP_ENV` | no | `development` | `development` / `staging` / `production` — controls dev-only console logging and warnings. |
 
 ## Architecture
 
