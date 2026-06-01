@@ -1,0 +1,257 @@
+import { AppConfig } from '@/config/app-config';
+import type { GenerationResult } from '@/types/product';
+
+/**
+ * AI Generation Service
+ *
+ * Thin client for the GetRoomly Backend `/v1/generate` endpoint.
+ * The backend owns:
+ *  - Gemini API call + key
+ *  - All prompt-building (carpet vs furniture, language lock, TINY rule, material instructions, etc.)
+ *  - WebP re-encoding
+ *  - Per-partner quota / rate limiting / auth
+ *
+ * This file only:
+ *  1. Compresses the room image client-side (to stay under 20MB body limit)
+ *  2. Converts images to `{data, mimeType}` shape the backend expects
+ *  3. POSTs to `/v1/generate` with the partner API key
+ *  4. Returns the generated image as a data URL ready for `<img src>`
+ */
+
+export interface PlacementRequest {
+  imageBlob: Blob;
+  productImage: string; // Product image URL or data URL
+  coordinates: {
+    x: number;          // pixel x in the (compressed) room image
+    y: number;          // pixel y
+    percentageX: number;
+    percentageY: number;
+  };
+  productInfo: {
+    name: string;
+    category: string;
+    productId?: string;
+    description?: string;
+    material?: string;
+    measurements?: {
+      width: number;
+      depth: number;
+      height: number;
+    };
+  };
+  language?: 'en' | 'sv';
+  /** Partner API key. Falls back to AppConfig.ai.defaultApiKey if absent. */
+  apiKey?: string;
+  /** Optional trace ID. Stored in backend RenderLog for support lookups. */
+  sessionId?: string;
+}
+
+/** Compresses an image to stay under the backend's 20MB body limit. */
+async function compressImage(blob: Blob | File, maxWidth = 1600, quality = 0.75): Promise<Blob> {
+  if (blob.size < 400 * 1024) return blob;
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = URL.createObjectURL(blob);
+    img.onload = () => {
+      URL.revokeObjectURL(img.src);
+      let width = img.width;
+      let height = img.height;
+
+      if (width > maxWidth || height > maxWidth) {
+        if (width > height) {
+          height = (height / width) * maxWidth;
+          width = maxWidth;
+        } else {
+          width = (width / height) * maxWidth;
+          height = maxWidth;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas context failed'));
+
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (compressed) => {
+          if (compressed) {
+            console.log(`[Plugin] Image compressed: ${(blob.size / 1024 / 1024).toFixed(2)}MB → ${(compressed.size / 1024 / 1024).toFixed(2)}MB`);
+            resolve(compressed);
+          } else {
+            resolve(blob);
+          }
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      resolve(blob);
+    };
+  });
+}
+
+/** Converts a Blob/File to backend's inline image shape (base64 without data URL prefix). */
+async function blobToInline(blob: Blob): Promise<{ data: string; mimeType: string }> {
+  const compressed = await compressImage(blob);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) return reject(new Error('Could not parse data URL'));
+      resolve({ mimeType: 'image/jpeg', data: match[2] });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(compressed);
+  });
+}
+
+/** Fetches a URL (or parses a data URL) and returns it in the backend's inline image shape. */
+async function urlToInline(url: string): Promise<{ data: string; mimeType: string }> {
+  // Already a data URL? Parse directly.
+  if (url.startsWith('data:')) {
+    const match = url.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) return { mimeType: match[1], data: match[2] };
+  }
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch product image: ${res.status} ${res.statusText}`);
+  const blob = await res.blob();
+  const compressed = await compressImage(blob);
+  return blobToInline(compressed);
+}
+
+/** Get pixel dimensions of an image blob (needed for the carpet OUTPUT FORMAT RULE). */
+async function getImageDimensions(blob: Blob): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const dims = { w: img.naturalWidth, h: img.naturalHeight };
+      URL.revokeObjectURL(img.src);
+      resolve(dims);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      reject(new Error('Could not read image dimensions'));
+    };
+    img.src = URL.createObjectURL(blob);
+  });
+}
+
+export class AIGenerationError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = 'AIGenerationError';
+  }
+}
+
+/** Generates a room visualization by calling the GetRoomly backend. */
+export async function generateRoomVisualization(request: PlacementRequest): Promise<GenerationResult> {
+  const apiKey = request.apiKey || AppConfig.ai.defaultApiKey;
+  if (!apiKey) {
+    throw new AIGenerationError(
+      'Missing GetRoomly API key. Set window.GetRoomlyEmbedConfig.apiKey to your partner key.',
+      'NO_API_KEY',
+      0,
+    );
+  }
+
+  const startTime = Date.now();
+
+  // 1. Convert room image (compresses client-side, then to base64)
+  console.log('[Plugin] Preparing room image:', request.imageBlob.size, 'bytes');
+  const compressedRoom = await compressImage(request.imageBlob);
+  const roomImage = await blobToInline(compressedRoom);
+  const roomDims = await getImageDimensions(compressedRoom);
+
+  // 2. Convert product image (URL or data URL → inline)
+  const productImageUrl = request.productImage || AppConfig.ai.fallbackImageUrl;
+  const furnitureImage = await urlToInline(productImageUrl);
+
+  // 3. Build the request body
+  const category = request.productInfo.category;
+  const isCarpet = (category ?? '').toLowerCase().includes('carpet');
+
+  const body = {
+    kind: 'placement' as const,
+    sessionId: request.sessionId,
+    language: request.language || 'en',
+    roomImage,
+    furnitureImage,
+    coordinates: { x: request.coordinates.x, y: request.coordinates.y },
+    category,
+    productId: request.productInfo.productId,
+    description: request.productInfo.description,
+    material: request.productInfo.material,
+    dimensions: request.productInfo.measurements && {
+      width: request.productInfo.measurements.width,
+      height: request.productInfo.measurements.height,
+      depth: request.productInfo.measurements.depth,
+    },
+    // Only carpet prompt uses roomDimensions (for OUTPUT FORMAT RULE)
+    roomDimensions: isCarpet ? roomDims : undefined,
+  };
+
+  // 4. POST to backend
+  const endpoint = `${AppConfig.api.baseUrl}/v1/generate`;
+  console.log('[Plugin] Calling backend:', endpoint);
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': apiKey,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({} as Record<string, unknown>));
+    const code = (err.code as string) ?? 'BACKEND_ERROR';
+    const description = (err.description as string) ?? res.statusText;
+    console.error(`[Plugin] Backend error ${res.status} (${code}):`, description);
+    throw new AIGenerationError(description, code, res.status);
+  }
+
+  const result = await res.json();
+  const endTime = Date.now();
+
+  if (!result.image?.data) {
+    throw new AIGenerationError(
+      'Backend response missing image data',
+      'INVALID_RESPONSE',
+      res.status,
+    );
+  }
+
+  return {
+    imageUrl: `data:${result.image.mimeType};base64,${result.image.data}`,
+    base64Data: result.image.data,
+    prompt: '',
+    latency: result.latencyMs ?? endTime - startTime,
+    coordinates: request.coordinates,
+  };
+}
+
+/** Validates uploaded image file. */
+export function validateImageFile(file: File): { isValid: boolean; error?: string } {
+  if (file.size > AppConfig.images.maxFileSize) {
+    const maxSizeMB = AppConfig.images.maxFileSize / (1024 * 1024);
+    return { isValid: false, error: `File size too large. Maximum size is ${maxSizeMB}MB.` };
+  }
+
+  if (!AppConfig.images.allowedFormats.includes(file.type as typeof AppConfig.images.allowedFormats[number])) {
+    return { isValid: false, error: 'Invalid file format. Please use JPEG, PNG, or WebP.' };
+  }
+
+  return { isValid: true };
+}

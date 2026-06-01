@@ -1,0 +1,21 @@
+# Production deploy compose — shipped to the server by .github/workflows/deploy.yml
+# Dropped on the box at: /opt/getroomly/compose/plugin/docker-compose.yml
+# Wired into /opt/getroomly/compose/docker-compose.yml via an `include:` line.
+services:
+  plugin-cdn:
+    image: ${PLUGIN_IMAGE:-ghcr.io/markusvonkellauer-ctrl/getroomly-plugin:latest}
+    container_name: plugin-cdn
+    restart: unless-stopped
+    ports:
+      - "${PLUGIN_PORT:-8081}:80"
+    networks:
+      - getroomly_net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  getroomly_net:
+    external: true

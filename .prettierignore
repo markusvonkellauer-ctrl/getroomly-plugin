@@ -1,0 +1,19 @@
+# Dependencies
+node_modules
+dist
+coverage
+
+# Build outputs
+*.min.js
+*.bundle.js
+
+# Lock files
+package-lock.json
+yarn.lock
+
+# Test artifacts
+tests/fixtures
+tests/__mocks__
+
+# Config files (formatted differently)
+*.md
