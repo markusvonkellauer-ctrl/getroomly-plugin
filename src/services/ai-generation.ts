@@ -40,7 +40,7 @@ export interface PlacementRequest {
     };
   };
   language?: 'en' | 'sv';
-  /** Partner API key. Falls back to AppConfig.ai.defaultApiKey if absent. */
+  /** Partner API key. Required — host pages set it via window.GetRoomlyEmbedConfig.apiKey. */
   apiKey?: string;
   /** Optional trace ID. Stored in backend RenderLog for support lookups. */
   sessionId?: string;
@@ -174,8 +174,14 @@ export async function generateRoomVisualization(request: PlacementRequest): Prom
   const roomDims = await getImageDimensions(compressedRoom);
 
   // 2. Convert product image (URL or data URL → inline)
-  const productImageUrl = request.productImage || AppConfig.ai.fallbackImageUrl;
-  const furnitureImage = await urlToInline(productImageUrl);
+  if (!request.productImage) {
+    throw new AIGenerationError(
+      'Missing product image. Set window.GetRoomlyEmbedConfig.productImage to your product image URL.',
+      'NO_PRODUCT_IMAGE',
+      0,
+    );
+  }
+  const furnitureImage = await urlToInline(request.productImage);
 
   // 3. Build the request body
   const category = request.productInfo.category;
