@@ -275,7 +275,7 @@ Vite inlines `VITE_*` vars at build time. The runtime values come from `window.G
 
 | Var | Required | Default | Notes |
 |---|---|---|---|
-| `VITE_API_BASE_URL` | no | `http://178.105.148.65:3000` | Where the plugin POSTs `/v1/generate`. The built-in default points at the live Hetzner backend. |
+| `VITE_API_BASE_URL` | no | `https://api.getroomly.ai` | Where the plugin POSTs `/v1/generate`. The built-in default points at the live HTTPS backend. |
 | `VITE_GETROOMLY_API_KEY` | dev only | — | Convenience for local plugin dev — when set, the dev demo at `npm run dev` uses it as the partner key. **Never set in production builds.** The published plugin bundle has no fallback key; production host pages must always pass `window.GetRoomlyEmbedConfig.apiKey` themselves. |
 | `VITE_APP_ENV` | no | `development` | `development` / `staging` / `production` — controls dev-only console logging and warnings. |
 
