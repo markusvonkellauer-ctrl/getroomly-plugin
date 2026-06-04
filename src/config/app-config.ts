@@ -58,8 +58,7 @@ export const AppConfig = {
 
   // API Configuration - GetRoomly Backend (handles AI generation, partner auth)
   api: {
-    // TODO: switch to https://api.getroomly.ai once nginx + TLS land (backend ticket GET-17)
-    baseUrl: getEnvVar('VITE_API_BASE_URL', 'http://178.105.148.65:3000'),
+    baseUrl: getEnvVar('VITE_API_BASE_URL', 'https://api.getroomly.ai'),
     timeout: getNumberEnv('VITE_API_TIMEOUT', 30000),
     uploadTimeout: getNumberEnv('VITE_UPLOAD_TIMEOUT', 60000),
     retryAttempts: getNumberEnv('VITE_API_RETRY_ATTEMPTS', 3),
