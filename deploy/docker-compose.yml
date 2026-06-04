@@ -6,8 +6,10 @@ services:
     image: ${PLUGIN_IMAGE:-ghcr.io/markusvonkellauer-ctrl/getroomly-plugin:latest}
     container_name: plugin-cdn
     restart: unless-stopped
+    # Bound to loopback only — host nginx (GET-17) reverse-proxies
+    # https://plugin.getroomly.ai/plugin.js to 127.0.0.1:8081.
     ports:
-      - "${PLUGIN_PORT:-8081}:80"
+      - "127.0.0.1:${PLUGIN_PORT:-8081}:80"
     networks:
       - getroomly_net
     logging:
