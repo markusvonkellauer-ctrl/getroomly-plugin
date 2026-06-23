@@ -14,6 +14,9 @@ concurrency:
 jobs:
   build-and-push:
     name: Build & push image to GHCR
+    # Only main/development are real deploy targets. Guard manual
+    # workflow_dispatch runs on other branches from building/deploying.
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,7 +52,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push (production)
+        if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -57,10 +61,25 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
+
+      - name: Build and push (development)
+        if: github.ref == 'refs/heads/development'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL_DEV }}
 
   deploy:
     name: Deploy to Hetzner
     needs: build-and-push
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
