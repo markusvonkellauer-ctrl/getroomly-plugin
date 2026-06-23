@@ -45,7 +45,6 @@ export function RoomVisualizationFlow({
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // One sessionId per plugin instance — sent on every generate, indexed in backend RenderLog for support tracing
   const [sessionId] = useState<string>(
@@ -139,7 +138,6 @@ export function RoomVisualizationFlow({
   }, [step, isGenerating]);
 
   const handleGenerate = async (file: File) => {
-    setError(null);
     setIsGenerating(true);
     setProgress(0);
     setMessageIndex(0);
@@ -166,11 +164,25 @@ export function RoomVisualizationFlow({
     } catch (err) {
       console.error('Generation error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Failed to generate image';
-      setError(errorMsg);
+
+      // Reset to clean upload state — no error shown in the plugin.
+      // The host website handles error display via the event / onError callback.
+      if (uploadedImageRef.current) {
+        URL.revokeObjectURL(uploadedImageRef.current);
+        uploadedImageRef.current = null;
+      }
+      setUploadedImage(null);
+      setResultImage(null);
       setStep('upload');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+
+      window.dispatchEvent(
+        new CustomEvent('getroomly-error', {
+          detail: { error: errorMsg, productId, sessionId },
+        })
+      );
       onError?.(errorMsg);
     } finally {
       setIsGenerating(false);
@@ -186,12 +198,15 @@ export function RoomVisualizationFlow({
     const validation = validateImageFile(file);
     if (!validation.isValid) {
       const errorMsg = validation.error || 'Invalid file';
-      setError(errorMsg);
+      console.error('[Plugin] Validation error:', errorMsg);
+      window.dispatchEvent(
+        new CustomEvent('getroomly-error', {
+          detail: { error: errorMsg, productId, sessionId },
+        })
+      );
       onError?.(errorMsg);
       return;
     }
-
-    setError(null);
 
     if (uploadedImageRef.current) {
       URL.revokeObjectURL(uploadedImageRef.current);
@@ -215,7 +230,6 @@ export function RoomVisualizationFlow({
     setStep('upload');
     setUploadedImage(null);
     setResultImage(null);
-    setError(null);
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -330,22 +344,6 @@ export function RoomVisualizationFlow({
       }}
     >
       {showSteps && renderStepIndicator('upload')}
-
-      {error && (
-        <div
-          style={{
-            background: 'hsl(0, 72%, 96%)',
-            color: 'hsl(0, 72%, 51%)',
-            padding: '12px 16px',
-            borderRadius: '0.75rem',
-            marginBottom: '24px',
-            border: '1px solid hsl(0, 72%, 85%)',
-            fontSize: '14px',
-          }}
-        >
-          {error}
-        </div>
-      )}
 
       <div
         style={{
