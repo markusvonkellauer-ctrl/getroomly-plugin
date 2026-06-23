@@ -209,7 +209,13 @@ export async function generateRoomVisualization(
     const err = await res.json().catch(() => ({}) as Record<string, unknown>);
     const code = (err.code as string) ?? 'BACKEND_ERROR';
     const description = (err.description as string) ?? res.statusText;
+    const modelResponse = (err.meta as Record<string, unknown>)?.modelResponse as
+      | string
+      | undefined;
     console.error(`[Plugin] Backend error ${res.status} (${code}):`, description);
+    if (modelResponse) {
+      console.error(`[Plugin] Model response:`, modelResponse);
+    }
     throw new AIGenerationError(description, code, res.status);
   }
 
