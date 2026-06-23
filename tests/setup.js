@@ -15,17 +15,17 @@ global.window.GetRoomlyEmbedConfig = {
   measurements: {
     width: 100,
     height: 80,
-    depth: 60
+    depth: 60,
   },
   styling: {
     backgroundColor: '#007bff',
-    color: 'white'
+    color: 'white',
   },
   callbacks: {
     onModalOpen: jest.fn(),
     onModalClose: jest.fn(),
-    onImageGenerated: jest.fn()
-  }
+    onImageGenerated: jest.fn(),
+  },
 };
 
 // Mock fetch for API calls

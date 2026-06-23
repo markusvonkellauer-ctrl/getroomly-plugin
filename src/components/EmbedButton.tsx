@@ -7,16 +7,9 @@ interface EmbedButtonProps {
 }
 
 export function EmbedButton({ config, onClick }: EmbedButtonProps) {
-  const {
-    buttonText = 'Visualize in Your Room',
-    styling = {}
-  } = config;
+  const { buttonText = 'Visualize in Your Room', styling = {} } = config;
 
-  const {
-    buttonColor = '#000',
-    buttonTextColor = '#fff',
-    borderRadius = '0'
-  } = styling;
+  const { buttonColor = '#000', buttonTextColor = '#fff', borderRadius = '0' } = styling;
 
   const handleClick = () => {
     // Call callback if provided
@@ -57,26 +50,28 @@ export function EmbedButton({ config, onClick }: EmbedButtonProps) {
         border: 'none',
         borderRadius: borderRadius,
         cursor: 'pointer',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.2)'
+        boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
       }}
-      onMouseOver={(e) => {
+      onMouseOver={e => {
         e.currentTarget.style.transform = 'scale(1.02)';
         e.currentTarget.style.filter = 'brightness(1.1)';
       }}
-      onMouseOut={(e) => {
+      onMouseOut={e => {
         e.currentTarget.style.transform = 'scale(1)';
         e.currentTarget.style.filter = 'brightness(1)';
       }}
     >
       <span>{buttonText}</span>
-      <span style={{
-        background: 'rgba(255,255,255,0.2)',
-        padding: '4px 8px',
-        borderRadius: '4px',
-        fontSize: '10px',
-        fontWeight: '900',
-        border: '1px solid rgba(255,255,255,0.2)'
-      }}>
+      <span
+        style={{
+          background: 'rgba(255,255,255,0.2)',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          fontSize: '10px',
+          fontWeight: '900',
+          border: '1px solid rgba(255,255,255,0.2)',
+        }}
+      >
         AI
       </span>
     </button>

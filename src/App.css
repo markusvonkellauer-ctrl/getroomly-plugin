@@ -1,5 +1,6 @@
 /* Global white background */
-html, body {
+html,
+body {
   background-color: #ffffff !important;
   margin: 0;
   padding: 0;
@@ -10,14 +11,16 @@ html, body {
   width: 100%;
   background-color: #ffffff;
   min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
 .getroomly-embed-inline {
   width: 100%;
   background-color: #ffffff;
   min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
 .getroomly-trigger-button:focus {
@@ -31,7 +34,7 @@ html, body {
 }
 
 /* Ensure modal appears above everything */
-.getroomly-embed [role="dialog"] {
+.getroomly-embed [role='dialog'] {
   z-index: 999999;
 }
 
@@ -42,13 +45,18 @@ html, body {
 
 /* Spin animation for loader */
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* Ping animation for marker */
 @keyframes ping {
-  75%, 100% {
+  75%,
+  100% {
     transform: scale(2);
     opacity: 0;
   }
