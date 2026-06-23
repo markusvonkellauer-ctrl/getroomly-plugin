@@ -1,106 +1,196 @@
 /**
  * AI Generation Service Tests
- *
- * Tests the AI room visualization generation functionality
  */
 
 import { generateRoomVisualization, validateImageFile } from '../../src/services/ai-generation';
 
-// Mock fetch for API calls
 global.fetch = jest.fn();
+
+// blobToInline / compressImage use canvas + FileReader — stub them out
+global.URL.createObjectURL = jest.fn(() => 'blob:mock');
+global.URL.revokeObjectURL = jest.fn();
+
+// Minimal Image stub so compressImage resolves immediately
+global.Image = class {
+  constructor() {
+    setTimeout(() => {
+      this.width = 800;
+      this.height = 600;
+      this.onload?.();
+    }, 0);
+  }
+};
+
+// Minimal canvas stub so compressImage produces a blob
+const mockBlob = new Blob(['img'], { type: 'image/jpeg' });
+HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
+  drawImage: jest.fn(),
+}));
+HTMLCanvasElement.prototype.toBlob = jest.fn((cb) => cb(mockBlob));
+
+// FileReader stub — returns a predictable base64 data URL
+global.FileReader = class {
+  readAsDataURL() {
+    setTimeout(() => {
+      this.result = 'data:image/jpeg;base64,dGVzdA==';
+      this.onloadend?.();
+    }, 0);
+  }
+};
+
+const makeFile = (name = 'room.jpg') => new File(['test'], name, { type: 'image/jpeg' });
+
+const baseParams = {
+  imageBlob: makeFile(),
+  productImage: 'data:image/jpeg;base64,dGVzdA==',
+  productInfo: { name: 'Test Chair', category: 'Furniture' },
+  apiKey: 'test-key',
+};
 
 describe('AI Generation Service', () => {
   beforeEach(() => {
     fetch.mockClear();
   });
 
+  // ─── validateImageFile ────────────────────────────────────────────────────
+
   describe('validateImageFile', () => {
     test('accepts valid JPEG file', () => {
-      const validFile = new File([''], 'test.jpg', { type: 'image/jpeg' });
-      Object.defineProperty(validFile, 'size', { value: 1024 * 1024 }); // 1MB
-
-      const result = validateImageFile(validFile);
-      expect(result.isValid).toBe(true);
-      expect(result.error).toBeNull();
+      const file = new File([''], 'test.jpg', { type: 'image/jpeg' });
+      Object.defineProperty(file, 'size', { value: 1024 * 1024 });
+      expect(validateImageFile(file).isValid).toBe(true);
     });
 
     test('accepts valid PNG file', () => {
-      const validFile = new File([''], 'test.png', { type: 'image/png' });
-      Object.defineProperty(validFile, 'size', { value: 1024 * 1024 });
-
-      const result = validateImageFile(validFile);
-      expect(result.isValid).toBe(true);
+      const file = new File([''], 'test.png', { type: 'image/png' });
+      Object.defineProperty(file, 'size', { value: 1024 * 1024 });
+      expect(validateImageFile(file).isValid).toBe(true);
     });
 
-    test('rejects file too large', () => {
-      const largeFile = new File([''], 'large.jpg', { type: 'image/jpeg' });
-      Object.defineProperty(largeFile, 'size', { value: 15 * 1024 * 1024 }); // 15MB
-
-      const result = validateImageFile(largeFile);
+    test('rejects file that is too large', () => {
+      const file = new File([''], 'large.jpg', { type: 'image/jpeg' });
+      Object.defineProperty(file, 'size', { value: 15 * 1024 * 1024 });
+      const result = validateImageFile(file);
       expect(result.isValid).toBe(false);
-      expect(result.error).toContain('File size too large');
+      expect(result.error).toMatch(/size too large/i);
     });
 
-    test('rejects invalid file type', () => {
-      const invalidFile = new File([''], 'test.txt', { type: 'text/plain' });
-
-      const result = validateImageFile(invalidFile);
+    test('rejects unsupported file type', () => {
+      const file = new File([''], 'test.txt', { type: 'text/plain' });
+      const result = validateImageFile(file);
       expect(result.isValid).toBe(false);
-      expect(result.error).toContain('Invalid file type');
+      expect(result.error).toMatch(/invalid file/i);
     });
   });
 
-  describe('generateRoomVisualization', () => {
-    test('successfully generates visualization', async () => {
-      const mockResponse = {
+  // ─── generateRoomVisualization ────────────────────────────────────────────
+
+  describe('generateRoomVisualization — request shape', () => {
+    test('does NOT send coordinates in the request body', async () => {
+      fetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          imageUrl: 'https://example.com/generated-image.jpg'
-        })
-      };
-      fetch.mockResolvedValueOnce(mockResponse);
+        json: () => Promise.resolve({ image: { data: 'dGVzdA==', mimeType: 'image/webp' } }),
+      });
 
-      const testFile = new File(['test'], 'room.jpg', { type: 'image/jpeg' });
-      const params = {
-        imageBlob: testFile,
-        coordinates: { x: 50, y: 75, percentageX: 50, percentageY: 75 },
-        productInfo: { name: 'Test Chair', category: 'Furniture' }
-      };
+      await generateRoomVisualization(baseParams);
 
-      const result = await generateRoomVisualization(params);
-      expect(result.imageUrl).toBe('https://example.com/generated-image.jpg');
-      expect(fetch).toHaveBeenCalledTimes(1);
+      const body = JSON.parse(fetch.mock.calls[0][1].body);
+      expect(body).not.toHaveProperty('coordinates');
+      expect(body).not.toHaveProperty('roomDimensions');
     });
 
-    test('handles API error gracefully', async () => {
-      const mockResponse = {
+    test('sends kind=placement, roomImage, and furnitureImage', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ image: { data: 'dGVzdA==', mimeType: 'image/webp' } }),
+      });
+
+      await generateRoomVisualization(baseParams);
+
+      const body = JSON.parse(fetch.mock.calls[0][1].body);
+      expect(body.kind).toBe('placement');
+      expect(body.roomImage).toBeDefined();
+      expect(body.furnitureImage).toBeDefined();
+    });
+
+    test('sends the partner API key as X-API-Key header', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ image: { data: 'dGVzdA==', mimeType: 'image/webp' } }),
+      });
+
+      await generateRoomVisualization({ ...baseParams, apiKey: 'partner-abc' });
+
+      const headers = fetch.mock.calls[0][1].headers;
+      expect(headers['X-API-Key']).toBe('partner-abc');
+    });
+
+    test('forwards category, productId, and dimensions when provided', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ image: { data: 'dGVzdA==', mimeType: 'image/webp' } }),
+      });
+
+      await generateRoomVisualization({
+        ...baseParams,
+        productInfo: {
+          name: 'Rug',
+          category: 'Carpet',
+          productId: 'carpet-1',
+          measurements: { width: 200, depth: 300, height: 1 },
+        },
+      });
+
+      const body = JSON.parse(fetch.mock.calls[0][1].body);
+      expect(body.category).toBe('Carpet');
+      expect(body.productId).toBe('carpet-1');
+      expect(body.dimensions).toEqual({ width: 200, height: 1, depth: 300 });
+    });
+  });
+
+  describe('generateRoomVisualization — response handling', () => {
+    test('returns imageUrl built from backend image data', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ image: { data: 'dGVzdA==', mimeType: 'image/webp' } }),
+      });
+
+      const result = await generateRoomVisualization(baseParams);
+      expect(result.imageUrl).toBe('data:image/webp;base64,dGVzdA==');
+    });
+
+    test('throws AIGenerationError when backend returns non-ok status', async () => {
+      fetch.mockResolvedValueOnce({
         ok: false,
-        status: 500,
-        statusText: 'Internal Server Error'
-      };
-      fetch.mockResolvedValueOnce(mockResponse);
+        status: 503,
+        statusText: 'Service Unavailable',
+        json: () => Promise.resolve({ code: 'tooBusy', description: 'Upstream busy' }),
+      });
 
-      const testFile = new File(['test'], 'room.jpg', { type: 'image/jpeg' });
-      const params = {
-        imageBlob: testFile,
-        coordinates: { x: 50, y: 75, percentageX: 50, percentageY: 75 },
-        productInfo: { name: 'Test Chair', category: 'Furniture' }
-      };
-
-      await expect(generateRoomVisualization(params)).rejects.toThrow('Failed to generate visualization');
+      await expect(generateRoomVisualization(baseParams)).rejects.toMatchObject({
+        name: 'AIGenerationError',
+        status: 503,
+      });
     });
 
-    test('handles network error', async () => {
-      fetch.mockRejectedValueOnce(new Error('Network error'));
+    test('throws AIGenerationError when response contains no image data', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ image: null }),
+      });
 
-      const testFile = new File(['test'], 'room.jpg', { type: 'image/jpeg' });
-      const params = {
-        imageBlob: testFile,
-        coordinates: { x: 50, y: 75, percentageX: 50, percentageY: 75 },
-        productInfo: { name: 'Test Chair', category: 'Furniture' }
-      };
+      await expect(generateRoomVisualization(baseParams)).rejects.toMatchObject({
+        name: 'AIGenerationError',
+        code: 'INVALID_RESPONSE',
+      });
+    });
 
-      await expect(generateRoomVisualization(params)).rejects.toThrow('Network error');
+    test('throws when API key is missing', async () => {
+      const { apiKey: _, ...noKey } = baseParams;
+      await expect(generateRoomVisualization(noKey)).rejects.toMatchObject({
+        name: 'AIGenerationError',
+        code: 'NO_API_KEY',
+      });
     });
   });
 });

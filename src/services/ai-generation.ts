@@ -145,10 +145,9 @@ export async function generateRoomVisualization(request: PlacementRequest): Prom
 
   const startTime = Date.now();
 
-  // 1. Convert room image (compresses client-side, then to base64)
+  // 1. Convert room image (blobToInline handles compression internally)
   console.log('[Plugin] Preparing room image:', request.imageBlob.size, 'bytes');
-  const compressedRoom = await compressImage(request.imageBlob);
-  const roomImage = await blobToInline(compressedRoom);
+  const roomImage = await blobToInline(request.imageBlob);
 
   // 2. Convert product image (URL or data URL → inline)
   if (!request.productImage) {

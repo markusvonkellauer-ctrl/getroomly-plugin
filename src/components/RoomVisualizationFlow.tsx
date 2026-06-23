@@ -176,6 +176,7 @@ export function RoomVisualizationFlow({
       const errorMsg = err instanceof Error ? err.message : "Failed to generate image";
       setError(errorMsg);
       setStep("upload");
+      if (fileInputRef.current) fileInputRef.current.value = '';
       onError?.(errorMsg);
     } finally {
       setIsGenerating(false);
@@ -207,11 +208,11 @@ export function RoomVisualizationFlow({
   };
 
   const handleNewPhoto = () => {
-    // Revoke blob URL to prevent memory leak
     if (uploadedImageRef.current) {
       URL.revokeObjectURL(uploadedImageRef.current);
       uploadedImageRef.current = null;
     }
+    if (fileInputRef.current) fileInputRef.current.value = '';
 
     setStep("upload");
     setUploadedImage(null);

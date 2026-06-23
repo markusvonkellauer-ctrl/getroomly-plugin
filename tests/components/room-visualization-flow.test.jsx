@@ -1,0 +1,211 @@
+/**
+ * RoomVisualizationFlow Component Tests
+ *
+ * Covers the new coordinate-free upload → processing → result flow.
+ */
+
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlow';
+
+jest.mock('../../src/services/ai-generation', () => ({
+  generateRoomVisualization: jest.fn(),
+  validateImageFile: jest.fn(() => ({ isValid: true, error: null })),
+}));
+
+import { generateRoomVisualization, validateImageFile } from '../../src/services/ai-generation';
+
+global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
+global.URL.revokeObjectURL = jest.fn();
+
+const defaultProps = {
+  productImages: ['https://example.com/product.jpg'],
+  productId: 'rug-001',
+  category: 'Carpet',
+  productName: 'Test Rug',
+  productPrice: 999,
+  measurements: { width: 200, depth: 300, height: 1 },
+  showSteps: false,
+};
+
+const makeFile = () => new File(['img'], 'room.jpg', { type: 'image/jpeg' });
+
+const uploadFile = (input, file) => {
+  Object.defineProperty(input, 'files', { value: [file], writable: false });
+  fireEvent.change(input);
+};
+
+describe('RoomVisualizationFlow', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    validateImageFile.mockReturnValue({ isValid: true, error: null });
+  });
+
+  // ─── Initial render ───────────────────────────────────────────────────────
+
+  test('renders the upload step on mount', () => {
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    expect(screen.getByText('Step 1: Upload Photo')).toBeInTheDocument();
+    expect(screen.queryByText('Step 2: Place Marker')).not.toBeInTheDocument();
+  });
+
+  test('shows an upload button', () => {
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    expect(screen.getByText('Upload Photo')).toBeInTheDocument();
+  });
+
+  // ─── Upload → Processing (no mark step) ──────────────────────────────────
+
+  test('goes directly to processing after file upload — no mark step', async () => {
+    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    const input = document.querySelector('input[type="file"]');
+
+    await act(async () => {
+      uploadFile(input, makeFile());
+    });
+
+    expect(screen.queryByText('Step 2: Place Marker')).not.toBeInTheDocument();
+    expect(screen.getByText('Transforming your space...')).toBeInTheDocument();
+  });
+
+  test('calls generateRoomVisualization immediately on file selection', async () => {
+    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    const input = document.querySelector('input[type="file"]');
+
+    await act(async () => {
+      uploadFile(input, makeFile());
+    });
+
+    expect(generateRoomVisualization).toHaveBeenCalledTimes(1);
+  });
+
+  test('does NOT pass coordinates to generateRoomVisualization', async () => {
+    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    const callArg = generateRoomVisualization.mock.calls[0][0];
+    expect(callArg).not.toHaveProperty('coordinates');
+  });
+
+  // ─── Processing → Result ──────────────────────────────────────────────────
+
+  test('transitions to result step after successful generation', async () => {
+    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Review Your New Room')).toBeInTheDocument();
+    });
+  });
+
+  test('calls onComplete with the result image URL', async () => {
+    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+    const onComplete = jest.fn();
+
+    render(<RoomVisualizationFlow {...defaultProps} onComplete={onComplete} />);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(onComplete).toHaveBeenCalledWith('blob:result');
+    });
+  });
+
+  // ─── Error handling ───────────────────────────────────────────────────────
+
+  test('returns to upload step on generation failure', async () => {
+    generateRoomVisualization.mockRejectedValueOnce(new Error('upstream busy'));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Step 1: Upload Photo')).toBeInTheDocument();
+    });
+  });
+
+  test('clears the file input on generation failure so the same file can be retried', async () => {
+    generateRoomVisualization.mockRejectedValueOnce(new Error('upstream busy'));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    const input = document.querySelector('input[type="file"]');
+
+    await act(async () => {
+      uploadFile(input, makeFile());
+    });
+
+    await waitFor(() => screen.getByText('Step 1: Upload Photo'));
+    expect(input.value).toBe('');
+  });
+
+  test('calls onError with the error message on failure', async () => {
+    generateRoomVisualization.mockRejectedValueOnce(new Error('upstream busy'));
+    const onError = jest.fn();
+
+    render(<RoomVisualizationFlow {...defaultProps} onError={onError} />);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith('upstream busy');
+    });
+  });
+
+  test('rejects invalid file type and stays on upload step', async () => {
+    validateImageFile.mockReturnValueOnce({ isValid: false, error: 'Invalid file format.' });
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+
+    await act(async () => {
+      uploadFile(
+        document.querySelector('input[type="file"]'),
+        new File(['x'], 'doc.pdf', { type: 'application/pdf' }),
+      );
+    });
+
+    expect(generateRoomVisualization).not.toHaveBeenCalled();
+    expect(screen.getByText('Step 1: Upload Photo')).toBeInTheDocument();
+  });
+
+  // ─── New Photo reset ──────────────────────────────────────────────────────
+
+  test('New Photo button resets back to upload step and clears file input', async () => {
+    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    const input = document.querySelector('input[type="file"]');
+
+    await act(async () => {
+      uploadFile(input, makeFile());
+    });
+
+    await waitFor(() => screen.getByText('Review Your New Room'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('New Photo'));
+    });
+
+    expect(screen.getByText('Step 1: Upload Photo')).toBeInTheDocument();
+    expect(input.value).toBe('');
+  });
+});
