@@ -43,7 +43,6 @@ export function RoomVisualizationFlow({
 }: RoomVisualizationFlowProps) {
   const [step, setStep] = useState<"upload" | "processing" | "result">("upload");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,36 +147,7 @@ export function RoomVisualizationFlow({
     };
   }, [step, isGenerating]);
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Validate file
-    const validation = validateImageFile(file);
-    if (!validation.isValid) {
-      const errorMsg = validation.error || "Invalid file";
-      setError(errorMsg);
-      onError?.(errorMsg);
-      return;
-    }
-
-    setError(null);
-    setUploadedFile(file);
-
-    // Revoke previous URL if it exists
-    if (uploadedImageRef.current) {
-      URL.revokeObjectURL(uploadedImageRef.current);
-    }
-
-    // Create preview URL then go straight to processing
-    const url = URL.createObjectURL(file);
-    uploadedImageRef.current = url;
-    setUploadedImage(url);
-    handleGenerate(file);
-  };
-
   const handleGenerate = async (file: File) => {
-    // Clear any previous errors
     setError(null);
     setIsGenerating(true);
     setStep("processing");
@@ -212,6 +182,30 @@ export function RoomVisualizationFlow({
     }
   };
 
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.isValid) {
+      const errorMsg = validation.error || "Invalid file";
+      setError(errorMsg);
+      onError?.(errorMsg);
+      return;
+    }
+
+    setError(null);
+
+    if (uploadedImageRef.current) {
+      URL.revokeObjectURL(uploadedImageRef.current);
+    }
+
+    const url = URL.createObjectURL(file);
+    uploadedImageRef.current = url;
+    setUploadedImage(url);
+    handleGenerate(file);
+  };
+
   const handleNewPhoto = () => {
     // Revoke blob URL to prevent memory leak
     if (uploadedImageRef.current) {
@@ -221,7 +215,6 @@ export function RoomVisualizationFlow({
 
     setStep("upload");
     setUploadedImage(null);
-    setUploadedFile(null);
     setResultImage(null);
     setError(null);
     setHasSubmittedFeedback(false);
@@ -552,84 +545,6 @@ export function RoomVisualizationFlow({
         style={{ display: "none" }}
       />
 
-    </div>
-  );
-
-  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const xPos = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPos = ((e.clientY - rect.top) / rect.height) * 100;
-    setMarkerPos({ x: xPos, y: yPos });
-  };
-
-  const renderMarkStep = () => (
-    <div style={{
-      position: "relative",
-      width: "100%",
-      aspectRatio: "5/5",
-      maxHeight: "100%",
-      cursor: "crosshair",
-      borderRadius: "8px",
-      overflow: "hidden",
-      backgroundColor: "rgba(0, 0, 0, 0.05)"
-    }}>
-      <img
-        src={uploadedImage || ""}
-        alt="Room"
-        onClick={handleImageClick}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          display: "block"
-        }}
-      />
-
-      {/* Visual Marker */}
-      <div
-        style={{
-          position: "absolute",
-          left: `${markerPos.x}%`,
-          top: `${markerPos.y}%`,
-          width: "24px",
-          height: "24px",
-          backgroundColor: "var(--getroomly-primary)",
-          borderRadius: "50%",
-          border: "2px solid white",
-          boxShadow: "0 0 15px hsla(176, 51%, 36%, 0.8)",
-          transform: "translate(-50%, -50%)",
-          pointerEvents: "none",
-          zIndex: 50,
-          transition: "all 0.2s ease"
-        }}
-      >
-        <div style={{
-          position: "absolute",
-          inset: "0",
-          borderRadius: "50%",
-          backgroundColor: "hsla(176, 51%, 36%, 0.4)",
-          animation: "ping 1s cubic-bezier(0, 0, 0.2, 1) infinite"
-        }}></div>
-      </div>
-
-      {/* Hover hint */}
-      <div style={{
-        position: "absolute",
-        top: "16px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        backgroundColor: "rgba(0, 0, 0, 0.75)",
-        color: "white",
-        padding: "8px 16px",
-        borderRadius: "20px",
-        fontSize: "12px",
-        pointerEvents: "none",
-        opacity: 0,
-        transition: "opacity 0.3s ease",
-        zIndex: 50
-      }}>
-        Click to place marker
-      </div>
     </div>
   );
 
@@ -1064,55 +979,7 @@ export function RoomVisualizationFlow({
     </div>
   );
 
-  // Generate Footer Component (Step 2)
-  const renderGenerateFooter = () => (
-    <div style={{
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      width: "100%"
-    }}>
-      <button
-        onClick={handleGenerate}
-        disabled={isGenerating}
-        style={{
-          background: isGenerating ? "#f5f5f5" : "var(--getroomly-primary)",
-          color: isGenerating ? "#666" : "#ffffff",
-          border: "none",
-          padding: "16px 32px",
-          borderRadius: "8px",
-          fontSize: "16px",
-          fontWeight: "600",
-          cursor: isGenerating ? "not-allowed" : "pointer",
-          minWidth: "200px",
-          transition: "all 0.2s ease",
-          boxShadow: isGenerating ? "none" : "0 4px 12px hsla(176, 51%, 36%, 0.25)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "8px"
-        }}
-        onMouseEnter={(e) => {
-          if (!isGenerating) {
-            e.currentTarget.style.backgroundColor = "hsl(176, 51%, 32%)";
-            e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 6px 20px hsla(176, 51%, 36%, 0.3)";
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isGenerating) {
-            e.currentTarget.style.backgroundColor = "var(--getroomly-primary)";
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "0 4px 12px hsla(176, 51%, 36%, 0.25)";
-          }
-        }}
-      >
-        {isGenerating ? "Processing..." : "Generate Design"}
-      </button>
-    </div>
-  );
-
-  // Processing Footer Component (Step 3)
+  // Processing Footer Component (Step 2)
   const renderProcessingFooter = () => (
     <div style={{
       display: "flex",
