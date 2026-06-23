@@ -4,14 +4,14 @@ services:
     container_name: plugin-cdn-dev
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8083:80"
+      - '127.0.0.1:8083:80'
     networks:
       - getroomly_net
     logging:
       driver: json-file
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: '10m'
+        max-file: '3'
 
 networks:
   getroomly_net:

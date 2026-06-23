@@ -29,11 +29,13 @@ function App() {
   // Show loading state while config is being loaded
   if (!isReady) {
     return (
-      <div style={{
-        padding: '20px',
-        textAlign: 'center',
-        fontFamily: AppConfig.ui.defaultLanguage === 'en' ? 'system-ui' : 'sans-serif'
-      }}>
+      <div
+        style={{
+          padding: '20px',
+          textAlign: 'center',
+          fontFamily: AppConfig.ui.defaultLanguage === 'en' ? 'system-ui' : 'sans-serif',
+        }}
+      >
         <p>GetRoomly: Loading configuration...</p>
         {error && <small style={{ color: '#e74c3c' }}>{error}</small>}
       </div>
@@ -43,12 +45,14 @@ function App() {
   // Show error state if config is invalid
   if (error || !config) {
     return (
-      <div style={{
-        padding: '20px',
-        textAlign: 'center',
-        color: '#e74c3c',
-        fontFamily: AppConfig.ui.defaultLanguage === 'en' ? 'system-ui' : 'sans-serif'
-      }}>
+      <div
+        style={{
+          padding: '20px',
+          textAlign: 'center',
+          color: '#e74c3c',
+          fontFamily: AppConfig.ui.defaultLanguage === 'en' ? 'system-ui' : 'sans-serif',
+        }}
+      >
         <p>⚠️ GetRoomly Configuration Error</p>
         <small>{error || 'Invalid configuration'}</small>
       </div>
@@ -68,14 +72,12 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="getroomly-embed" style={{ backgroundColor: '#ffffff', minHeight: hideButton ? '0' : '100vh' }}>
+      <div
+        className="getroomly-embed"
+        style={{ backgroundColor: '#ffffff', minHeight: hideButton ? '0' : '100vh' }}
+      >
         {/* Main Embed Button (hidden when controlled externally via window.GetRoomly.open()) */}
-        {!hideButton && (
-          <EmbedButton
-            config={config}
-            onClick={() => setIsModalOpen(true)}
-          />
-        )}
+        {!hideButton && <EmbedButton config={config} onClick={() => setIsModalOpen(true)} />}
 
         {/* Original Modal System with Plugin Content */}
         {isModalOpen && (
@@ -97,9 +99,9 @@ function App() {
                 zIndex: 50,
                 width: '100%',
                 maxWidth: '520px',
-                maxHeight: '80%'
+                maxHeight: '80%',
               }}
-              onClick={(e) => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
             >
               <button
                 onClick={handleModalClose}
@@ -119,20 +121,30 @@ function App() {
                   backgroundColor: 'rgba(0, 0, 0, 0.06)',
                   color: '#374151',
                   transition: 'all 0.15s ease',
-                  zIndex: 10
+                  zIndex: 10,
                 }}
-                onMouseEnter={(e) => {
+                onMouseEnter={e => {
                   e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.12)';
                   e.currentTarget.style.transform = 'scale(1.05)';
                 }}
-                onMouseLeave={(e) => {
+                onMouseLeave={e => {
                   e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.06)';
                   e.currentTarget.style.transform = 'scale(1)';
                 }}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 6 6 18"/>
-                  <path d="m6 6 12 12"/>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
                 </svg>
               </button>
 
@@ -145,10 +157,10 @@ function App() {
                 measurements={config.measurements}
                 showSteps={config.showSteps}
                 config={config}
-                onComplete={(imageUrl) => {
+                onComplete={imageUrl => {
                   config.callbacks?.onImageGenerated?.(imageUrl);
                 }}
-                onError={(error) => {
+                onError={error => {
                   config.callbacks?.onError?.(error);
                 }}
               />

@@ -86,11 +86,11 @@ export interface EmbedConfig {
 
   /** Button visibility settings (optional) */
   buttons?: {
-    addToBasket?: boolean;     // default: true
-    favorite?: boolean;        // default: true (heart/wishlist button)
-    feedback?: boolean;        // default: true (thumbs up/down buttons)
-    showOriginal?: boolean;    // default: true
-    saveShare?: boolean;       // default: true
+    addToBasket?: boolean; // default: true
+    favorite?: boolean; // default: true (heart/wishlist button)
+    feedback?: boolean; // default: true (thumbs up/down buttons)
+    showOriginal?: boolean; // default: true
+    saveShare?: boolean; // default: true
   };
 
   /** Custom styling options (optional) */

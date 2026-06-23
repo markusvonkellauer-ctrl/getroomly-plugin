@@ -42,7 +42,9 @@ export interface PlacementRequest {
 
 /** Compresses an image to stay under the backend's 20MB body limit. */
 async function compressImage(blob: Blob | File, maxWidth = 1600, quality = 0.75): Promise<Blob> {
-  if (blob.size < 400 * 1024) return blob;
+  if (blob.size < 400 * 1024) {
+    return blob;
+  }
 
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -66,13 +68,17 @@ async function compressImage(blob: Blob | File, maxWidth = 1600, quality = 0.75)
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
-      if (!ctx) return reject(new Error('Canvas context failed'));
+      if (!ctx) {
+        return reject(new Error('Canvas context failed'));
+      }
 
       ctx.drawImage(img, 0, 0, width, height);
       canvas.toBlob(
-        (compressed) => {
+        compressed => {
           if (compressed) {
-            console.log(`[Plugin] Image compressed: ${(blob.size / 1024 / 1024).toFixed(2)}MB → ${(compressed.size / 1024 / 1024).toFixed(2)}MB`);
+            console.log(
+              `[Plugin] Image compressed: ${(blob.size / 1024 / 1024).toFixed(2)}MB → ${(compressed.size / 1024 / 1024).toFixed(2)}MB`
+            );
             resolve(compressed);
           } else {
             resolve(blob);
@@ -97,7 +103,9 @@ async function blobToInline(blob: Blob): Promise<{ data: string; mimeType: strin
     reader.onloadend = () => {
       const dataUrl = reader.result as string;
       const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (!match) return reject(new Error('Could not parse data URL'));
+      if (!match) {
+        return reject(new Error('Could not parse data URL'));
+      }
       resolve({ mimeType: 'image/jpeg', data: match[2] });
     };
     reader.onerror = reject;
@@ -110,22 +118,25 @@ async function urlToInline(url: string): Promise<{ data: string; mimeType: strin
   // Already a data URL? Parse directly.
   if (url.startsWith('data:')) {
     const match = url.match(/^data:([^;]+);base64,(.+)$/);
-    if (match) return { mimeType: match[1], data: match[2] };
+    if (match) {
+      return { mimeType: match[1], data: match[2] };
+    }
   }
 
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch product image: ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch product image: ${res.status} ${res.statusText}`);
+  }
   const blob = await res.blob();
   const compressed = await compressImage(blob);
   return blobToInline(compressed);
 }
 
-
 export class AIGenerationError extends Error {
   constructor(
     message: string,
     public readonly code: string,
-    public readonly status: number,
+    public readonly status: number
   ) {
     super(message);
     this.name = 'AIGenerationError';
@@ -133,13 +144,15 @@ export class AIGenerationError extends Error {
 }
 
 /** Generates a room visualization by calling the GetRoomly backend. */
-export async function generateRoomVisualization(request: PlacementRequest): Promise<GenerationResult> {
+export async function generateRoomVisualization(
+  request: PlacementRequest
+): Promise<GenerationResult> {
   const apiKey = request.apiKey || AppConfig.ai.defaultApiKey;
   if (!apiKey) {
     throw new AIGenerationError(
       'Missing GetRoomly API key. Set window.GetRoomlyEmbedConfig.apiKey to your partner key.',
       'NO_API_KEY',
-      0,
+      0
     );
   }
 
@@ -154,7 +167,7 @@ export async function generateRoomVisualization(request: PlacementRequest): Prom
     throw new AIGenerationError(
       'Missing product image. Set window.GetRoomlyEmbedConfig.productImage to your product image URL.',
       'NO_PRODUCT_IMAGE',
-      0,
+      0
     );
   }
   const furnitureImage = await urlToInline(request.productImage);
@@ -193,7 +206,7 @@ export async function generateRoomVisualization(request: PlacementRequest): Prom
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({} as Record<string, unknown>));
+    const err = await res.json().catch(() => ({}) as Record<string, unknown>);
     const code = (err.code as string) ?? 'BACKEND_ERROR';
     const description = (err.description as string) ?? res.statusText;
     console.error(`[Plugin] Backend error ${res.status} (${code}):`, description);
@@ -207,7 +220,7 @@ export async function generateRoomVisualization(request: PlacementRequest): Prom
     throw new AIGenerationError(
       'Backend response missing image data',
       'INVALID_RESPONSE',
-      res.status,
+      res.status
     );
   }
 
@@ -226,7 +239,11 @@ export function validateImageFile(file: File): { isValid: boolean; error?: strin
     return { isValid: false, error: `File size too large. Maximum size is ${maxSizeMB}MB.` };
   }
 
-  if (!AppConfig.images.allowedFormats.includes(file.type as typeof AppConfig.images.allowedFormats[number])) {
+  if (
+    !AppConfig.images.allowedFormats.includes(
+      file.type as (typeof AppConfig.images.allowedFormats)[number]
+    )
+  ) {
     return { isValid: false, error: 'Invalid file format. Please use JPEG, PNG, or WebP.' };
   }
 
