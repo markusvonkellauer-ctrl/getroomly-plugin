@@ -22,23 +22,6 @@ const getEnvVar = (key: string, defaultValue?: string): string | undefined => {
   }
 };
 
-// Derive API base URL from the plugin's own script origin.
-// The plugin knows its deployment from where it's served:
-//   dev-plugin.getroomly.ai → https://dev-api.getroomly.ai
-//   plugin.getroomly.ai     → https://api.getroomly.ai
-// For local dev (localhost) or third-party hosts, falls back to env / default.
-function resolveApiBaseUrl(): string {
-  try {
-    const scriptUrl = new URL(import.meta.url);
-    if (scriptUrl.hostname.endsWith('plugin.getroomly.ai')) {
-      const apiHost = scriptUrl.hostname.replace('plugin', 'api');
-      return `${scriptUrl.protocol}//${apiHost}`;
-    }
-  } catch {
-    /* local dev or non-URL context */
-  }
-  return getEnvVar('VITE_API_BASE_URL', 'https://api.getroomly.ai')!;
-}
 
 const getBooleanEnv = (key: string, defaultValue: boolean = false): boolean => {
   const value = getEnvVar(key);
@@ -84,7 +67,7 @@ export const AppConfig = {
 
   // API Configuration - GetRoomly Backend (handles AI generation, partner auth)
   api: {
-    baseUrl: resolveApiBaseUrl(),
+    baseUrl: getEnvVar('VITE_API_BASE_URL', '__API_BASE_URL__'),
     timeout: getNumberEnv('VITE_API_TIMEOUT', 30000),
     uploadTimeout: getNumberEnv('VITE_UPLOAD_TIMEOUT', 60000),
     retryAttempts: getNumberEnv('VITE_API_RETRY_ATTEMPTS', 3),
