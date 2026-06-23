@@ -24,17 +24,9 @@ export interface FurnitureItem {
 // Legacy alias for backwards compatibility
 export type Product = FurnitureItem;
 
-export interface PlacementCoordinates {
-  x: number;
-  y: number;
-  percentageX: number;
-  percentageY: number;
-}
-
 export interface GenerationResult {
   imageUrl: string;
   base64Data: string;
   prompt: string;
   latency: number;
-  coordinates?: PlacementCoordinates;
 }

@@ -41,10 +41,9 @@ export function RoomVisualizationFlow({
   onError,
   config,
 }: RoomVisualizationFlowProps) {
-  const [step, setStep] = useState<"upload" | "mark" | "processing" | "result">("upload");
+  const [step, setStep] = useState<"upload" | "processing" | "result">("upload");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [markerPos, setMarkerPos] = useState<{ x: number, y: number }>({ x: 50, y: 75 });
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,51 +169,23 @@ export function RoomVisualizationFlow({
       URL.revokeObjectURL(uploadedImageRef.current);
     }
 
-    // Create preview URL
+    // Create preview URL then go straight to processing
     const url = URL.createObjectURL(file);
     uploadedImageRef.current = url;
     setUploadedImage(url);
-    setStep("mark");
+    handleGenerate(file);
   };
 
-  const handleGenerate = async () => {
-    if (!uploadedFile || !uploadedImage) {
-      const errorMsg = "Please upload an image first";
-      setError(errorMsg);
-      onError?.(errorMsg);
-      return;
-    }
-
+  const handleGenerate = async (file: File) => {
     // Clear any previous errors
     setError(null);
     setIsGenerating(true);
     setStep("processing");
 
     try {
-      // Calculate pixel coordinates from percentage (same logic as original frontend)
-      const imgDimensions = await new Promise<{ width: number; height: number }>((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-        img.src = uploadedImage;
-      });
-      const pixelX = Math.round((markerPos.x / 100) * imgDimensions.width);
-      const pixelY = Math.round((markerPos.y / 100) * imgDimensions.height);
-
-      console.log('[Plugin] Generating with coordinates:', {
-        percentage: { x: markerPos.x, y: markerPos.y },
-        pixel: { x: pixelX, y: pixelY },
-        imageDimensions: imgDimensions
-      });
-
       const result = await generateRoomVisualization({
-        imageBlob: uploadedFile,
+        imageBlob: file,
         productImage: productImages && productImages.length > 0 ? productImages[0] : '',
-        coordinates: {
-          x: pixelX,
-          y: pixelY,
-          percentageX: markerPos.x,
-          percentageY: markerPos.y,
-        },
         productInfo: {
           name: productName,
           category: category,
@@ -234,7 +205,7 @@ export function RoomVisualizationFlow({
       console.error("Generation error:", err);
       const errorMsg = err instanceof Error ? err.message : "Failed to generate image";
       setError(errorMsg);
-      setStep("mark"); // Stay on marker step, don't go back to upload
+      setStep("upload");
       onError?.(errorMsg);
     } finally {
       setIsGenerating(false);
@@ -253,7 +224,6 @@ export function RoomVisualizationFlow({
     setUploadedFile(null);
     setResultImage(null);
     setError(null);
-    setMarkerPos({ x: 50, y: 75 });
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -271,12 +241,11 @@ export function RoomVisualizationFlow({
     };
   }, []);
 
-  const renderStepIndicator = (currentStep: "upload" | "mark" | "processing" | "result") => {
+  const renderStepIndicator = (currentStep: "upload" | "processing" | "result") => {
     const steps = [
       { key: "upload", label: "Upload", number: 1 },
-      { key: "mark", label: "Place Marker", number: 2 },
-      { key: "processing", label: "Processing", number: 3 },
-      { key: "result", label: "Result", number: 4 }
+      { key: "processing", label: "Processing", number: 2 },
+      { key: "result", label: "Result", number: 3 }
     ];
 
     return (
@@ -1400,7 +1369,6 @@ export function RoomVisualizationFlow({
           color: "rgba(0, 0, 0, 0.8)"
         }}>
           {step === "upload" && "Step 1: Upload Photo"}
-          {step === "mark" && "Step 2: Place Marker"}
           {step === "processing" && "Transforming your space..."}
           {step === "result" && "Review Your New Room"}
         </h2>
@@ -1423,7 +1391,6 @@ export function RoomVisualizationFlow({
         textAlign: "center"
       }}>
         {step === "upload" && renderUploadStep()}
-        {step === "mark" && renderMarkStep()}
         {step === "processing" && renderProcessingStep()}
         {step === "result" && renderResultStep()}
       </div>
@@ -1435,7 +1402,6 @@ export function RoomVisualizationFlow({
         flexShrink: 0
       }}>
         {step === "upload" && renderTermsFooter()}
-        {step === "mark" && renderGenerateFooter()}
         {step === "processing" && renderProcessingFooter()}
         {step === "result" && renderResultFooter()}
       </div>

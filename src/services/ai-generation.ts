@@ -21,12 +21,6 @@ import type { GenerationResult } from '@/types/product';
 export interface PlacementRequest {
   imageBlob: Blob;
   productImage: string; // Product image URL or data URL
-  coordinates: {
-    x: number;          // pixel x in the (compressed) room image
-    y: number;          // pixel y
-    percentageX: number;
-    percentageY: number;
-  };
   productInfo: {
     name: string;
     category: string;
@@ -126,22 +120,6 @@ async function urlToInline(url: string): Promise<{ data: string; mimeType: strin
   return blobToInline(compressed);
 }
 
-/** Get pixel dimensions of an image blob (needed for the carpet OUTPUT FORMAT RULE). */
-async function getImageDimensions(blob: Blob): Promise<{ w: number; h: number }> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const dims = { w: img.naturalWidth, h: img.naturalHeight };
-      URL.revokeObjectURL(img.src);
-      resolve(dims);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(img.src);
-      reject(new Error('Could not read image dimensions'));
-    };
-    img.src = URL.createObjectURL(blob);
-  });
-}
 
 export class AIGenerationError extends Error {
   constructor(
@@ -171,7 +149,6 @@ export async function generateRoomVisualization(request: PlacementRequest): Prom
   console.log('[Plugin] Preparing room image:', request.imageBlob.size, 'bytes');
   const compressedRoom = await compressImage(request.imageBlob);
   const roomImage = await blobToInline(compressedRoom);
-  const roomDims = await getImageDimensions(compressedRoom);
 
   // 2. Convert product image (URL or data URL → inline)
   if (!request.productImage) {
@@ -185,7 +162,6 @@ export async function generateRoomVisualization(request: PlacementRequest): Prom
 
   // 3. Build the request body
   const category = request.productInfo.category;
-  const isCarpet = (category ?? '').toLowerCase().includes('carpet');
 
   const body = {
     kind: 'placement' as const,
@@ -193,7 +169,6 @@ export async function generateRoomVisualization(request: PlacementRequest): Prom
     language: request.language || 'en',
     roomImage,
     furnitureImage,
-    coordinates: { x: request.coordinates.x, y: request.coordinates.y },
     category,
     productId: request.productInfo.productId,
     description: request.productInfo.description,
@@ -203,8 +178,6 @@ export async function generateRoomVisualization(request: PlacementRequest): Prom
       height: request.productInfo.measurements.height,
       depth: request.productInfo.measurements.depth,
     },
-    // Only carpet prompt uses roomDimensions (for OUTPUT FORMAT RULE)
-    roomDimensions: isCarpet ? roomDims : undefined,
   };
 
   // 4. POST to backend
@@ -244,7 +217,6 @@ export async function generateRoomVisualization(request: PlacementRequest): Prom
     base64Data: result.image.data,
     prompt: '',
     latency: result.latencyMs ?? endTime - startTime,
-    coordinates: request.coordinates,
   };
 }
 
