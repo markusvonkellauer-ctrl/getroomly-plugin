@@ -161,12 +161,14 @@ jobs:
           EOF
 
       - name: Notify Slack
-        if: always() && secrets.SLACK_WEBHOOK_URL
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: always()
         run: |
           ENV=$([[ "${{ github.ref }}" == "refs/heads/main" ]] && echo "prod" || echo "dev")
           STATUS=$([[ "${{ job.status }}" == "success" ]] && echo "✅" || echo "❌")
-          curl -sS -X POST "$SLACK_WEBHOOK_URL" -H 'Content-type: application/json' -d "{
-            \"text\": \"${STATUS} *plugin* deployed to *${ENV}* — \`${GITHUB_SHA::7}\` by ${GITHUB_ACTOR} (<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|view run>)\"
-          }"
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" bash -se <<EOF
+            . /opt/getroomly/secrets/slack-server-monitor.env
+            [ -z "\$SLACK_WEBHOOK_URL" ] && exit 0
+            curl -sS -X POST "\$SLACK_WEBHOOK_URL" -H 'Content-type: application/json' -d '{
+              "text": "${STATUS} *plugin* deployed to *${ENV}* — \`${GITHUB_SHA::7}\` by ${GITHUB_ACTOR} (<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|view run>)"
+            }'
+          EOF
