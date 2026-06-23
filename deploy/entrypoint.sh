@@ -12,6 +12,11 @@ if [ -z "$API_BASE_URL" ]; then
   exit 1
 fi
 
+if ! grep -q '__API_BASE_URL__' "$PLUGIN_JS"; then
+  echo "FATAL: __API_BASE_URL__ placeholder not found in plugin.js. Image may be misconfigured." >&2
+  exit 1
+fi
+
 # Escape sed special chars in the value (& and \)
 ESCAPED=$(printf '%s' "$API_BASE_URL" | sed 's/[&\\/]/\\&/g')
 sed -i "s|__API_BASE_URL__|${ESCAPED}|g" "$PLUGIN_JS"
