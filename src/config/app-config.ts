@@ -22,7 +22,6 @@ const getEnvVar = (key: string, defaultValue?: string): string | undefined => {
   }
 };
 
-
 const getBooleanEnv = (key: string, defaultValue: boolean = false): boolean => {
   const value = getEnvVar(key);
   if (value === undefined) {
