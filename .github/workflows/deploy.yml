@@ -14,6 +14,9 @@ concurrency:
 jobs:
   build-and-push:
     name: Build & push image to GHCR
+    # Only main/development are real deploy targets. Guard manual
+    # workflow_dispatch runs on other branches from building/deploying.
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -76,6 +79,7 @@ jobs:
   deploy:
     name: Deploy to Hetzner
     needs: build-and-push
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
