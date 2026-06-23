@@ -8,18 +8,37 @@
 
 // Helper function to get env var or return undefined/default
 const getEnvVar = (key: string, defaultValue?: string): string | undefined => {
-  // Safely access import.meta.env or return default
+  // NOTE: import.meta.env (without ?. on import.meta) is required so that
+  // Vite can statically replace it at build time. Using import.meta?.env
+  // breaks the replacement and every var falls back to its default.
   try {
-    const value = import.meta?.env?.[key];
+    const value = import.meta.env?.[key];
     if (!value || value === '') {
       return defaultValue;
     }
     return value;
   } catch {
-    // If import.meta.env is not available (server context), return default
     return defaultValue;
   }
 };
+
+// Derive API base URL from the plugin's own script origin.
+// The plugin knows its deployment from where it's served:
+//   dev-plugin.getroomly.ai → https://dev-api.getroomly.ai
+//   plugin.getroomly.ai     → https://api.getroomly.ai
+// For local dev (localhost) or third-party hosts, falls back to env / default.
+function resolveApiBaseUrl(): string {
+  try {
+    const scriptUrl = new URL(import.meta.url);
+    if (scriptUrl.hostname.endsWith('plugin.getroomly.ai')) {
+      const apiHost = scriptUrl.hostname.replace('plugin', 'api');
+      return `${scriptUrl.protocol}//${apiHost}`;
+    }
+  } catch {
+    /* local dev or non-URL context */
+  }
+  return getEnvVar('VITE_API_BASE_URL', 'https://api.getroomly.ai')!;
+}
 
 const getBooleanEnv = (key: string, defaultValue: boolean = false): boolean => {
   const value = getEnvVar(key);
@@ -65,7 +84,7 @@ export const AppConfig = {
 
   // API Configuration - GetRoomly Backend (handles AI generation, partner auth)
   api: {
-    baseUrl: getEnvVar('VITE_API_BASE_URL', 'https://api.getroomly.ai'),
+    baseUrl: resolveApiBaseUrl(),
     timeout: getNumberEnv('VITE_API_TIMEOUT', 30000),
     uploadTimeout: getNumberEnv('VITE_UPLOAD_TIMEOUT', 60000),
     retryAttempts: getNumberEnv('VITE_API_RETRY_ATTEMPTS', 3),
