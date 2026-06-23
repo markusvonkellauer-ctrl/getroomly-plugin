@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - development
   workflow_dispatch:
 
 concurrency:
@@ -68,6 +69,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set deploy environment
+        id: env
+        run: |
+          if [ "${GITHUB_REF}" = "refs/heads/development" ]; then
+            echo "compose_dir=/opt/getroomly-dev/compose" >> $GITHUB_OUTPUT
+            echo "container=plugin-cdn-dev" >> $GITHUB_OUTPUT
+            echo "compose_file=deploy/docker-compose.dev.yml" >> $GITHUB_OUTPUT
+          else
+            echo "compose_dir=/opt/getroomly/compose" >> $GITHUB_OUTPUT
+            echo "container=plugin-cdn" >> $GITHUB_OUTPUT
+            echo "compose_file=deploy/docker-compose.yml" >> $GITHUB_OUTPUT
+          fi
+
       - name: Setup SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -84,19 +98,21 @@ jobs:
 
       - name: Ship deploy compose to server
         run: |
-          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "mkdir -p /opt/getroomly/compose/plugin"
-          scp deploy/docker-compose.yml \
-            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/getroomly/compose/plugin/docker-compose.yml"
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "mkdir -p ${{ steps.env.outputs.compose_dir }}/plugin"
+          scp ${{ steps.env.outputs.compose_file }} \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ steps.env.outputs.compose_dir }}/plugin/docker-compose.yml"
 
       - name: Pull image + roll the plugin container
         env:
           PLUGIN_IMAGE: ${{ needs.build-and-push.outputs.image }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMPOSE_DIR: ${{ steps.env.outputs.compose_dir }}
+          CONTAINER: ${{ steps.env.outputs.container }}
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" bash -se <<EOF
             set -euo pipefail
-            COMPOSE=/opt/getroomly/compose/docker-compose.yml
+            COMPOSE="${COMPOSE_DIR}/docker-compose.yml"
 
             echo '${GHCR_TOKEN}' | docker login ghcr.io -u '${GHCR_USER}' --password-stdin
 
@@ -113,29 +129,29 @@ jobs:
               echo "plugin include already present"
             fi
 
-            cd /opt/getroomly/compose
+            cd "${COMPOSE_DIR}"
             export PLUGIN_IMAGE='${PLUGIN_IMAGE}'
-            echo "Deploying image: \$PLUGIN_IMAGE"
+            echo "Deploying image: \$PLUGIN_IMAGE to container: ${CONTAINER}"
 
-            docker compose pull plugin-cdn
-            docker compose up -d --remove-orphans plugin-cdn
+            docker compose pull ${CONTAINER}
+            docker compose up -d --remove-orphans ${CONTAINER}
 
             docker logout ghcr.io >/dev/null 2>&1 || true
 
-            echo "Waiting for /health to return 200..."
+            echo "Waiting for ${CONTAINER} to become healthy..."
             for i in {1..30}; do
-              status=\$(docker inspect --format='{{.State.Health.Status}}' plugin-cdn 2>/dev/null || echo "starting")
+              status=\$(docker inspect --format='{{.State.Health.Status}}' ${CONTAINER} 2>/dev/null || echo "starting")
               echo "  [\$i] container health: \$status"
               if [ "\$status" = "healthy" ]; then
-                echo "✅ plugin-cdn is healthy"
-                docker compose ps plugin-cdn
+                echo "OK ${CONTAINER} is healthy"
+                docker compose ps ${CONTAINER}
                 exit 0
               fi
               sleep 3
             done
 
-            echo "❌ plugin-cdn did not become healthy in 90s"
-            docker compose ps plugin-cdn
-            docker compose logs --tail=200 plugin-cdn
+            echo "FAIL ${CONTAINER} did not become healthy in 90s"
+            docker compose ps ${CONTAINER}
+            docker compose logs --tail=200 ${CONTAINER}
             exit 1
           EOF
