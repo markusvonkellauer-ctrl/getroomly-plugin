@@ -7,12 +7,6 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-
-# API base URL is baked into the bundle at build time. The deploy workflow
-# passes the prod value on `main` and the dev value on `development`. When
-# unset, app-config.ts falls back to the prod default.
-ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npx vite build
 
 FROM nginx:1.27-alpine AS runtime
@@ -97,7 +91,10 @@ server {
 NGINX
 
 COPY --from=build /app/dist /usr/share/nginx/html
+COPY --chmod=755 deploy/entrypoint.sh /entrypoint.sh
 
 EXPOSE 80
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- http://127.0.0.1/health >/dev/null || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]

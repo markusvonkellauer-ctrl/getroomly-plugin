@@ -8,15 +8,16 @@
 
 // Helper function to get env var or return undefined/default
 const getEnvVar = (key: string, defaultValue?: string): string | undefined => {
-  // Safely access import.meta.env or return default
+  // NOTE: import.meta.env (without ?. on import.meta) is required so that
+  // Vite can statically replace it at build time. Using import.meta?.env
+  // breaks the replacement and every var falls back to its default.
   try {
-    const value = import.meta?.env?.[key];
+    const value = import.meta.env?.[key];
     if (!value || value === '') {
       return defaultValue;
     }
     return value;
   } catch {
-    // If import.meta.env is not available (server context), return default
     return defaultValue;
   }
 };
@@ -65,7 +66,9 @@ export const AppConfig = {
 
   // API Configuration - GetRoomly Backend (handles AI generation, partner auth)
   api: {
-    baseUrl: getEnvVar('VITE_API_BASE_URL', 'https://api.getroomly.ai'),
+    // Placeholder is replaced by Docker entrypoint from server-side env file.
+    // For local dev, set VITE_API_BASE_URL in .env.
+    baseUrl: getEnvVar('VITE_API_BASE_URL', '__API_BASE_URL__'),
     timeout: getNumberEnv('VITE_API_TIMEOUT', 30000),
     uploadTimeout: getNumberEnv('VITE_UPLOAD_TIMEOUT', 60000),
     retryAttempts: getNumberEnv('VITE_API_RETRY_ATTEMPTS', 3),

@@ -6,6 +6,8 @@ services:
     image: ${PLUGIN_IMAGE:-ghcr.io/markusvonkellauer-ctrl/getroomly-plugin:latest}
     container_name: plugin-cdn
     restart: unless-stopped
+    env_file:
+      - /opt/getroomly/secrets/plugin.env
     # Bound to loopback only — host nginx (GET-17) reverse-proxies
     # https://plugin.getroomly.ai/plugin.js to 127.0.0.1:8081.
     ports:
