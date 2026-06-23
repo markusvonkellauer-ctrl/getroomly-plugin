@@ -56,41 +56,46 @@ describe('RoomVisualizationFlow', () => {
   // ─── Upload → Processing (no mark step) ──────────────────────────────────
 
   test('goes directly to processing after file upload — no mark step', async () => {
-    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+    // Never-resolving promise keeps the component in processing state so we can assert it
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
 
     render(<RoomVisualizationFlow {...defaultProps} />);
     const input = document.querySelector('input[type="file"]');
 
-    await act(async () => {
+    act(() => {
       uploadFile(input, makeFile());
     });
 
-    expect(screen.queryByText('Step 2: Place Marker')).not.toBeInTheDocument();
-    expect(screen.getByText('Transforming your space...')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('Step 2: Place Marker')).not.toBeInTheDocument();
+      expect(screen.getByText('Transforming your space...')).toBeInTheDocument();
+    });
   });
 
   test('calls generateRoomVisualization immediately on file selection', async () => {
-    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
-
-    render(<RoomVisualizationFlow {...defaultProps} />);
-    const input = document.querySelector('input[type="file"]');
-
-    await act(async () => {
-      uploadFile(input, makeFile());
-    });
-
-    expect(generateRoomVisualization).toHaveBeenCalledTimes(1);
-  });
-
-  test('does NOT pass coordinates to generateRoomVisualization', async () => {
-    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
 
     render(<RoomVisualizationFlow {...defaultProps} />);
 
-    await act(async () => {
+    act(() => {
       uploadFile(document.querySelector('input[type="file"]'), makeFile());
     });
 
+    await waitFor(() => {
+      expect(generateRoomVisualization).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  test('does NOT pass coordinates to generateRoomVisualization', async () => {
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+
+    act(() => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => expect(generateRoomVisualization).toHaveBeenCalledTimes(1));
     const callArg = generateRoomVisualization.mock.calls[0][0];
     expect(callArg).not.toHaveProperty('coordinates');
   });
@@ -179,7 +184,7 @@ describe('RoomVisualizationFlow', () => {
     await act(async () => {
       uploadFile(
         document.querySelector('input[type="file"]'),
-        new File(['x'], 'doc.pdf', { type: 'application/pdf' }),
+        new File(['x'], 'doc.pdf', { type: 'application/pdf' })
       );
     });
 

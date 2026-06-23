@@ -15,7 +15,7 @@ const getEnvVar = (key: string, defaultValue?: string): string | undefined => {
       return defaultValue;
     }
     return value;
-  } catch (e) {
+  } catch {
     // If import.meta.env is not available (server context), return default
     return defaultValue;
   }
@@ -23,13 +23,17 @@ const getEnvVar = (key: string, defaultValue?: string): string | undefined => {
 
 const getBooleanEnv = (key: string, defaultValue: boolean = false): boolean => {
   const value = getEnvVar(key);
-  if (value === undefined) return defaultValue;
+  if (value === undefined) {
+    return defaultValue;
+  }
   return value.toLowerCase() === 'true';
 };
 
 const getNumberEnv = (key: string, defaultValue?: number): number | undefined => {
   const value = getEnvVar(key);
-  if (value === undefined) return defaultValue;
+  if (value === undefined) {
+    return defaultValue;
+  }
   const parsed = parseInt(value, 10);
   return isNaN(parsed) ? defaultValue : parsed;
 };
@@ -51,7 +55,10 @@ export const AppConfig = {
     // The published bundle has no key — every host page must pass its own via
     // window.GetRoomlyEmbedConfig.apiKey.
     defaultApiKey: getEnvVar('VITE_GETROOMLY_API_KEY'),
-    fallbackImageUrl: getEnvVar('VITE_FALLBACK_IMAGE_URL', 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800'),
+    fallbackImageUrl: getEnvVar(
+      'VITE_FALLBACK_IMAGE_URL',
+      'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800'
+    ),
     // Image compression settings before sending to backend
     maxImageDimension: getNumberEnv('VITE_MAX_IMAGE_DIMENSION', 1600),
   },
@@ -129,9 +136,18 @@ export const AppConfig = {
 
   // Demo/Placeholder Configuration
   demo: {
-    chairImageUrl: getEnvVar('VITE_DEMO_CHAIR_IMAGE', 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800'),
-    sofaImageUrl: getEnvVar('VITE_DEMO_SOFA_IMAGE', 'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?q=80&w=800'),
-    tableImageUrl: getEnvVar('VITE_DEMO_TABLE_IMAGE', 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=800'),
+    chairImageUrl: getEnvVar(
+      'VITE_DEMO_CHAIR_IMAGE',
+      'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800'
+    ),
+    sofaImageUrl: getEnvVar(
+      'VITE_DEMO_SOFA_IMAGE',
+      'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?q=80&w=800'
+    ),
+    tableImageUrl: getEnvVar(
+      'VITE_DEMO_TABLE_IMAGE',
+      'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=800'
+    ),
   },
 } as const;
 
@@ -171,7 +187,9 @@ export const isFeatureEnabled = (feature: keyof typeof AppConfig.features): bool
 
 export const getApiUrl = (endpoint: string): string => {
   const baseUrl = AppConfig.api.baseUrl;
-  if (!baseUrl) return endpoint; // Relative URL for development
+  if (!baseUrl) {
+    return endpoint;
+  } // Relative URL for development
   return `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 };
 

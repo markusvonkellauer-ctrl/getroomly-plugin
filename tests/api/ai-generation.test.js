@@ -26,7 +26,7 @@ const mockBlob = new Blob(['img'], { type: 'image/jpeg' });
 HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
   drawImage: jest.fn(),
 }));
-HTMLCanvasElement.prototype.toBlob = jest.fn((cb) => cb(mockBlob));
+HTMLCanvasElement.prototype.toBlob = jest.fn(cb => cb(mockBlob));
 
 // FileReader stub — returns a predictable base64 data URL
 global.FileReader = class {
