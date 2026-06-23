@@ -66,7 +66,12 @@ export const AppConfig = {
 
   // API Configuration - GetRoomly Backend (handles AI generation, partner auth)
   api: {
-    baseUrl: getEnvVar('VITE_API_BASE_URL', '__API_BASE_URL__'),
+    // In production builds the placeholder is replaced by the Docker entrypoint
+    // from the server-side env file. In local dev, fall back to a real URL.
+    baseUrl: getEnvVar(
+      'VITE_API_BASE_URL',
+      import.meta.env.PROD ? '__API_BASE_URL__' : 'https://api.getroomly.ai'
+    ),
     timeout: getNumberEnv('VITE_API_TIMEOUT', 30000),
     uploadTimeout: getNumberEnv('VITE_UPLOAD_TIMEOUT', 60000),
     retryAttempts: getNumberEnv('VITE_API_RETRY_ATTEMPTS', 3),
