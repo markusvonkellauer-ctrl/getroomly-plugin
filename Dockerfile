@@ -91,7 +91,10 @@ server {
 NGINX
 
 COPY --from=build /app/dist /usr/share/nginx/html
+COPY --chmod=755 deploy/entrypoint.sh /entrypoint.sh
 
 EXPOSE 80
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- http://127.0.0.1/health >/dev/null || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]

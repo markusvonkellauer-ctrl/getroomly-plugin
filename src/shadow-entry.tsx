@@ -3,13 +3,13 @@
  * This creates an isolated Shadow DOM environment for the plugin
  */
 
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import App from './App'
-import { AppConfig } from './config/app-config'
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import { AppConfig } from './config/app-config';
 
 // Import styles as text to inject into Shadow DOM
-import styleContent from './index.css?inline'
+import styleContent from './index.css?inline';
 
 class GetRoomlyPlugin extends HTMLElement {
   private reactRoot: any;
@@ -36,13 +36,13 @@ class GetRoomlyPlugin extends HTMLElement {
     if (!window.GetRoomlyEmbedConfig) {
       window.GetRoomlyEmbedConfig = {
         productImage: AppConfig.demo.chairImageUrl,
-        sku: "SHADOW-TEST-001",
-        productName: "Shadow DOM Test Product",
+        sku: 'SHADOW-TEST-001',
+        productName: 'Shadow DOM Test Product',
         productPrice: 99999,
-        category: "test",
+        category: 'test',
         measurements: { width: 78, depth: 75, height: 80 },
-        language: "en",
-        buttonText: "Visualize in Your Room"
+        language: 'en',
+        buttonText: 'Visualize in Your Room',
       };
     }
 
@@ -62,15 +62,19 @@ class GetRoomlyPlugin extends HTMLElement {
   }
 }
 
-// Define custom element
-customElements.define('getroomly-plugin', GetRoomlyPlugin);
+// Define custom element (guard against re-definition on script re-load)
+if (!customElements.get('getroomly-plugin')) {
+  customElements.define('getroomly-plugin', GetRoomlyPlugin);
+}
 
 // Expose global API for host page integration
 let pluginInstance: HTMLElement | null = null;
 let isModalOpen = false;
 
 const initPlugin = () => {
-  if (pluginInstance) return pluginInstance;
+  if (pluginInstance) {
+    return pluginInstance;
+  }
   const container = document.getElementById('getroomly-plugin-container');
   if (container) {
     pluginInstance = document.createElement('getroomly-plugin');

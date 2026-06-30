@@ -15,7 +15,7 @@ describe('Shadow DOM CSS Isolation', () => {
   beforeAll(async () => {
     browser = await puppeteer.launch({
       headless: process.env.CI !== 'false',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     page = await browser.newPage();
   });
@@ -102,7 +102,7 @@ describe('Shadow DOM CSS Isolation', () => {
         color: styles.color,
         fontSize: styles.fontSize,
         fontFamily: styles.fontFamily,
-        transform: styles.transform
+        transform: styles.transform,
       };
     });
 
@@ -121,7 +121,7 @@ describe('Shadow DOM CSS Isolation', () => {
       return {
         backgroundColor: styles.backgroundColor,
         color: styles.color,
-        fontFamily: styles.fontFamily
+        fontFamily: styles.fontFamily,
       };
     });
 
@@ -147,7 +147,7 @@ describe('Shadow DOM CSS Isolation', () => {
       const styles = window.getComputedStyle(modal);
       return {
         backgroundColor: styles.backgroundColor,
-        transform: styles.transform
+        transform: styles.transform,
       };
     });
 
@@ -157,7 +157,7 @@ describe('Shadow DOM CSS Isolation', () => {
 
   test('Plugin event handling works correctly', async () => {
     const clickHandled = await page.evaluate(() => {
-      return new Promise((resolve) => {
+      return new Promise(resolve => {
         const container = document.querySelector('#getroomly-container');
         const button = container?.shadowRoot?.querySelector('button');
 

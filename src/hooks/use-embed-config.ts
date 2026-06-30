@@ -48,8 +48,15 @@ export function useEmbedConfig() {
       }
 
       const m = embedConfig.measurements;
-      if (!m || typeof m.width !== 'number' || typeof m.depth !== 'number' || typeof m.height !== 'number') {
-        setError('Product measurements {width, depth, height} in cm are required in GetRoomlyEmbedConfig.measurements');
+      if (
+        !m ||
+        typeof m.width !== 'number' ||
+        typeof m.depth !== 'number' ||
+        typeof m.height !== 'number'
+      ) {
+        setError(
+          'Product measurements {width, depth, height} in cm are required in GetRoomlyEmbedConfig.measurements'
+        );
         return;
       }
 

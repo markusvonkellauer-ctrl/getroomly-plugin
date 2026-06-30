@@ -14,6 +14,9 @@ concurrency:
 jobs:
   build-and-push:
     name: Build & push image to GHCR
+    # Only main/development are real deploy targets. Guard manual
+    # workflow_dispatch runs on other branches from building/deploying.
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -61,6 +64,7 @@ jobs:
   deploy:
     name: Deploy to Hetzner
     needs: build-and-push
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -154,4 +158,17 @@ jobs:
             docker compose ps ${CONTAINER}
             docker compose logs --tail=200 ${CONTAINER}
             exit 1
+          EOF
+
+      - name: Notify Slack
+        if: always()
+        run: |
+          ENV=$([[ "${{ github.ref }}" == "refs/heads/main" ]] && echo "prod" || echo "dev")
+          STATUS=$([[ "${{ job.status }}" == "success" ]] && echo "✅" || echo "❌")
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" bash -se <<EOF
+            . /opt/getroomly/secrets/slack-server-monitor.env
+            [ -z "\$SLACK_WEBHOOK_URL" ] && exit 0
+            curl -sS -X POST "\$SLACK_WEBHOOK_URL" -H 'Content-type: application/json' -d '{
+              "text": "${STATUS} *plugin* deployed to *${ENV}* — \`${GITHUB_SHA::7}\` by ${GITHUB_ACTOR} (<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|view run>)"
+            }'
           EOF

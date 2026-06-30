@@ -14,7 +14,7 @@ describe('EmbedButton Component', () => {
     productName: 'Test Product',
     productPrice: 9999,
     category: 'Test Category',
-    buttonText: 'Visualize in Your Room'
+    buttonText: 'Visualize in Your Room',
   };
 
   test('renders with default button text', () => {
@@ -44,9 +44,9 @@ describe('EmbedButton Component', () => {
     const styledConfig = {
       ...mockConfig,
       styling: {
-        backgroundColor: '#ff0000',
-        color: '#ffffff'
-      }
+        buttonColor: '#ff0000',
+        buttonTextColor: '#ffffff',
+      },
     };
     const mockOnClick = jest.fn();
     render(<EmbedButton config={styledConfig} onClick={mockOnClick} />);

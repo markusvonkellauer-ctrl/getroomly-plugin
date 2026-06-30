@@ -3,15 +3,17 @@ services:
     image: ${PLUGIN_IMAGE:-ghcr.io/markusvonkellauer-ctrl/getroomly-plugin:development-latest}
     container_name: plugin-cdn-dev
     restart: unless-stopped
+    env_file:
+      - /opt/getroomly-dev/secrets/plugin.env
     ports:
-      - "127.0.0.1:8083:80"
+      - '127.0.0.1:8083:80'
     networks:
       - getroomly_net
     logging:
       driver: json-file
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: '10m'
+        max-file: '3'
 
 networks:
   getroomly_net:

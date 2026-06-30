@@ -8,28 +8,33 @@
 
 // Helper function to get env var or return undefined/default
 const getEnvVar = (key: string, defaultValue?: string): string | undefined => {
-  // Safely access import.meta.env or return default
+  // NOTE: import.meta.env (without ?. on import.meta) is required so that
+  // Vite can statically replace it at build time. Using import.meta?.env
+  // breaks the replacement and every var falls back to its default.
   try {
-    const value = import.meta?.env?.[key];
+    const value = import.meta.env?.[key];
     if (!value || value === '') {
       return defaultValue;
     }
     return value;
-  } catch (e) {
-    // If import.meta.env is not available (server context), return default
+  } catch {
     return defaultValue;
   }
 };
 
 const getBooleanEnv = (key: string, defaultValue: boolean = false): boolean => {
   const value = getEnvVar(key);
-  if (value === undefined) return defaultValue;
+  if (value === undefined) {
+    return defaultValue;
+  }
   return value.toLowerCase() === 'true';
 };
 
 const getNumberEnv = (key: string, defaultValue?: number): number | undefined => {
   const value = getEnvVar(key);
-  if (value === undefined) return defaultValue;
+  if (value === undefined) {
+    return defaultValue;
+  }
   const parsed = parseInt(value, 10);
   return isNaN(parsed) ? defaultValue : parsed;
 };
@@ -51,14 +56,19 @@ export const AppConfig = {
     // The published bundle has no key — every host page must pass its own via
     // window.GetRoomlyEmbedConfig.apiKey.
     defaultApiKey: getEnvVar('VITE_GETROOMLY_API_KEY'),
-    fallbackImageUrl: getEnvVar('VITE_FALLBACK_IMAGE_URL', 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800'),
+    fallbackImageUrl: getEnvVar(
+      'VITE_FALLBACK_IMAGE_URL',
+      'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800'
+    ),
     // Image compression settings before sending to backend
     maxImageDimension: getNumberEnv('VITE_MAX_IMAGE_DIMENSION', 1600),
   },
 
   // API Configuration - GetRoomly Backend (handles AI generation, partner auth)
   api: {
-    baseUrl: getEnvVar('VITE_API_BASE_URL', 'https://api.getroomly.ai'),
+    // Placeholder is replaced by Docker entrypoint from server-side env file.
+    // For local dev, set VITE_API_BASE_URL in .env.
+    baseUrl: getEnvVar('VITE_API_BASE_URL', '__API_BASE_URL__'),
     timeout: getNumberEnv('VITE_API_TIMEOUT', 30000),
     uploadTimeout: getNumberEnv('VITE_UPLOAD_TIMEOUT', 60000),
     retryAttempts: getNumberEnv('VITE_API_RETRY_ATTEMPTS', 3),
@@ -129,9 +139,18 @@ export const AppConfig = {
 
   // Demo/Placeholder Configuration
   demo: {
-    chairImageUrl: getEnvVar('VITE_DEMO_CHAIR_IMAGE', 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800'),
-    sofaImageUrl: getEnvVar('VITE_DEMO_SOFA_IMAGE', 'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?q=80&w=800'),
-    tableImageUrl: getEnvVar('VITE_DEMO_TABLE_IMAGE', 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=800'),
+    chairImageUrl: getEnvVar(
+      'VITE_DEMO_CHAIR_IMAGE',
+      'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=800'
+    ),
+    sofaImageUrl: getEnvVar(
+      'VITE_DEMO_SOFA_IMAGE',
+      'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?q=80&w=800'
+    ),
+    tableImageUrl: getEnvVar(
+      'VITE_DEMO_TABLE_IMAGE',
+      'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=800'
+    ),
   },
 } as const;
 
@@ -171,7 +190,9 @@ export const isFeatureEnabled = (feature: keyof typeof AppConfig.features): bool
 
 export const getApiUrl = (endpoint: string): string => {
   const baseUrl = AppConfig.api.baseUrl;
-  if (!baseUrl) return endpoint; // Relative URL for development
+  if (!baseUrl) {
+    return endpoint;
+  } // Relative URL for development
   return `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 };
 
