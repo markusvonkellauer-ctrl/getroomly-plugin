@@ -62,8 +62,10 @@ class GetRoomlyPlugin extends HTMLElement {
   }
 }
 
-// Define custom element
-customElements.define('getroomly-plugin', GetRoomlyPlugin);
+// Define custom element (guard against re-definition on script re-load)
+if (!customElements.get('getroomly-plugin')) {
+  customElements.define('getroomly-plugin', GetRoomlyPlugin);
+}
 
 // Expose global API for host page integration
 let pluginInstance: HTMLElement | null = null;
