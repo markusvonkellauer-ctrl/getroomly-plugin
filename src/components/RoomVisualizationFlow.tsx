@@ -646,15 +646,15 @@ export function RoomVisualizationFlow({
             backdropFilter: 'blur(12px)',
             borderRadius: '50%',
             padding: '24px',
-            boxShadow: '0 0 40px rgba(176, 143, 106, 0.4)',
-            border: '1px solid rgba(176, 143, 106, 0.4)',
+            boxShadow: '0 0 40px hsla(176, 51%, 36%, 0.4)',
+            border: '1px solid hsla(176, 51%, 36%, 0.4)',
           }}
         >
           <div
             style={{
               width: '48px',
               height: '48px',
-              border: '2.5px solid rgba(176, 143, 106, 0.3)',
+              border: '2.5px solid hsla(176, 51%, 36%, 0.3)',
               borderTop: '2.5px solid var(--getroomly-primary)',
               borderRadius: '50%',
               animation: 'spin 1s linear infinite',
@@ -1143,7 +1143,7 @@ export function RoomVisualizationFlow({
             position: 'relative',
             width: '100%',
             height: '4px',
-            background: 'rgba(176, 143, 106, 0.2)',
+            background: 'hsla(176, 51%, 36%, 0.2)',
             borderRadius: '2px',
             overflow: 'hidden',
           }}
@@ -1155,7 +1155,7 @@ export function RoomVisualizationFlow({
               left: 0,
               height: '100%',
               background: 'var(--getroomly-primary)',
-              boxShadow: '0 0 8px rgba(176, 143, 106, 0.8)',
+              boxShadow: '0 0 8px hsla(176, 51%, 36%, 0.8)',
               width: `${progress}%`,
               transition: 'width 100ms linear',
             }}
@@ -1166,7 +1166,7 @@ export function RoomVisualizationFlow({
             display: 'flex',
             justifyContent: 'center',
             marginTop: '4px',
-            color: 'rgba(176, 143, 106, 0.7)',
+            color: 'hsla(176, 51%, 36%, 0.7)',
             fontWeight: '700',
             fontSize: '10px',
             letterSpacing: '0.1em',
