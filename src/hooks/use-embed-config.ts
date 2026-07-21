@@ -89,10 +89,21 @@ export function useEmbedConfig() {
     // Also check when DOM is ready (in case script loads after this component)
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', checkConfig);
-      return () => {
-        document.removeEventListener('DOMContentLoaded', checkConfig);
-      };
     }
+
+    // The shadow-DOM plugin root is created once per page load and never
+    // remounted (see shadow-entry.tsx's `pluginInstance` guard), so without
+    // this listener `config` would be captured only from whatever
+    // window.GetRoomlyEmbedConfig held at the very first open — later opens
+    // for a different product, or a newly picked size on the same product,
+    // would silently keep using that stale snapshot. Re-reading on every
+    // open keeps it in sync with whatever the host page just set.
+    window.addEventListener('getroomly-open-modal', checkConfig);
+
+    return () => {
+      document.removeEventListener('DOMContentLoaded', checkConfig);
+      window.removeEventListener('getroomly-open-modal', checkConfig);
+    };
   }, []);
 
   return { config, isReady, error };
