@@ -638,16 +638,16 @@ export function RoomVisualizationFlow({
             backdropFilter: 'blur(12px)',
             borderRadius: '50%',
             padding: '24px',
-            boxShadow: '0 0 40px color-mix(in srgb, var(--getroomly-primary) 40%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--getroomly-primary) 40%, transparent)',
+            boxShadow: '0 0 40px rgba(176, 143, 106, 0.4)',
+            border: '1px solid rgba(176, 143, 106, 0.4)',
           }}
         >
           <div
             style={{
               width: '48px',
               height: '48px',
-              border: '2.5px solid color-mix(in srgb, var(--getroomly-primary) 30%, transparent)',
-              borderTop: '2.5px solid var(--getroomly-primary)',
+              border: '2.5px solid rgba(176, 143, 106, 0.3)',
+              borderTop: '2.5px solid #b08f6a',
               borderRadius: '50%',
               animation: 'spin 1s linear infinite',
             }}
@@ -1110,7 +1110,7 @@ export function RoomVisualizationFlow({
           alignItems: 'center',
           justifyContent: 'center',
           width: '100%',
-          color: 'var(--getroomly-primary)',
+          color: '#b08f6a',
           fontSize: '10px',
           fontWeight: '700',
           letterSpacing: '0.2em',
@@ -1135,7 +1135,7 @@ export function RoomVisualizationFlow({
             position: 'relative',
             width: '100%',
             height: '4px',
-            background: 'color-mix(in srgb, var(--getroomly-primary) 20%, transparent)',
+            background: 'rgba(176, 143, 106, 0.2)',
             borderRadius: '2px',
             overflow: 'hidden',
           }}
@@ -1146,8 +1146,8 @@ export function RoomVisualizationFlow({
               top: 0,
               left: 0,
               height: '100%',
-              background: 'var(--getroomly-primary)',
-              boxShadow: '0 0 8px color-mix(in srgb, var(--getroomly-primary) 80%, transparent)',
+              background: '#b08f6a',
+              boxShadow: '0 0 8px rgba(176, 143, 106, 0.8)',
               width: `${progress}%`,
               transition: 'width 100ms linear',
             }}
@@ -1158,7 +1158,7 @@ export function RoomVisualizationFlow({
             display: 'flex',
             justifyContent: 'center',
             marginTop: '4px',
-            color: 'color-mix(in srgb, var(--getroomly-primary) 70%, transparent)',
+            color: 'rgba(176, 143, 106, 0.7)',
             fontWeight: '700',
             fontSize: '10px',
             letterSpacing: '0.1em',
