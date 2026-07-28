@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AppConfig } from '@/config/app-config';
 import type { EmbedConfig } from '@/types/embed-config';
+import { detectLanguageFromTLD } from '@/lib/i18n';
 
 /**
  * Hook to manage embed configuration from window.GetRoomlyEmbedConfig
@@ -61,7 +62,10 @@ export function useEmbedConfig() {
       }
 
       const configWithDefaults: EmbedConfig = {
-        language: 'en',
+        // Explicit embedConfig.language (spread below) wins if the host page
+        // set one; otherwise fall back to TLD detection (.se -> sv) before
+        // finally defaulting to English.
+        language: detectLanguageFromTLD(),
         debugCoordinates: AppConfig.features.debugCoordinates,
         showSteps: false,
         buttons: {

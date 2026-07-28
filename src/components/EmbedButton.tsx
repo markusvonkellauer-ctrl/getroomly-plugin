@@ -1,5 +1,6 @@
 import { AppConfig } from '@/config/app-config';
 import type { EmbedConfig } from '@/types/embed-config';
+import { getTranslations } from '@/lib/i18n';
 
 interface EmbedButtonProps {
   config: EmbedConfig;
@@ -7,7 +8,8 @@ interface EmbedButtonProps {
 }
 
 export function EmbedButton({ config, onClick }: EmbedButtonProps) {
-  const { buttonText = 'Visualize in Your Room', styling = {} } = config;
+  const t = getTranslations(config.language);
+  const { buttonText = t.launchButton, styling = {} } = config;
 
   const { buttonColor = '#000', buttonTextColor = '#fff', borderRadius = '0' } = styling;
 
