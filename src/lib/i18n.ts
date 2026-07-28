@@ -129,12 +129,18 @@ export const translations = {
 } as const;
 
 export type TranslationKeys = keyof typeof translations.en;
-export type Translations = typeof translations.en;
+// Union, not just `typeof translations.en` — indexing `translations` by a
+// SupportedLanguage union (as getTranslations does below) yields a union of
+// both language objects' literal types, which isn't assignable to the `en`
+// shape alone (sv's string literals aren't the same literal types as en's).
+export type Translations = typeof translations.en | typeof translations.sv;
 
 /** TLD-based fallback: `.se` -> Swedish, everything else -> English. */
 export function detectLanguageFromTLD(): SupportedLanguage {
   const hostname = window.location.hostname;
-  if (hostname.endsWith('.se')) return 'sv';
+  if (hostname.endsWith('.se')) {
+    return 'sv';
+  }
   return 'en';
 }
 
@@ -145,7 +151,9 @@ export function detectLanguageFromTLD(): SupportedLanguage {
  */
 export function detectLanguage(): SupportedLanguage {
   const configLang = window.GetRoomlyEmbedConfig?.language;
-  if (configLang === 'sv' || configLang === 'en') return configLang;
+  if (configLang === 'sv' || configLang === 'en') {
+    return configLang;
+  }
   return detectLanguageFromTLD();
 }
 

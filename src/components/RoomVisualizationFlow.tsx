@@ -128,7 +128,7 @@ export function RoomVisualizationFlow({
         timeoutTimerRef.current = null;
       }
     };
-  }, [step, isGenerating]);
+  }, [step, isGenerating, t.loadingMessages.length]);
 
   const handleGenerate = async (file: File) => {
     setIsGenerating(true);
