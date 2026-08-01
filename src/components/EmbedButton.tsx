@@ -1,6 +1,6 @@
-import { AppConfig } from '@/config/app-config';
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
+import { trackInteraction } from '@/lib/analytics';
 
 interface EmbedButtonProps {
   config: EmbedConfig;
@@ -14,20 +14,8 @@ export function EmbedButton({ config, onClick }: EmbedButtonProps) {
   const { buttonColor = '#000', buttonTextColor = '#fff', borderRadius = '0' } = styling;
 
   const handleClick = () => {
-    // Call callback if provided
     config.callbacks?.onModalOpen?.();
-
-    // Analytics tracking
-    if (AppConfig.features.enableAnalytics && AppConfig.services.analytics.googleAnalyticsId) {
-      // Track button click event
-      if (typeof (window as any).gtag !== 'undefined') {
-        (window as any).gtag('event', 'embed_button_click', {
-          product_sku: config.sku,
-          product_category: config.category || 'unknown',
-        });
-      }
-    }
-
+    trackInteraction(config.sku, config.category);
     onClick();
   };
 
