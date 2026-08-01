@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppConfig } from '@/config/app-config';
 import { useEmbedConfig } from '@/hooks/use-embed-config';
 import { EmbedButton } from '@/components/EmbedButton';
 import { RoomVisualizationFlow } from '@/components/RoomVisualizationFlow';
+import { trackInteraction } from '@/lib/analytics';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -11,6 +12,28 @@ const queryClient = new QueryClient();
 function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { config, isReady, error } = useEmbedConfig();
+
+  // Keep a ref to the latest config.category so the Mode B listener
+  // always reads the current value without needing to re-register.
+  const categoryRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    categoryRef.current = config?.category;
+  }, [config]);
+
+  // Mode B: delegated click listener for partner buttons with data-getroomly-sku.
+  // Runs once on mount; uses categoryRef to avoid stale closure.
+  useEffect(() => {
+    const handleDocumentClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement)?.closest('[data-getroomly-sku]');
+      if (target) {
+        trackInteraction(target.getAttribute('data-getroomly-sku') || '', categoryRef.current);
+      }
+    };
+    document.addEventListener('click', handleDocumentClick);
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+    };
+  }, []);
 
   // Listen for external open/close events from host page
   useEffect(() => {

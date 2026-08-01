@@ -1,16 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { generateRoomVisualization, validateImageFile } from '@/services/ai-generation';
 import type { EmbedConfig } from '@/types/embed-config';
+import { getTranslations } from '@/lib/i18n';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-
-// Professional loading messages (from original frontend)
-const LOADING_MESSAGES = [
-  'Analysing room geometry...',
-  'Detecting ambient light...',
-  'Scaling product to floor...',
-  'Applying neural textures...',
-  'Finalising photorealistic render...',
-];
 
 interface RoomVisualizationFlowProps {
   productImages: string[];
@@ -41,6 +33,7 @@ export function RoomVisualizationFlow({
   onError,
   config,
 }: RoomVisualizationFlowProps) {
+  const t = getTranslations(config?.language);
   const [step, setStep] = useState<'upload' | 'processing' | 'result'>('upload');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [resultImage, setResultImage] = useState<string | null>(null);
@@ -113,7 +106,7 @@ export function RoomVisualizationFlow({
 
       // Message cycler every 3 seconds
       messageCyclerRef.current = window.setInterval(() => {
-        setMessageIndex(prev => (prev + 1) % LOADING_MESSAGES.length);
+        setMessageIndex(prev => (prev + 1) % t.loadingMessages.length);
       }, 3000);
 
       // 30s timeout for long loading message
@@ -135,7 +128,7 @@ export function RoomVisualizationFlow({
         timeoutTimerRef.current = null;
       }
     };
-  }, [step, isGenerating]);
+  }, [step, isGenerating, t.loadingMessages.length]);
 
   const handleGenerate = async (file: File) => {
     setIsGenerating(true);
@@ -153,7 +146,7 @@ export function RoomVisualizationFlow({
           productId: productId,
           measurements: measurements,
         },
-        language: 'en',
+        language: config?.language ?? 'en',
         apiKey: config?.apiKey,
         sessionId: sessionId,
       });
@@ -249,9 +242,9 @@ export function RoomVisualizationFlow({
 
   const renderStepIndicator = (currentStep: 'upload' | 'processing' | 'result') => {
     const steps = [
-      { key: 'upload', label: 'Upload', number: 1 },
-      { key: 'processing', label: 'Processing', number: 2 },
-      { key: 'result', label: 'Result', number: 3 },
+      { key: 'upload', label: t.stepIndicatorUpload, number: 1 },
+      { key: 'processing', label: t.stepIndicatorProcessing, number: 2 },
+      { key: 'result', label: t.stepIndicatorResult, number: 3 },
     ];
 
     return (
@@ -427,7 +420,7 @@ export function RoomVisualizationFlow({
             cursor: 'pointer',
           }}
         >
-          Upload Photo
+          {t.uploadButton}
         </button>
         <p
           style={{
@@ -439,7 +432,7 @@ export function RoomVisualizationFlow({
             fontWeight: '500',
           }}
         >
-          JPEG, PNG • MAX 10MB
+          {t.uploadHint}
         </p>
       </div>
 
@@ -470,7 +463,7 @@ export function RoomVisualizationFlow({
             paddingBottom: '8px', // pb-2
           }}
         >
-          For best results:
+          {t.tipsHeading}
         </p>
 
         <div
@@ -503,12 +496,9 @@ export function RoomVisualizationFlow({
             </span>
             <p style={{ margin: 0, textAlign: 'left' }}>
               <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
-                Angle & Distance:
+                {t.tip1Label}
               </span>
-              <span>
-                {' '}
-                Stand 1–2 metres back and point towards the floor. Capture furniture for scale.
-              </span>
+              <span> {t.tip1Body}</span>
             </p>
           </div>
 
@@ -531,8 +521,10 @@ export function RoomVisualizationFlow({
               2
             </span>
             <p style={{ margin: 0, textAlign: 'left' }}>
-              <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>Lighting:</span>
-              <span> Ensure the room is well-lit. Avoid deep shadows or dark corners.</span>
+              <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
+                {t.tip2Label}
+              </span>
+              <span> {t.tip2Body}</span>
             </p>
           </div>
 
@@ -556,9 +548,9 @@ export function RoomVisualizationFlow({
             </span>
             <p style={{ margin: 0, textAlign: 'left' }}>
               <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
-                Clear Space:
+                {t.tip3Label}
               </span>
-              <span> Remove small clutter from the floor area where the rug will be placed.</span>
+              <span> {t.tip3Body}</span>
             </p>
           </div>
         </div>
@@ -646,16 +638,16 @@ export function RoomVisualizationFlow({
             backdropFilter: 'blur(12px)',
             borderRadius: '50%',
             padding: '24px',
-            boxShadow: '0 0 40px rgba(176, 143, 106, 0.4)',
-            border: '1px solid rgba(176, 143, 106, 0.4)',
+            boxShadow: '0 0 40px color-mix(in srgb, var(--getroomly-primary) 40%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--getroomly-primary) 40%, transparent)',
           }}
         >
           <div
             style={{
               width: '48px',
               height: '48px',
-              border: '2.5px solid rgba(176, 143, 106, 0.3)',
-              borderTop: '2.5px solid #b08f6a',
+              border: '2.5px solid color-mix(in srgb, var(--getroomly-primary) 30%, transparent)',
+              borderTop: '2.5px solid var(--getroomly-primary)',
               borderRadius: '50%',
               animation: 'spin 1s linear infinite',
             }}
@@ -809,7 +801,7 @@ export function RoomVisualizationFlow({
           {(resultImage || uploadedImage) && (
             <img
               src={showOriginalImage ? uploadedImage || '' : resultImage || ''}
-              alt={showOriginalImage ? 'Original Room' : 'New Room Design'}
+              alt={showOriginalImage ? t.labelOriginal : t.labelNew}
               style={{
                 width: '100%',
                 height: '100%',
@@ -835,7 +827,7 @@ export function RoomVisualizationFlow({
               zIndex: 10,
             }}
           >
-            {showOriginalImage ? 'Original Room' : 'New Design'}
+            {showOriginalImage ? t.labelOriginal : t.labelNew}
           </div>
 
           {/* Favorite Button */}
@@ -978,7 +970,7 @@ export function RoomVisualizationFlow({
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
           }}
         >
-          Add to Basket
+          {t.addToBasket}
         </button>
       )}
 
@@ -1003,7 +995,7 @@ export function RoomVisualizationFlow({
             fontWeight: '700',
           }}
         >
-          {showOriginalImage ? 'Show New Design' : 'Show Original'}
+          {showOriginalImage ? t.showNew : t.showOriginal}
         </button>
       )}
 
@@ -1029,7 +1021,7 @@ export function RoomVisualizationFlow({
                 border: '1px solid transparent',
               }}
             >
-              Save / Share
+              {t.saveShare}
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
@@ -1054,7 +1046,7 @@ export function RoomVisualizationFlow({
                   outline: 'none',
                 }}
               >
-                Download to Device
+                {t.downloadToDevice}
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 onSelect={handleShareWithFriends}
@@ -1066,7 +1058,7 @@ export function RoomVisualizationFlow({
                   outline: 'none',
                 }}
               >
-                Share with Friends
+                {t.shareWithFriends}
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
@@ -1093,7 +1085,7 @@ export function RoomVisualizationFlow({
           border: '1px solid transparent',
         }}
       >
-        New Photo
+        {t.newPhoto}
       </button>
     </div>
   );
@@ -1118,7 +1110,7 @@ export function RoomVisualizationFlow({
           alignItems: 'center',
           justifyContent: 'center',
           width: '100%',
-          color: '#b08f6a',
+          color: 'var(--getroomly-primary)',
           fontSize: '10px',
           fontWeight: '700',
           letterSpacing: '0.2em',
@@ -1126,7 +1118,7 @@ export function RoomVisualizationFlow({
           textAlign: 'center',
         }}
       >
-        {LOADING_MESSAGES[messageIndex]}
+        {t.loadingMessages[messageIndex]}
       </div>
 
       {/* Progress Bar */}
@@ -1143,7 +1135,7 @@ export function RoomVisualizationFlow({
             position: 'relative',
             width: '100%',
             height: '4px',
-            background: 'rgba(176, 143, 106, 0.2)',
+            background: 'color-mix(in srgb, var(--getroomly-primary) 20%, transparent)',
             borderRadius: '2px',
             overflow: 'hidden',
           }}
@@ -1154,8 +1146,8 @@ export function RoomVisualizationFlow({
               top: 0,
               left: 0,
               height: '100%',
-              background: '#b08f6a',
-              boxShadow: '0 0 8px rgba(176, 143, 106, 0.8)',
+              background: 'var(--getroomly-primary)',
+              boxShadow: '0 0 8px color-mix(in srgb, var(--getroomly-primary) 80%, transparent)',
               width: `${progress}%`,
               transition: 'width 100ms linear',
             }}
@@ -1166,7 +1158,7 @@ export function RoomVisualizationFlow({
             display: 'flex',
             justifyContent: 'center',
             marginTop: '4px',
-            color: 'rgba(176, 143, 106, 0.7)',
+            color: 'color-mix(in srgb, var(--getroomly-primary) 70%, transparent)',
             fontWeight: '700',
             fontSize: '10px',
             letterSpacing: '0.1em',
@@ -1202,7 +1194,7 @@ export function RoomVisualizationFlow({
           e.currentTarget.style.color = 'hsla(20, 8%, 45%, 0.6)';
         }}
       >
-        Terms of Use &amp; Privacy
+        {t.termsLink}
       </button>
     </div>
   );
@@ -1255,7 +1247,7 @@ export function RoomVisualizationFlow({
               }}
             >
               <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: '#374151' }}>
-                Terms of Use &amp; Privacy
+                {t.termsTitle}
               </h2>
               <button
                 onClick={() => setShowTermsDialog(false)}
@@ -1288,11 +1280,30 @@ export function RoomVisualizationFlow({
                     marginBottom: '8px',
                   }}
                 >
-                  1. Purpose of Image Processing
+                  {t.termsSection1Title}
                 </h3>
+                <p style={{ margin: 0 }}>{t.termsSection1Body}</p>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <h3
+                  style={{
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    color: '#374151',
+                    marginBottom: '8px',
+                  }}
+                >
+                  {t.termsSection2Title}
+                </h3>
+                <p style={{ margin: '0 0 8px 0' }}>
+                  <strong>{t.termsNoPersonalDataTitle}:</strong> {t.termsNoPersonalDataBody}
+                </p>
+                <p style={{ margin: '0 0 8px 0' }}>
+                  <strong>{t.termsEphemeralTitle}:</strong> {t.termsEphemeralBody}
+                </p>
                 <p style={{ margin: 0 }}>
-                  Your uploaded images are processed solely to generate room visualizations with
-                  furniture placement. No personal data is collected or stored.
+                  <strong>{t.termsContinuousTitle}:</strong> {t.termsContinuousBody}
                 </p>
               </div>
 
@@ -1305,37 +1316,9 @@ export function RoomVisualizationFlow({
                     marginBottom: '8px',
                   }}
                 >
-                  2. Data Privacy
+                  {t.termsSection3Title}
                 </h3>
-                <p style={{ margin: '0 0 8px 0' }}>
-                  <strong>No Personal Data:</strong> We only process room images you voluntarily
-                  upload.
-                </p>
-                <p style={{ margin: '0 0 8px 0' }}>
-                  <strong>Ephemeral Storage:</strong> Images are temporarily processed and
-                  automatically deleted after visualization.
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>No Tracking:</strong> We do not store, share, or use your images for any
-                  purpose beyond the current visualization.
-                </p>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <h3
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: '#374151',
-                    marginBottom: '8px',
-                  }}
-                >
-                  3. Data Security
-                </h3>
-                <p style={{ margin: 0 }}>
-                  All image processing uses secure, encrypted connections. Your images are never
-                  permanently stored on our servers.
-                </p>
+                <p style={{ margin: 0 }}>{t.termsSection3Body}</p>
               </div>
 
               <div>
@@ -1347,12 +1330,9 @@ export function RoomVisualizationFlow({
                     marginBottom: '8px',
                   }}
                 >
-                  4. Your Rights
+                  {t.termsSection4Title}
                 </h3>
-                <p style={{ margin: 0 }}>
-                  You retain full ownership of your uploaded images. You can stop using the service
-                  at any time, and any temporary data is automatically removed.
-                </p>
+                <p style={{ margin: 0 }}>{t.termsSection4Body}</p>
               </div>
             </div>
 
@@ -1377,7 +1357,7 @@ export function RoomVisualizationFlow({
                   e.currentTarget.style.filter = 'brightness(1)';
                 }}
               >
-                Close
+                {t.termsClose}
               </button>
             </div>
           </div>
@@ -1411,9 +1391,9 @@ export function RoomVisualizationFlow({
             color: 'rgba(0, 0, 0, 0.8)',
           }}
         >
-          {step === 'upload' && 'Step 1: Upload Photo'}
-          {step === 'processing' && 'Transforming your space...'}
-          {step === 'result' && 'Review Your New Room'}
+          {step === 'upload' && t.stepUpload}
+          {step === 'processing' && t.stepProcessing}
+          {step === 'result' && t.stepResult}
         </h2>
       </div>
 
