@@ -26,10 +26,7 @@ function App() {
     const handleDocumentClick = (e: MouseEvent) => {
       const target = (e.target as HTMLElement)?.closest('[data-getroomly-sku]');
       if (target) {
-        trackInteraction(
-          target.getAttribute('data-getroomly-sku') || '',
-          categoryRef.current,
-        );
+        trackInteraction(target.getAttribute('data-getroomly-sku') || '', categoryRef.current);
       }
     };
     document.addEventListener('click', handleDocumentClick);
