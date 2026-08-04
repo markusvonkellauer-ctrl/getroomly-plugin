@@ -10,7 +10,7 @@ global.fetch = jest.fn();
 global.URL.createObjectURL = jest.fn(() => 'blob:mock');
 global.URL.revokeObjectURL = jest.fn();
 
-// Minimal Image stub so compressImage resolves immediately
+// Minimal Image stub so the createImageBitmap-unavailable fallback resolves immediately
 global.Image = class {
   constructor() {
     setTimeout(() => {
@@ -20,6 +20,12 @@ global.Image = class {
     }, 0);
   }
 };
+
+// Minimal createImageBitmap stub — applies "EXIF orientation" (mocked as a no-op) and
+// resolves with a bitmap-like object exposing width/height/close(), same as the real API.
+global.createImageBitmap = jest.fn(() =>
+  Promise.resolve({ width: 800, height: 600, close: jest.fn() })
+);
 
 // Minimal canvas stub so compressImage produces a blob
 const mockBlob = new Blob(['img'], { type: 'image/jpeg' });
@@ -145,6 +151,40 @@ describe('AI Generation Service', () => {
       expect(body.category).toBe('Carpet');
       expect(body.productId).toBe('carpet-1');
       expect(body.dimensions).toEqual({ width: 200, height: 1, depth: 300 });
+    });
+  });
+
+  describe('generateRoomVisualization — image compression (EXIF orientation)', () => {
+    const makeLargeFile = () => {
+      const file = new File(['test'], 'room.jpg', { type: 'image/jpeg' });
+      Object.defineProperty(file, 'size', { value: 500 * 1024 });
+      return file;
+    };
+
+    test('compresses a large image via createImageBitmap and still returns a valid result', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ image: { data: 'dGVzdA==', mimeType: 'image/webp' } }),
+      });
+
+      const result = await generateRoomVisualization({ ...baseParams, imageBlob: makeLargeFile() });
+
+      expect(global.createImageBitmap).toHaveBeenCalled();
+      expect(result.imageUrl).toBe('data:image/webp;base64,dGVzdA==');
+    });
+
+    test('falls back to Image() when createImageBitmap throws, and still returns a valid result', async () => {
+      global.createImageBitmap.mockImplementationOnce(() =>
+        Promise.reject(new Error('createImageBitmap unsupported'))
+      );
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ image: { data: 'dGVzdA==', mimeType: 'image/webp' } }),
+      });
+
+      const result = await generateRoomVisualization({ ...baseParams, imageBlob: makeLargeFile() });
+
+      expect(result.imageUrl).toBe('data:image/webp;base64,dGVzdA==');
     });
   });
 

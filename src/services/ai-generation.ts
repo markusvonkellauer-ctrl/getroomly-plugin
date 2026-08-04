@@ -40,6 +40,75 @@ export interface PlacementRequest {
   sessionId?: string;
 }
 
+/** Draws a source (ImageBitmap or HTMLImageElement) onto a resized canvas and returns the compressed blob. */
+function drawAndCompress(
+  source: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+  maxWidth: number,
+  quality: number,
+  originalBlob: Blob,
+  resolve: (blob: Blob) => void,
+  reject: (err: Error) => void
+): void {
+  let width = sourceWidth;
+  let height = sourceHeight;
+
+  if (width > maxWidth || height > maxWidth) {
+    if (width > height) {
+      height = (height / width) * maxWidth;
+      width = maxWidth;
+    } else {
+      width = (width / height) * maxWidth;
+      height = maxWidth;
+    }
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return reject(new Error('Canvas context failed'));
+  }
+
+  ctx.drawImage(source, 0, 0, width, height);
+  canvas.toBlob(
+    compressed => {
+      if (compressed) {
+        console.log(
+          `[Plugin] Image compressed: ${(originalBlob.size / 1024 / 1024).toFixed(2)}MB → ${(compressed.size / 1024 / 1024).toFixed(2)}MB`
+        );
+        resolve(compressed);
+      } else {
+        resolve(originalBlob);
+      }
+    },
+    'image/jpeg',
+    quality
+  );
+}
+
+/** Loads the image via `new Image()` (no EXIF orientation correction) and compresses it. */
+function compressImageFallback(
+  blob: Blob | File,
+  maxWidth: number,
+  quality: number,
+  resolve: (blob: Blob) => void,
+  reject: (err: Error) => void
+): void {
+  const img = new Image();
+  img.src = URL.createObjectURL(blob);
+  img.onload = () => {
+    URL.revokeObjectURL(img.src);
+    drawAndCompress(img, img.width, img.height, maxWidth, quality, blob, resolve, reject);
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(img.src);
+    resolve(blob);
+  };
+}
+
 /** Compresses an image to stay under the backend's 20MB body limit. */
 async function compressImage(blob: Blob | File, maxWidth = 1600, quality = 0.75): Promise<Blob> {
   if (blob.size < 400 * 1024) {
@@ -47,51 +116,35 @@ async function compressImage(blob: Blob | File, maxWidth = 1600, quality = 0.75)
   }
 
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.src = URL.createObjectURL(blob);
-    img.onload = () => {
-      URL.revokeObjectURL(img.src);
-      let width = img.width;
-      let height = img.height;
+    if (typeof createImageBitmap !== 'function') {
+      return compressImageFallback(blob, maxWidth, quality, resolve, reject);
+    }
 
-      if (width > maxWidth || height > maxWidth) {
-        if (width > height) {
-          height = (height / width) * maxWidth;
-          width = maxWidth;
-        } else {
-          width = (width / height) * maxWidth;
-          height = maxWidth;
-        }
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        return reject(new Error('Canvas context failed'));
-      }
-
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        compressed => {
-          if (compressed) {
-            console.log(
-              `[Plugin] Image compressed: ${(blob.size / 1024 / 1024).toFixed(2)}MB → ${(compressed.size / 1024 / 1024).toFixed(2)}MB`
-            );
+    // Applies the photo's embedded EXIF orientation automatically — without this,
+    // portrait photos taken directly with a phone camera get compressed sideways.
+    createImageBitmap(blob, { imageOrientation: 'from-image' })
+      .then(bitmap => {
+        drawAndCompress(
+          bitmap,
+          bitmap.width,
+          bitmap.height,
+          maxWidth,
+          quality,
+          blob,
+          compressed => {
+            bitmap.close();
             resolve(compressed);
-          } else {
-            resolve(blob);
+          },
+          err => {
+            bitmap.close();
+            reject(err);
           }
-        },
-        'image/jpeg',
-        quality
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(img.src);
-      resolve(blob);
-    };
+        );
+      })
+      .catch(err => {
+        console.warn('[Plugin] createImageBitmap failed, falling back to Image():', err);
+        compressImageFallback(blob, maxWidth, quality, resolve, reject);
+      });
   });
 }
 
