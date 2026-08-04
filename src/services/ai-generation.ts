@@ -64,6 +64,12 @@ function drawAndCompress(
     }
   }
 
+  // Round once so canvas dimensions (integer attributes) and drawImage's target size agree —
+  // otherwise a fractional size gets truncated for the canvas but not for the draw, causing
+  // 1px clipping/stretching.
+  width = Math.round(width);
+  height = Math.round(height);
+
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -122,29 +128,36 @@ async function compressImage(blob: Blob | File, maxWidth = 1600, quality = 0.75)
 
     // Applies the photo's embedded EXIF orientation automatically — without this,
     // portrait photos taken directly with a phone camera get compressed sideways.
-    createImageBitmap(blob, { imageOrientation: 'from-image' })
-      .then(bitmap => {
-        drawAndCompress(
-          bitmap,
-          bitmap.width,
-          bitmap.height,
-          maxWidth,
-          quality,
-          blob,
-          compressed => {
-            bitmap.close();
-            resolve(compressed);
-          },
-          err => {
-            bitmap.close();
-            reject(err);
-          }
-        );
-      })
-      .catch(err => {
-        console.warn('[Plugin] createImageBitmap failed, falling back to Image():', err);
-        compressImageFallback(blob, maxWidth, quality, resolve, reject);
-      });
+    // createImageBitmap can both reject *and* throw synchronously (e.g. unsupported
+    // options), so both paths need to fall back the same way.
+    try {
+      createImageBitmap(blob, { imageOrientation: 'from-image' })
+        .then(bitmap => {
+          drawAndCompress(
+            bitmap,
+            bitmap.width,
+            bitmap.height,
+            maxWidth,
+            quality,
+            blob,
+            compressed => {
+              bitmap.close();
+              resolve(compressed);
+            },
+            err => {
+              bitmap.close();
+              reject(err);
+            }
+          );
+        })
+        .catch(err => {
+          console.warn('[Plugin] createImageBitmap failed, falling back to Image():', err);
+          compressImageFallback(blob, maxWidth, quality, resolve, reject);
+        });
+    } catch (err) {
+      console.warn('[Plugin] createImageBitmap threw synchronously, falling back to Image():', err);
+      compressImageFallback(blob, maxWidth, quality, resolve, reject);
+    }
   });
 }
 

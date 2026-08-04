@@ -161,6 +161,13 @@ describe('AI Generation Service', () => {
       return file;
     };
 
+    beforeEach(() => {
+      global.createImageBitmap.mockClear();
+      global.createImageBitmap.mockImplementation(() =>
+        Promise.resolve({ width: 800, height: 600, close: jest.fn() })
+      );
+    });
+
     test('compresses a large image via createImageBitmap and still returns a valid result', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,
