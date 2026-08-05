@@ -35,6 +35,22 @@ function App() {
     };
   }, []);
 
+  // Lock host page scroll when modal is open — prevents iOS rubber-band
+  // scroll from propagating to the body and making the fixed modal jump.
+  useEffect(() => {
+    if (isModalOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, [isModalOpen]);
+
   // Listen for external open/close events from host page
   useEffect(() => {
     const handleOpen = () => setIsModalOpen(true);
