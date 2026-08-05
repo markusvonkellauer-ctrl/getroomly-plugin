@@ -1422,7 +1422,7 @@ export function RoomVisualizationFlow({
       {/* Footer - Dynamic based on step */}
       <div
         style={{
-          padding: '10px 0',
+          padding: '8px var(--getroomly-space-sm) var(--getroomly-space-sm)',
           backgroundColor: '#ffffff',
           flexShrink: 0,
         }}
