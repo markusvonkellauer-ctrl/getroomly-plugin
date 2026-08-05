@@ -53,6 +53,15 @@ body {
   }
 }
 
+/* Modal container height — dvh correctly sizes to the visible area on
+   mobile Safari regardless of whether the address bar is expanded or
+   collapsed. 100vh on iOS counts the area behind the address bar; dvh
+   does not, so buttons stay visible without scrolling. */
+.getroomly-modal-container {
+  max-height: 80vh; /* fallback for browsers without dvh support */
+  max-height: 80dvh;
+}
+
 /* Ping animation for marker */
 @keyframes ping {
   75%,

@@ -1375,7 +1375,7 @@ export function RoomVisualizationFlow({
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '10px 16px 20px',
+          padding: 'var(--getroomly-space-xs) var(--getroomly-space-sm)',
           flexShrink: 0,
         }}
       >
@@ -1410,8 +1410,7 @@ export function RoomVisualizationFlow({
           padding: '0',
           margin: '0 auto',
           position: 'relative',
-          minHeight: '400px',
-          maxHeight: 'calc(100vh - 122px)',
+          minHeight: '0',
           textAlign: 'center',
         }}
       >
@@ -1423,7 +1422,7 @@ export function RoomVisualizationFlow({
       {/* Footer - Dynamic based on step */}
       <div
         style={{
-          padding: '10px 0',
+          padding: '8px var(--getroomly-space-sm) var(--getroomly-space-sm)',
           backgroundColor: '#ffffff',
           flexShrink: 0,
         }}
