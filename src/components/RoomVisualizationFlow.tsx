@@ -1376,13 +1376,13 @@ export function RoomVisualizationFlow({
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          padding: 'var(--getroomly-space-xs) var(--getroomly-space-sm)',
+          padding: '4px var(--getroomly-space-sm)',
           flexShrink: 0,
-          gap: 'var(--getroomly-space-xs)',
+          gap: '4px',
         }}
       >
         {/* Left spacer balances the close button so the title stays centred */}
-        <div style={{ width: '32px', flexShrink: 0 }} />
+        <div style={{ width: '28px', flexShrink: 0 }} />
 
         <h2
           style={{
@@ -1406,8 +1406,8 @@ export function RoomVisualizationFlow({
             aria-label="Close"
             style={{
               flexShrink: 0,
-              width: '32px',
-              height: '32px',
+              width: '28px',
+              height: '28px',
               borderRadius: '50%',
               border: 'none',
               cursor: 'pointer',
