@@ -112,7 +112,7 @@ function App() {
             />
             <div
               role="dialog"
-              className="getroomly-modal-container rounded-t-2xl sm:rounded-2xl flex flex-col gap-0 transition-all duration-300 overflow-hidden bg-background border shadow-2xl"
+              className="getroomly-modal-container rounded-2xl flex flex-col gap-0 transition-all duration-300 overflow-hidden bg-background border shadow-2xl"
               style={{
                 pointerEvents: 'auto',
                 position: 'fixed',
