@@ -1375,7 +1375,7 @@ export function RoomVisualizationFlow({
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '10px 16px 20px',
+          padding: 'var(--getroomly-space-xs) var(--getroomly-space-sm)',
           flexShrink: 0,
         }}
       >
