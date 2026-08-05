@@ -125,51 +125,6 @@ function App() {
               }}
               onClick={e => e.stopPropagation()}
             >
-              <button
-                onClick={handleModalClose}
-                aria-label="Close"
-                style={{
-                  position: 'absolute',
-                  right: '12px',
-                  top: '12px',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: 'rgba(0, 0, 0, 0.06)',
-                  color: '#374151',
-                  transition: 'all 0.15s ease',
-                  zIndex: 10,
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.12)';
-                  e.currentTarget.style.transform = 'scale(1.05)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.06)';
-                  e.currentTarget.style.transform = 'scale(1)';
-                }}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
-                </svg>
-              </button>
-
               <RoomVisualizationFlow
                 productImages={[config.productImage]}
                 productId={config.sku}
@@ -179,6 +134,7 @@ function App() {
                 measurements={config.measurements}
                 showSteps={config.showSteps}
                 config={config}
+                onClose={handleModalClose}
                 onComplete={imageUrl => {
                   config.callbacks?.onImageGenerated?.(imageUrl);
                 }}

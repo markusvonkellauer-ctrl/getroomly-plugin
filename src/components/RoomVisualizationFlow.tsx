@@ -16,6 +16,7 @@ interface RoomVisualizationFlowProps {
     height: number;
   };
   showSteps?: boolean;
+  onClose?: () => void;
   onComplete?: (imageUrl: string) => void;
   onError?: (error: string) => void;
   config?: EmbedConfig;
@@ -29,6 +30,7 @@ export function RoomVisualizationFlow({
   productPrice: _productPrice,
   measurements,
   showSteps = true,
+  onClose,
   onComplete,
   onError,
   config,
@@ -1368,26 +1370,28 @@ export function RoomVisualizationFlow({
 
   return (
     <>
-      {/* Header - Step Titles */}
+      {/* Header - Step Titles + Close button */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'center',
           padding: 'var(--getroomly-space-xs) var(--getroomly-space-sm)',
           flexShrink: 0,
+          gap: 'var(--getroomly-space-xs)',
         }}
       >
+        {/* Left spacer balances the close button so the title stays centred */}
+        <div style={{ width: '32px', flexShrink: 0 }} />
+
         <h2
           style={{
+            flex: 1,
             textAlign: 'center',
-            width: '100%',
             fontSize: '18px',
             fontWeight: 'bold',
             letterSpacing: '-0.025em',
-            marginTop: '0',
-            marginBottom: '0',
+            margin: '0',
             color: 'rgba(0, 0, 0, 0.8)',
           }}
         >
@@ -1395,6 +1399,50 @@ export function RoomVisualizationFlow({
           {step === 'processing' && t.stepProcessing}
           {step === 'result' && t.stepResult}
         </h2>
+
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              flexShrink: 0,
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0, 0, 0, 0.06)',
+              color: '#374151',
+              transition: 'all var(--getroomly-transition-fast)',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.12)';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.06)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Content - Like original content structure */}
