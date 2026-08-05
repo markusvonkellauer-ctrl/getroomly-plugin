@@ -112,7 +112,7 @@ function App() {
             />
             <div
               role="dialog"
-              className="sm:rounded-lg flex flex-col p-3 sm:p-4 gap-0 transition-all duration-300 overflow-hidden bg-background border shadow-2xl"
+              className="getroomly-modal-container rounded-t-2xl sm:rounded-2xl flex flex-col gap-0 transition-all duration-300 overflow-hidden bg-background border shadow-2xl"
               style={{
                 pointerEvents: 'auto',
                 position: 'fixed',
@@ -122,7 +122,6 @@ function App() {
                 zIndex: 50,
                 width: '100%',
                 maxWidth: '520px',
-                maxHeight: '80%',
               }}
               onClick={e => e.stopPropagation()}
             >

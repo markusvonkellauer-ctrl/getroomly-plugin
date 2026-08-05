@@ -1410,8 +1410,7 @@ export function RoomVisualizationFlow({
           padding: '0',
           margin: '0 auto',
           position: 'relative',
-          minHeight: '400px',
-          maxHeight: 'calc(100vh - 122px)',
+          minHeight: '0',
           textAlign: 'center',
         }}
       >
