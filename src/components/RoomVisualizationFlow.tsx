@@ -57,6 +57,10 @@ export function RoomVisualizationFlow({
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
+  // Natural aspect ratio of the uploaded image — drives the container size so
+  // the full photo is visible without cropping.
+  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
+
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
   const [zoomState, setZoomState] = useState<{ scale: number; forImage: string | null }>({
@@ -236,6 +240,12 @@ export function RoomVisualizationFlow({
     const url = URL.createObjectURL(file);
     uploadedImageRef.current = url;
     setUploadedImage(url);
+
+    // Detect natural dimensions so the container matches the photo's real ratio
+    const img = new Image();
+    img.onload = () => setImageAspectRatio(img.naturalWidth / img.naturalHeight);
+    img.src = url;
+
     handleGenerate(file);
   };
 
@@ -251,6 +261,7 @@ export function RoomVisualizationFlow({
     setStep('upload');
     setUploadedImage(null);
     setResultImage(null);
+    setImageAspectRatio(null);
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -678,7 +689,7 @@ export function RoomVisualizationFlow({
       style={{
         position: 'relative',
         width: '100%',
-        aspectRatio: '5/5',
+        aspectRatio: imageAspectRatio ? String(imageAspectRatio) : '4/3',
         maxHeight: '100%',
         background: '#0a111a',
         display: 'flex',
@@ -870,13 +881,13 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Fixed aspect ratio container - prevents resize when toggling images */}
+        {/* Aspect ratio matches the uploaded photo — no cropping */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
             width: '100%',
-            aspectRatio: '5/5',
+            aspectRatio: imageAspectRatio ? String(imageAspectRatio) : '4/3',
             maxHeight: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
@@ -890,7 +901,7 @@ export function RoomVisualizationFlow({
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover',
+                objectFit: 'contain',
                 display: 'block',
                 transform: `scale(${imageScale})`,
                 transformOrigin: 'center center',
