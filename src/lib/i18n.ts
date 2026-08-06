@@ -15,7 +15,7 @@ export type SupportedLanguage = 'en' | 'sv';
 
 export const translations = {
   en: {
-    stepUpload: 'Step 1: Upload Photo',
+    stepUpload: 'Upload Photo',
     stepProcessing: 'Transforming your space...',
     stepResult: 'Review Your New Room',
     stepIndicatorUpload: 'Upload',
@@ -71,7 +71,7 @@ export const translations = {
     termsClose: 'Close',
   },
   sv: {
-    stepUpload: 'Steg 1: Ladda upp foto',
+    stepUpload: 'Ladda upp foto',
     stepProcessing: 'Transformerar ditt rum...',
     stepResult: 'Granska ditt nya rum',
     stepIndicatorUpload: 'Ladda upp',
