@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { generateRoomVisualization, validateImageFile } from '@/services/ai-generation';
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
@@ -56,6 +56,12 @@ export function RoomVisualizationFlow({
   const [saveShareDropdownOpen, setSaveShareDropdownOpen] = useState(false);
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
+
+  // Pinch-to-zoom state for the generated image
+  const [imageScale, setImageScale] = useState(1);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null);
+  const lastTapRef = useRef(0);
 
   // Listen for external favorite state changes from host page
   useEffect(() => {
@@ -241,6 +247,58 @@ export function RoomVisualizationFlow({
       }
     };
   }, []);
+
+  // Reset zoom when a new result image arrives
+  useEffect(() => {
+    setImageScale(1);
+  }, [resultImage]);
+
+  // Pinch-to-zoom helpers (non-passive listeners required for e.preventDefault())
+  const getDistance = useCallback((t1: Touch, t2: Touch) =>
+    Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2)), []);
+
+  useEffect(() => {
+    const el = imageContainerRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        pinchRef.current = {
+          startDist: getDistance(e.touches[0], e.touches[1]),
+          startScale: imageScale,
+        };
+      } else if (e.touches.length === 1) {
+        const now = Date.now();
+        if (now - lastTapRef.current < 300) {
+          setImageScale(1);
+        }
+        lastTapRef.current = now;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && pinchRef.current) {
+        e.preventDefault();
+        const newDist = getDistance(e.touches[0], e.touches[1]);
+        const ratio = newDist / pinchRef.current.startDist;
+        const next = Math.min(Math.max(pinchRef.current.startScale * ratio, 1), 4);
+        setImageScale(next);
+      }
+    };
+
+    const onTouchEnd = () => {
+      pinchRef.current = null;
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [getDistance, imageScale]);
 
   const renderStepIndicator = (currentStep: 'upload' | 'processing' | 'result') => {
     const steps = [
@@ -791,6 +849,7 @@ export function RoomVisualizationFlow({
       >
         {/* Fixed aspect ratio container - prevents resize when toggling images */}
         <div
+          ref={imageContainerRef}
           style={{
             position: 'relative',
             width: '100%',
@@ -798,6 +857,7 @@ export function RoomVisualizationFlow({
             maxHeight: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
+            cursor: imageScale > 1 ? 'grab' : 'default',
           }}
         >
           {(resultImage || uploadedImage) && (
@@ -809,6 +869,10 @@ export function RoomVisualizationFlow({
                 height: '100%',
                 objectFit: 'cover',
                 display: 'block',
+                transform: `scale(${imageScale})`,
+                transformOrigin: 'center center',
+                transition: imageScale === 1 ? 'transform 0.25s ease' : 'none',
+                willChange: 'transform',
               }}
             />
           )}
@@ -871,8 +935,8 @@ export function RoomVisualizationFlow({
             <div
               style={{
                 position: 'absolute',
-                bottom: '16px',
-                right: '16px',
+                bottom: '8px',
+                right: '8px',
                 display: 'flex',
                 gap: '8px',
                 zIndex: 10,

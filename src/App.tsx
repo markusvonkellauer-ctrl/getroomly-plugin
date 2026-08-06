@@ -40,14 +40,11 @@ function App() {
   useEffect(() => {
     if (isModalOpen) {
       document.body.style.overflow = 'hidden';
-      document.body.style.touchAction = 'none';
     } else {
       document.body.style.overflow = '';
-      document.body.style.touchAction = '';
     }
     return () => {
       document.body.style.overflow = '';
-      document.body.style.touchAction = '';
     };
   }, [isModalOpen]);
 
@@ -123,7 +120,7 @@ function App() {
           <>
             <div
               className="fixed inset-0 z-50 bg-black/80"
-              style={{ pointerEvents: 'auto' }}
+              style={{ pointerEvents: 'auto', touchAction: 'none' }}
               onClick={handleModalClose}
             />
             <div
