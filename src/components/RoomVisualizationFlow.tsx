@@ -1301,7 +1301,7 @@ export function RoomVisualizationFlow({
           bottom: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.8)',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'center',
           zIndex: 10000,
           backdropFilter: 'blur(4px)',
