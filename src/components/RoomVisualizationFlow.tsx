@@ -57,9 +57,11 @@ export function RoomVisualizationFlow({
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
-  // Natural aspect ratio of the uploaded image — drives the container size so
-  // the full photo is visible without cropping.
+  // Natural aspect ratio of the uploaded image — used for the processing step container.
   const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
+  // Aspect ratio read from the actual Gemini result image on load — used for the result
+  // step container so it always matches exactly what the model returned.
+  const [resultAspectRatio, setResultAspectRatio] = useState<number | null>(null);
 
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
@@ -262,6 +264,7 @@ export function RoomVisualizationFlow({
     setUploadedImage(null);
     setResultImage(null);
     setImageAspectRatio(null);
+    setResultAspectRatio(null);
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -881,13 +884,15 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Aspect ratio matches the uploaded photo — no cropping */}
+        {/* Aspect ratio is driven by the actual Gemini result dimensions (read on
+            load), falling back to the uploaded image ratio during the initial
+            render before the result image has loaded. */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
             width: '100%',
-            aspectRatio: imageAspectRatio ? String(imageAspectRatio) : '4/3',
+            aspectRatio: String(resultAspectRatio ?? imageAspectRatio ?? 4 / 3),
             maxHeight: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
@@ -898,6 +903,12 @@ export function RoomVisualizationFlow({
             <img
               src={showOriginalImage ? uploadedImage || '' : resultImage || ''}
               alt={showOriginalImage ? t.labelOriginal : t.labelNew}
+              onLoad={e => {
+                const img = e.currentTarget;
+                if (img.naturalWidth && img.naturalHeight) {
+                  setResultAspectRatio(img.naturalWidth / img.naturalHeight);
+                }
+              }}
               style={{
                 width: '100%',
                 height: '100%',
