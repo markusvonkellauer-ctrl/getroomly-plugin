@@ -1308,9 +1308,25 @@ export function RoomVisualizationFlow({
         }}
         onClick={() => setShowTermsDialog(false)}
       >
-        {/* CSS class handles maxHeight (dvh), margin, border-radius, and the
-            mobile overrides — see .getroomly-terms-content in index.css */}
-        <div className="getroomly-terms-content" onClick={e => e.stopPropagation()}>
+        {/* Inline styles handle the critical layout (flex column, background,
+            shadow). The CSS class adds dvh max-height + mobile margin/radius
+            overrides that require two-value fallbacks or media queries. */}
+        <div
+          className="getroomly-terms-content"
+          style={{
+            backgroundColor: '#ffffff',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            width: '100%',
+            maxWidth: '500px',
+            margin: '16px',
+            borderRadius: '12px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
           {/* Sticky header — always visible, never scrolls away */}
           <div
             style={{
