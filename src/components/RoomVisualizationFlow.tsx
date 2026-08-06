@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { generateRoomVisualization, validateImageFile } from '@/services/ai-generation';
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
@@ -56,6 +56,32 @@ export function RoomVisualizationFlow({
   const [saveShareDropdownOpen, setSaveShareDropdownOpen] = useState(false);
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
+
+  // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
+  // resets automatically whenever resultImage changes — no effect needed.
+  const [zoomState, setZoomState] = useState<{ scale: number; forImage: string | null }>({
+    scale: 1,
+    forImage: null,
+  });
+  const imageScale = zoomState.forImage === resultImage ? zoomState.scale : 1;
+
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null);
+  const lastTapRef = useRef(0);
+
+  // Mutable refs so touch handlers can read latest values without being in the
+  // effect dep array (avoids re-registering listeners on every scale update).
+  const imageScaleRef = useRef(imageScale);
+  const resultImageRef = useRef(resultImage);
+  useEffect(() => {
+    imageScaleRef.current = imageScale;
+    resultImageRef.current = resultImage;
+  });
+
+  const setImageScale = useCallback(
+    (next: number) => setZoomState({ scale: next, forImage: resultImageRef.current }),
+    []
+  );
 
   // Listen for external favorite state changes from host page
   useEffect(() => {
@@ -241,6 +267,58 @@ export function RoomVisualizationFlow({
       }
     };
   }, []);
+
+  // Pinch-to-zoom helpers (non-passive listeners required for e.preventDefault())
+  const getDistance = useCallback(
+    (t1: Touch, t2: Touch) =>
+      Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2)),
+    []
+  );
+
+  useEffect(() => {
+    const el = imageContainerRef.current;
+    if (!el) {
+      return;
+    }
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        pinchRef.current = {
+          startDist: getDistance(e.touches[0], e.touches[1]),
+          startScale: imageScaleRef.current,
+        };
+      } else if (e.touches.length === 1) {
+        const now = Date.now();
+        if (now - lastTapRef.current < 300) {
+          setImageScale(1);
+        }
+        lastTapRef.current = now;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && pinchRef.current) {
+        e.preventDefault();
+        const newDist = getDistance(e.touches[0], e.touches[1]);
+        const ratio = newDist / pinchRef.current.startDist;
+        const next = Math.min(Math.max(pinchRef.current.startScale * ratio, 1), 4);
+        setImageScale(next);
+      }
+    };
+
+    const onTouchEnd = () => {
+      pinchRef.current = null;
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [getDistance, setImageScale]);
 
   const renderStepIndicator = (currentStep: 'upload' | 'processing' | 'result') => {
     const steps = [
@@ -791,6 +869,7 @@ export function RoomVisualizationFlow({
       >
         {/* Fixed aspect ratio container - prevents resize when toggling images */}
         <div
+          ref={imageContainerRef}
           style={{
             position: 'relative',
             width: '100%',
@@ -798,6 +877,7 @@ export function RoomVisualizationFlow({
             maxHeight: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
+            cursor: imageScale > 1 ? 'grab' : 'default',
           }}
         >
           {(resultImage || uploadedImage) && (
@@ -809,6 +889,10 @@ export function RoomVisualizationFlow({
                 height: '100%',
                 objectFit: 'cover',
                 display: 'block',
+                transform: `scale(${imageScale})`,
+                transformOrigin: 'center center',
+                transition: imageScale === 1 ? 'transform 0.25s ease' : 'none',
+                willChange: 'transform',
               }}
             />
           )}
@@ -871,8 +955,8 @@ export function RoomVisualizationFlow({
             <div
               style={{
                 position: 'absolute',
-                bottom: '16px',
-                right: '16px',
+                bottom: '8px',
+                right: '8px',
                 display: 'flex',
                 gap: '8px',
                 zIndex: 10,
