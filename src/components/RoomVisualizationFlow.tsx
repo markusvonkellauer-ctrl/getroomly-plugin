@@ -80,7 +80,7 @@ export function RoomVisualizationFlow({
 
   const setImageScale = useCallback(
     (next: number) => setZoomState({ scale: next, forImage: resultImageRef.current }),
-    [],
+    []
   );
 
   // Listen for external favorite state changes from host page
@@ -269,12 +269,17 @@ export function RoomVisualizationFlow({
   }, []);
 
   // Pinch-to-zoom helpers (non-passive listeners required for e.preventDefault())
-  const getDistance = useCallback((t1: Touch, t2: Touch) =>
-    Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2)), []);
+  const getDistance = useCallback(
+    (t1: Touch, t2: Touch) =>
+      Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2)),
+    []
+  );
 
   useEffect(() => {
     const el = imageContainerRef.current;
-    if (!el) { return; }
+    if (!el) {
+      return;
+    }
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 2) {
