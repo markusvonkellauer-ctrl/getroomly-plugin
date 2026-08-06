@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppConfig } from '@/config/app-config';
 import { useEmbedConfig } from '@/hooks/use-embed-config';
@@ -123,11 +124,12 @@ function App() {
               style={{ pointerEvents: 'auto', touchAction: 'none' }}
               onClick={handleModalClose}
             />
+            {/* Positioning wrapper — static, never animated. Keeps the centering
+                transform isolated so framer-motion's layout transform on the
+                inner motion.div doesn't conflict with translate(-50%, -50%). */}
             <div
-              role="dialog"
-              className="getroomly-modal-container rounded-2xl flex flex-col gap-0 transition-all duration-300 overflow-hidden bg-background border shadow-2xl"
               style={{
-                pointerEvents: 'auto',
+                pointerEvents: 'none',
                 position: 'fixed',
                 top: '50%',
                 left: '50%',
@@ -136,8 +138,17 @@ function App() {
                 width: '100%',
                 maxWidth: '520px',
               }}
-              onClick={e => e.stopPropagation()}
             >
+              {/* Animated visual dialog — layout="size" smoothly interpolates
+                  height as step content changes (Upload → Processing → Result). */}
+              <motion.div
+                role="dialog"
+                layout="size"
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="getroomly-modal-container rounded-2xl flex flex-col gap-0 overflow-hidden bg-background border shadow-2xl"
+                style={{ pointerEvents: 'auto' }}
+                onClick={e => e.stopPropagation()}
+              >
               <RoomVisualizationFlow
                 productImages={[config.productImage]}
                 productId={config.sku}
@@ -155,6 +166,7 @@ function App() {
                   config.callbacks?.onError?.(error);
                 }}
               />
+              </motion.div>
             </div>
           </>
         )}
