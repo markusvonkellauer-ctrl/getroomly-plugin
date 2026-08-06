@@ -235,6 +235,17 @@ code {
   max-height: 80vh;
   max-height: 80dvh;
 }
+/* Upload step — on wider/desktop viewports the square container is much taller
+   than on mobile, so space-between pushes the icon to the very top. Switch to
+   center so the icon+button and guidance box are grouped in the middle instead.
+   Mobile (≤480px) keeps the original space-between layout which looks fine. */
+@media (min-width: 481px) {
+  .getroomly-upload-step {
+    justify-content: center !important;
+    gap: var(--getroomly-space-lg);
+  }
+}
+
 /* Terms dialog content box — clamp to backdrop height.
    The backdrop is contained within the plugin dialog (transform containing
    block), so max-height: 100% ensures the content box never overflows the
