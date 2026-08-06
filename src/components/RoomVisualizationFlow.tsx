@@ -1308,144 +1308,152 @@ export function RoomVisualizationFlow({
         }}
         onClick={() => setShowTermsDialog(false)}
       >
-        <div
-          style={{
-            backgroundColor: '#ffffff',
-            borderRadius: '12px',
-            maxWidth: '500px',
-            maxHeight: '80vh',
-            overflow: 'auto',
-            position: 'relative',
-            margin: '16px',
-            width: '100%',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-          }}
-          onClick={e => e.stopPropagation()}
-        >
-          <div style={{ padding: '24px' }}>
-            <div
+        {/* CSS class handles maxHeight (dvh), margin, border-radius, and the
+            mobile overrides — see .getroomly-terms-content in index.css */}
+        <div className="getroomly-terms-content" onClick={e => e.stopPropagation()}>
+          {/* Sticky header — always visible, never scrolls away */}
+          <div
+            style={{
+              padding: '16px 20px',
+              flexShrink: 0,
+              borderBottom: '1px solid #f3f4f6',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: '#374151' }}>
+              {t.termsTitle}
+            </h2>
+            <button
+              onClick={() => setShowTermsDialog(false)}
               style={{
+                background: 'rgba(0, 0, 0, 0.1)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
                 display: 'flex',
-                justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: '20px',
+                justifyContent: 'center',
+                color: '#6b7280',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                flexShrink: 0,
               }}
             >
-              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: '#374151' }}>
-                {t.termsTitle}
-              </h2>
-              <button
-                onClick={() => setShowTermsDialog(false)}
+              ×
+            </button>
+          </div>
+
+          {/* Scrollable content — only this section scrolls */}
+          <div
+            style={{
+              flex: '1 1 auto',
+              overflow: 'auto',
+              padding: '16px 20px',
+              fontSize: '14px',
+              lineHeight: '1.6',
+              color: '#4b5563',
+            }}
+          >
+            <div style={{ marginBottom: '16px' }}>
+              <h3
                 style={{
-                  background: 'rgba(0, 0, 0, 0.1)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '32px',
-                  height: '32px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#6b7280',
                   fontSize: '16px',
-                  fontWeight: 'bold',
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ fontSize: '14px', lineHeight: '1.6', color: '#4b5563' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <h3
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: '#374151',
-                    marginBottom: '8px',
-                  }}
-                >
-                  {t.termsSection1Title}
-                </h3>
-                <p style={{ margin: 0 }}>{t.termsSection1Body}</p>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <h3
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: '#374151',
-                    marginBottom: '8px',
-                  }}
-                >
-                  {t.termsSection2Title}
-                </h3>
-                <p style={{ margin: '0 0 8px 0' }}>
-                  <strong>{t.termsNoPersonalDataTitle}:</strong> {t.termsNoPersonalDataBody}
-                </p>
-                <p style={{ margin: '0 0 8px 0' }}>
-                  <strong>{t.termsEphemeralTitle}:</strong> {t.termsEphemeralBody}
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>{t.termsContinuousTitle}:</strong> {t.termsContinuousBody}
-                </p>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <h3
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: '#374151',
-                    marginBottom: '8px',
-                  }}
-                >
-                  {t.termsSection3Title}
-                </h3>
-                <p style={{ margin: 0 }}>{t.termsSection3Body}</p>
-              </div>
-
-              <div>
-                <h3
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: '#374151',
-                    marginBottom: '8px',
-                  }}
-                >
-                  {t.termsSection4Title}
-                </h3>
-                <p style={{ margin: 0 }}>{t.termsSection4Body}</p>
-              </div>
-            </div>
-
-            <div style={{ marginTop: '24px', textAlign: 'center' }}>
-              <button
-                onClick={() => setShowTermsDialog(false)}
-                style={{
-                  backgroundColor: 'var(--getroomly-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '10px 20px',
-                  fontSize: '14px',
                   fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.filter = 'brightness(0.9)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.filter = 'brightness(1)';
+                  color: '#374151',
+                  marginBottom: '8px',
                 }}
               >
-                {t.termsClose}
-              </button>
+                {t.termsSection1Title}
+              </h3>
+              <p style={{ margin: 0 }}>{t.termsSection1Body}</p>
             </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <h3
+                style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  marginBottom: '8px',
+                }}
+              >
+                {t.termsSection2Title}
+              </h3>
+              <p style={{ margin: '0 0 8px 0' }}>
+                <strong>{t.termsNoPersonalDataTitle}:</strong> {t.termsNoPersonalDataBody}
+              </p>
+              <p style={{ margin: '0 0 8px 0' }}>
+                <strong>{t.termsEphemeralTitle}:</strong> {t.termsEphemeralBody}
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong>{t.termsContinuousTitle}:</strong> {t.termsContinuousBody}
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <h3
+                style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  marginBottom: '8px',
+                }}
+              >
+                {t.termsSection3Title}
+              </h3>
+              <p style={{ margin: 0 }}>{t.termsSection3Body}</p>
+            </div>
+
+            <div>
+              <h3
+                style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  marginBottom: '8px',
+                }}
+              >
+                {t.termsSection4Title}
+              </h3>
+              <p style={{ margin: 0 }}>{t.termsSection4Body}</p>
+            </div>
+          </div>
+
+          {/* Sticky footer — always visible, never scrolls away */}
+          <div
+            style={{
+              padding: '12px 20px 16px',
+              flexShrink: 0,
+              borderTop: '1px solid #f3f4f6',
+              textAlign: 'center',
+            }}
+          >
+            <button
+              onClick={() => setShowTermsDialog(false)}
+              style={{
+                backgroundColor: 'var(--getroomly-primary)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '10px 20px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.filter = 'brightness(0.9)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.filter = 'brightness(1)';
+              }}
+            >
+              {t.termsClose}
+            </button>
           </div>
         </div>
       </div>
