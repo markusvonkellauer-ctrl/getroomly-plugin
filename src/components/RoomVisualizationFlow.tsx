@@ -1319,11 +1319,9 @@ export function RoomVisualizationFlow({
             flexDirection: 'column',
             overflow: 'hidden',
             width: '100%',
-            maxWidth: '500px',
-            margin: '16px',
-            borderRadius: '12px',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
+            // No margin or maxWidth — fills the backdrop edge-to-edge on all
+            // screen sizes. The plugin dialog's overflow:hidden + rounded-2xl
+            // clips the corners naturally so no dark gutter appears.
           }}
           onClick={e => e.stopPropagation()}
         >

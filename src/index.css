@@ -235,22 +235,12 @@ code {
   max-height: 80vh;
   max-height: 80dvh;
 }
-/* Terms dialog content box — mobile overrides only.
-   max-height is set to 100% so the content box never exceeds the backdrop
-   (which is contained within the plugin dialog via the transform containing
-   block). The plugin dialog's own max-height: 80dvh already caps everything
-   to the visible viewport — no need to repeat dvh here. */
+/* Terms dialog content box — clamp to backdrop height.
+   The backdrop is contained within the plugin dialog (transform containing
+   block), so max-height: 100% ensures the content box never overflows the
+   backdrop and clips the title or Close button. */
 .getroomly-terms-content {
   max-height: 100%;
-}
-/* Mobile: no outer margin or border-radius so the dialog is edge-to-edge
-   with no dark gutter, consistent with the rest of the plugin on mobile. */
-@media (max-width: 480px) {
-  .getroomly-terms-content {
-    margin: 0 !important;
-    border-radius: 0 !important;
-    max-width: 100% !important;
-  }
 }
 .w-full {
   width: 100%;
