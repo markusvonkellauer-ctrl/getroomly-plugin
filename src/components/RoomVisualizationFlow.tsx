@@ -519,9 +519,12 @@ export function RoomVisualizationFlow({
       {/* Guidance Text - matching shadow plugin */}
       <div
         style={{
-          width: '100%',
-          maxWidth: '450px',
-          margin: '34px auto auto auto',
+          // alignSelf:stretch fills the flex cross-axis (horizontal) width
+          // reliably in iOS Safari. Using width:'100%' in a flex-column with
+          // alignItems:'center' can resolve to the parent's border-box (390px)
+          // instead of content-box (342px) in Safari, causing text to overflow.
+          alignSelf: 'stretch',
+          marginTop: '34px',
           padding: '16px', // p-4
           backgroundColor: 'hsla(30, 20%, 98%, 0.4)', // bg-background/40
           backdropFilter: 'blur(2px)', // backdrop-blur-[2px]
