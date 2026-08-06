@@ -149,23 +149,23 @@ function App() {
                 style={{ pointerEvents: 'auto' }}
                 onClick={e => e.stopPropagation()}
               >
-              <RoomVisualizationFlow
-                productImages={[config.productImage]}
-                productId={config.sku}
-                category={config.category}
-                productName={config.productName}
-                productPrice={config.productPrice ?? 0}
-                measurements={config.measurements}
-                showSteps={config.showSteps}
-                config={config}
-                onClose={handleModalClose}
-                onComplete={imageUrl => {
-                  config.callbacks?.onImageGenerated?.(imageUrl);
-                }}
-                onError={error => {
-                  config.callbacks?.onError?.(error);
-                }}
-              />
+                <RoomVisualizationFlow
+                  productImages={[config.productImage]}
+                  productId={config.sku}
+                  category={config.category}
+                  productName={config.productName}
+                  productPrice={config.productPrice ?? 0}
+                  measurements={config.measurements}
+                  showSteps={config.showSteps}
+                  config={config}
+                  onClose={handleModalClose}
+                  onComplete={imageUrl => {
+                    config.callbacks?.onImageGenerated?.(imageUrl);
+                  }}
+                  onError={error => {
+                    config.callbacks?.onError?.(error);
+                  }}
+                />
               </motion.div>
             </div>
           </>
