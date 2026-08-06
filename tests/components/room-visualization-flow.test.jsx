@@ -44,13 +44,13 @@ describe('RoomVisualizationFlow', () => {
 
   test('renders the upload step on mount', () => {
     render(<RoomVisualizationFlow {...defaultProps} />);
-    expect(screen.getByText('Step 1: Upload Photo')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
     expect(screen.queryByText('Step 2: Place Marker')).not.toBeInTheDocument();
   });
 
   test('shows an upload button', () => {
     render(<RoomVisualizationFlow {...defaultProps} />);
-    expect(screen.getByText('Upload Photo')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upload Photo' })).toBeInTheDocument();
   });
 
   // ─── Upload → Processing (no mark step) ──────────────────────────────────
@@ -143,7 +143,7 @@ describe('RoomVisualizationFlow', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Step 1: Upload Photo')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
     });
   });
 
@@ -157,7 +157,7 @@ describe('RoomVisualizationFlow', () => {
       uploadFile(input, makeFile());
     });
 
-    await waitFor(() => screen.getByText('Step 1: Upload Photo'));
+    await waitFor(() => screen.getByRole('heading', { name: 'Upload Photo' }));
     expect(input.value).toBe('');
   });
 
@@ -189,7 +189,7 @@ describe('RoomVisualizationFlow', () => {
     });
 
     expect(generateRoomVisualization).not.toHaveBeenCalled();
-    expect(screen.getByText('Step 1: Upload Photo')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
   });
 
   // ─── New Photo reset ──────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ describe('RoomVisualizationFlow', () => {
       fireEvent.click(screen.getByText('New Photo'));
     });
 
-    expect(screen.getByText('Step 1: Upload Photo')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
     expect(input.value).toBe('');
   });
 });

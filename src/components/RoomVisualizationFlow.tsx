@@ -574,7 +574,7 @@ export function RoomVisualizationFlow({
             >
               1
             </span>
-            <p style={{ margin: 0, textAlign: 'left' }}>
+            <p style={{ margin: 0, textAlign: 'left', minWidth: 0 }}>
               <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
                 {t.tip1Label}
               </span>
@@ -600,7 +600,7 @@ export function RoomVisualizationFlow({
             >
               2
             </span>
-            <p style={{ margin: 0, textAlign: 'left' }}>
+            <p style={{ margin: 0, textAlign: 'left', minWidth: 0 }}>
               <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
                 {t.tip2Label}
               </span>
@@ -626,7 +626,7 @@ export function RoomVisualizationFlow({
             >
               3
             </span>
-            <p style={{ margin: 0, textAlign: 'left' }}>
+            <p style={{ margin: 0, textAlign: 'left', minWidth: 0 }}>
               <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
                 {t.tip3Label}
               </span>
