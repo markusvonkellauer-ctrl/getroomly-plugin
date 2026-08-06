@@ -57,11 +57,31 @@ export function RoomVisualizationFlow({
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
-  // Pinch-to-zoom state for the generated image
-  const [imageScale, setImageScale] = useState(1);
+  // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
+  // resets automatically whenever resultImage changes — no effect needed.
+  const [zoomState, setZoomState] = useState<{ scale: number; forImage: string | null }>({
+    scale: 1,
+    forImage: null,
+  });
+  const imageScale = zoomState.forImage === resultImage ? zoomState.scale : 1;
+
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null);
   const lastTapRef = useRef(0);
+
+  // Mutable refs so touch handlers can read latest values without being in the
+  // effect dep array (avoids re-registering listeners on every scale update).
+  const imageScaleRef = useRef(imageScale);
+  const resultImageRef = useRef(resultImage);
+  useEffect(() => {
+    imageScaleRef.current = imageScale;
+    resultImageRef.current = resultImage;
+  });
+
+  const setImageScale = useCallback(
+    (next: number) => setZoomState({ scale: next, forImage: resultImageRef.current }),
+    [],
+  );
 
   // Listen for external favorite state changes from host page
   useEffect(() => {
@@ -248,24 +268,19 @@ export function RoomVisualizationFlow({
     };
   }, []);
 
-  // Reset zoom when a new result image arrives
-  useEffect(() => {
-    setImageScale(1);
-  }, [resultImage]);
-
   // Pinch-to-zoom helpers (non-passive listeners required for e.preventDefault())
   const getDistance = useCallback((t1: Touch, t2: Touch) =>
     Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2)), []);
 
   useEffect(() => {
     const el = imageContainerRef.current;
-    if (!el) return;
+    if (!el) { return; }
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 2) {
         pinchRef.current = {
           startDist: getDistance(e.touches[0], e.touches[1]),
-          startScale: imageScale,
+          startScale: imageScaleRef.current,
         };
       } else if (e.touches.length === 1) {
         const now = Date.now();
@@ -298,7 +313,7 @@ export function RoomVisualizationFlow({
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
     };
-  }, [getDistance, imageScale]);
+  }, [getDistance, setImageScale]);
 
   const renderStepIndicator = (currentStep: 'upload' | 'processing' | 'result') => {
     const steps = [
