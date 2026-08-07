@@ -870,14 +870,15 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Container adapts to the image's natural ratio — no cropping.
-            width:100% + height:auto shows the full image exactly as
-            Gemini returned it, portrait or landscape. */}
+        {/* Container fills the available content area height. objectFit:contain
+            on the image shows it fully scaled within this space — no clipping,
+            no overflow, works reliably on iOS Safari. */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
             width: '100%',
+            height: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
             cursor: imageScale > 1 ? 'grab' : 'default',
@@ -889,7 +890,8 @@ export function RoomVisualizationFlow({
               alt={showOriginalImage ? t.labelOriginal : t.labelNew}
               style={{
                 width: '100%',
-                height: 'auto',
+                height: '100%',
+                objectFit: 'contain',
                 display: 'block',
                 transform: `scale(${imageScale})`,
                 transformOrigin: 'center center',
@@ -1562,8 +1564,7 @@ export function RoomVisualizationFlow({
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'flex-start',
-          overflowX: 'hidden',
-          overflowY: step === 'result' ? 'auto' : 'hidden',
+          overflow: 'hidden',
           padding: '0',
           margin: '0 auto',
           position: 'relative',
