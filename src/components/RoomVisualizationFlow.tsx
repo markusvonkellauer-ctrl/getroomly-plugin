@@ -57,12 +57,6 @@ export function RoomVisualizationFlow({
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
-  // Natural aspect ratio of the uploaded image — used for the processing step container.
-  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
-  // Aspect ratio read from the actual Gemini result image on load — used for the result
-  // step container so it always matches exactly what the model returned.
-  const [resultAspectRatio, setResultAspectRatio] = useState<number | null>(null);
-
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
   const [zoomState, setZoomState] = useState<{ scale: number; forImage: string | null }>({
@@ -242,12 +236,6 @@ export function RoomVisualizationFlow({
     const url = URL.createObjectURL(file);
     uploadedImageRef.current = url;
     setUploadedImage(url);
-
-    // Detect natural dimensions so the container matches the photo's real ratio
-    const img = new Image();
-    img.onload = () => setImageAspectRatio(img.naturalWidth / img.naturalHeight);
-    img.src = url;
-
     handleGenerate(file);
   };
 
@@ -263,8 +251,6 @@ export function RoomVisualizationFlow({
     setStep('upload');
     setUploadedImage(null);
     setResultImage(null);
-    setImageAspectRatio(null);
-    setResultAspectRatio(null);
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -692,7 +678,7 @@ export function RoomVisualizationFlow({
       style={{
         position: 'relative',
         width: '100%',
-        aspectRatio: imageAspectRatio ? String(imageAspectRatio) : '4/3',
+        aspectRatio: '5/5',
         maxHeight: '100%',
         background: '#0a111a',
         display: 'flex',
@@ -884,15 +870,13 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Aspect ratio is driven by the actual Gemini result dimensions (read on
-            load), falling back to the uploaded image ratio during the initial
-            render before the result image has loaded. */}
+        {/* Fixed aspect ratio container - prevents resize when toggling images */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
             width: '100%',
-            aspectRatio: String(resultAspectRatio ?? imageAspectRatio ?? 4 / 3),
+            aspectRatio: '5/5',
             maxHeight: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
@@ -903,16 +887,10 @@ export function RoomVisualizationFlow({
             <img
               src={showOriginalImage ? uploadedImage || '' : resultImage || ''}
               alt={showOriginalImage ? t.labelOriginal : t.labelNew}
-              onLoad={e => {
-                const img = e.currentTarget;
-                if (img.naturalWidth && img.naturalHeight) {
-                  setResultAspectRatio(img.naturalWidth / img.naturalHeight);
-                }
-              }}
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'contain',
+                objectFit: 'cover',
                 display: 'block',
                 transform: `scale(${imageScale})`,
                 transformOrigin: 'center center',
