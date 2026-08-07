@@ -64,17 +64,6 @@ function drawAndCompress(
     }
   }
 
-  // Gemini normalises its output to landscape when the input aspect ratio is
-  // more extreme than 9:16 (ratio < 0.5625). iOS can deliver portrait photos
-  // at ratios as extreme as ~0.46 via the file picker, which triggers this.
-  // Clamp the height so the portrait ratio never exceeds 9:16 — the crop
-  // removes only the top/bottom edges (~9% at most) which is acceptable for
-  // room photos and ensures Gemini preserves the portrait orientation.
-  const MAX_PORTRAIT_RATIO = 16 / 9;
-  if (height > width && height / width > MAX_PORTRAIT_RATIO) {
-    height = width * MAX_PORTRAIT_RATIO;
-  }
-
   // Round once so canvas dimensions (integer attributes) and drawImage's target size agree —
   // otherwise a fractional size gets truncated for the canvas but not for the draw, causing
   // 1px clipping/stretching.
