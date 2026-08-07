@@ -57,6 +57,11 @@ export function RoomVisualizationFlow({
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
+  // Aspect ratio read from the Gemini result image on load. Drives the result
+  // container so both "New Design" and "Original Room" show the same crop of
+  // the room — the toggle feels like an overlay rather than a camera shift.
+  const [resultAspectRatio, setResultAspectRatio] = useState<number | null>(null);
+
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
   const [zoomState, setZoomState] = useState<{ scale: number; forImage: string | null }>({
@@ -251,6 +256,7 @@ export function RoomVisualizationFlow({
     setStep('upload');
     setUploadedImage(null);
     setResultImage(null);
+    setResultAspectRatio(null);
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -870,13 +876,15 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Fixed aspect ratio container - prevents resize when toggling images */}
+        {/* Container ratio driven by the Gemini result so both "New Design"
+            and "Original Room" show the same area of the room. Falls back
+            to 5/5 square until the result image has loaded. */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
             width: '100%',
-            aspectRatio: '5/5',
+            aspectRatio: resultAspectRatio ? String(resultAspectRatio) : '5/5',
             maxHeight: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
@@ -887,6 +895,17 @@ export function RoomVisualizationFlow({
             <img
               src={showOriginalImage ? uploadedImage || '' : resultImage || ''}
               alt={showOriginalImage ? t.labelOriginal : t.labelNew}
+              onLoad={e => {
+                // Only read dimensions from the result image, not the original.
+                // The container stays locked to the result ratio so toggling
+                // between views never shifts the visible area of the room.
+                if (!showOriginalImage) {
+                  const img = e.currentTarget;
+                  if (img.naturalWidth && img.naturalHeight) {
+                    setResultAspectRatio(img.naturalWidth / img.naturalHeight);
+                  }
+                }
+              }}
               style={{
                 width: '100%',
                 height: '100%',
