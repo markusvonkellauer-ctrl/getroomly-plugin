@@ -57,10 +57,12 @@ export function RoomVisualizationFlow({
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
-  // Confirmed via debug logging: Gemini returns ~0.730 (3:4) ratio regardless
-  // of the 0.563 (9:16) input. This state captures the actual result ratio so
-  // the container matches exactly — no cropping, minimal letterboxing on toggle.
-  const [resultAspectRatio, setResultAspectRatio] = useState<number | null>(null);
+  // Explicit pixel dimensions computed from the Gemini result and current
+  // viewport. Sidesteps iOS Safari's broken aspectRatio + maxHeight behaviour
+  // in nested flex layouts — we set width/height directly in px so the container
+  // shape is always deterministic. Matches Google NanoBanana's approach:
+  // the display window adapts to the actual image dimensions.
+  const [containerSize, setContainerSize] = useState<{ w: number; h: number } | null>(null);
 
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
@@ -267,7 +269,7 @@ export function RoomVisualizationFlow({
     setStep('upload');
     setUploadedImage(null);
     setResultImage(null);
-    setResultAspectRatio(null);
+    setContainerSize(null);
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -887,17 +889,16 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Container ratio driven by Gemini result dimensions (read on load).
-            maxHeight:60dvh caps height explicitly — avoids iOS Safari's
-            broken behaviour with maxHeight:100% + aspectRatio on nested flex.
-            objectFit:contain shows the full image with no clipping. */}
+        {/* Container uses explicit pixel dimensions computed from the Gemini
+            result and viewport. No aspectRatio/maxHeight — those break on iOS
+            Safari inside nested flex. Falls back to a square while loading. */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
-            width: '100%',
-            aspectRatio: resultAspectRatio ? String(resultAspectRatio) : '5/5',
-            maxHeight: '60dvh',
+            width: containerSize ? `${containerSize.w}px` : '100%',
+            height: containerSize ? `${containerSize.h}px` : 'auto',
+            aspectRatio: containerSize ? undefined : '1/1',
             borderRadius: '8px',
             overflow: 'hidden',
             cursor: imageScale > 1 ? 'grab' : 'default',
@@ -913,8 +914,22 @@ export function RoomVisualizationFlow({
                 console.log(
                   `[DEBUG] <img> onLoad (${label}): naturalSize=${img.naturalWidth}x${img.naturalHeight} ratio=${(img.naturalWidth / img.naturalHeight).toFixed(3)}`
                 );
+                // Only size the container from the Gemini result — original toggle
+                // must not resize the view. Compute px dimensions bounded by the
+                // available modal space (parent width, 60dvh cap).
                 if (!showOriginalImage && img.naturalWidth && img.naturalHeight) {
-                  setResultAspectRatio(img.naturalWidth / img.naturalHeight);
+                  const parent = imageContainerRef.current?.parentElement;
+                  const availableWidth = parent?.clientWidth ?? window.innerWidth;
+                  const maxHeightPx = Math.round(window.innerHeight * 0.6);
+                  const ratio = img.naturalWidth / img.naturalHeight;
+                  let w = availableWidth;
+                  let h = Math.round(w / ratio);
+                  if (h > maxHeightPx) {
+                    h = maxHeightPx;
+                    w = Math.round(h * ratio);
+                  }
+                  console.log(`[DEBUG] container computed: ${w}x${h}`);
+                  setContainerSize({ w, h });
                 }
               }}
               style={{
