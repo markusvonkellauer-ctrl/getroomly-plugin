@@ -870,15 +870,14 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Container fills the available content area height. objectFit:contain
-            on the image shows it fully scaled within this space — no clipping,
-            no overflow, works reliably on iOS Safari. */}
+        {/* Fixed aspect ratio container - prevents resize when toggling images */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
             width: '100%',
-            height: '100%',
+            aspectRatio: '5/5',
+            maxHeight: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
             cursor: imageScale > 1 ? 'grab' : 'default',
@@ -891,7 +890,7 @@ export function RoomVisualizationFlow({
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'contain',
+                objectFit: 'cover',
                 display: 'block',
                 transform: `scale(${imageScale})`,
                 transformOrigin: 'center center',
