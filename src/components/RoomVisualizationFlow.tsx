@@ -888,15 +888,16 @@ export function RoomVisualizationFlow({
         }}
       >
         {/* Container ratio driven by Gemini result dimensions (read on load).
-            objectFit:contain shows the full image — New Design fits perfectly,
-            Original Room gets ~11px side bars (barely visible). */}
+            maxHeight:60dvh caps height explicitly — avoids iOS Safari's
+            broken behaviour with maxHeight:100% + aspectRatio on nested flex.
+            objectFit:contain shows the full image with no clipping. */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
             width: '100%',
             aspectRatio: resultAspectRatio ? String(resultAspectRatio) : '5/5',
-            maxHeight: '100%',
+            maxHeight: '60dvh',
             borderRadius: '8px',
             overflow: 'hidden',
             cursor: imageScale > 1 ? 'grab' : 'default',
