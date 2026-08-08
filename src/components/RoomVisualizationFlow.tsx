@@ -57,6 +57,11 @@ export function RoomVisualizationFlow({
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
+  // Confirmed via debug logging: Gemini returns ~0.730 (3:4) ratio regardless
+  // of the 0.563 (9:16) input. This state captures the actual result ratio so
+  // the container matches exactly — no cropping, minimal letterboxing on toggle.
+  const [resultAspectRatio, setResultAspectRatio] = useState<number | null>(null);
+
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
   const [zoomState, setZoomState] = useState<{ scale: number; forImage: string | null }>({
@@ -262,6 +267,7 @@ export function RoomVisualizationFlow({
     setStep('upload');
     setUploadedImage(null);
     setResultImage(null);
+    setResultAspectRatio(null);
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -881,13 +887,15 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Fixed aspect ratio container - prevents resize when toggling images */}
+        {/* Container ratio driven by Gemini result dimensions (read on load).
+            objectFit:contain shows the full image — New Design fits perfectly,
+            Original Room gets ~11px side bars (barely visible). */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
             width: '100%',
-            aspectRatio: '5/5',
+            aspectRatio: resultAspectRatio ? String(resultAspectRatio) : '5/5',
             maxHeight: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
@@ -904,11 +912,14 @@ export function RoomVisualizationFlow({
                 console.log(
                   `[DEBUG] <img> onLoad (${label}): naturalSize=${img.naturalWidth}x${img.naturalHeight} ratio=${(img.naturalWidth / img.naturalHeight).toFixed(3)}`
                 );
+                if (!showOriginalImage && img.naturalWidth && img.naturalHeight) {
+                  setResultAspectRatio(img.naturalWidth / img.naturalHeight);
+                }
               }}
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover',
+                objectFit: 'contain',
                 display: 'block',
                 transform: `scale(${imageScale})`,
                 transformOrigin: 'center center',
