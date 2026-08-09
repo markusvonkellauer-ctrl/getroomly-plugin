@@ -57,12 +57,14 @@ export function RoomVisualizationFlow({
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
-  // Explicit pixel dimensions computed from the Gemini result and current
-  // viewport. Sidesteps iOS Safari's broken aspectRatio + maxHeight behaviour
-  // in nested flex layouts — we set width/height directly in px so the container
-  // shape is always deterministic. Matches Google NanoBanana's approach:
-  // the display window adapts to the actual image dimensions.
-  const [containerSize, setContainerSize] = useState<{ w: number; h: number } | null>(null);
+  // Explicit pixel dimensions per image — the container adapts to whichever
+  // image is currently displayed. Matches Google NanoBanana's approach: full
+  // image always visible in its natural ratio, whether portrait or landscape.
+  // Two separate states so toggling between "New Design" and "Original Room"
+  // resizes the container to fit each image individually.
+  const [resultSize, setResultSize] = useState<{ w: number; h: number } | null>(null);
+  const [originalSize, setOriginalSize] = useState<{ w: number; h: number } | null>(null);
+  const containerSize = showOriginalImage ? originalSize : resultSize;
 
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
@@ -269,7 +271,8 @@ export function RoomVisualizationFlow({
     setStep('upload');
     setUploadedImage(null);
     setResultImage(null);
-    setContainerSize(null);
+    setResultSize(null);
+    setOriginalSize(null);
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -914,22 +917,25 @@ export function RoomVisualizationFlow({
                 console.log(
                   `[DEBUG] <img> onLoad (${label}): naturalSize=${img.naturalWidth}x${img.naturalHeight} ratio=${(img.naturalWidth / img.naturalHeight).toFixed(3)}`
                 );
-                // Only size the container from the Gemini result — original toggle
-                // must not resize the view. Compute px dimensions bounded by the
-                // available modal space (parent width, 60dvh cap).
-                if (!showOriginalImage && img.naturalWidth && img.naturalHeight) {
-                  const parent = imageContainerRef.current?.parentElement;
-                  const availableWidth = parent?.clientWidth ?? window.innerWidth;
-                  const maxHeightPx = Math.round(window.innerHeight * 0.6);
-                  const ratio = img.naturalWidth / img.naturalHeight;
-                  let w = availableWidth;
-                  let h = Math.round(w / ratio);
-                  if (h > maxHeightPx) {
-                    h = maxHeightPx;
-                    w = Math.round(h * ratio);
-                  }
-                  console.log(`[DEBUG] container computed: ${w}x${h}`);
-                  setContainerSize({ w, h });
+                if (!img.naturalWidth || !img.naturalHeight) return;
+
+                // Size the container to fit THIS image's natural ratio within
+                // the modal — parent width bound, 60dvh height cap.
+                const parent = imageContainerRef.current?.parentElement;
+                const availableWidth = parent?.clientWidth ?? window.innerWidth;
+                const maxHeightPx = Math.round(window.innerHeight * 0.6);
+                const ratio = img.naturalWidth / img.naturalHeight;
+                let w = availableWidth;
+                let h = Math.round(w / ratio);
+                if (h > maxHeightPx) {
+                  h = maxHeightPx;
+                  w = Math.round(h * ratio);
+                }
+                console.log(`[DEBUG] container computed (${label}): ${w}x${h}`);
+                if (showOriginalImage) {
+                  setOriginalSize({ w, h });
+                } else {
+                  setResultSize({ w, h });
                 }
               }}
               style={{
