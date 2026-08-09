@@ -917,7 +917,9 @@ export function RoomVisualizationFlow({
                 console.log(
                   `[DEBUG] <img> onLoad (${label}): naturalSize=${img.naturalWidth}x${img.naturalHeight} ratio=${(img.naturalWidth / img.naturalHeight).toFixed(3)}`
                 );
-                if (!img.naturalWidth || !img.naturalHeight) return;
+                if (!img.naturalWidth || !img.naturalHeight) {
+                  return;
+                }
 
                 // Size the container to fit THIS image's natural ratio within
                 // the modal — parent width bound, 60dvh height cap.
