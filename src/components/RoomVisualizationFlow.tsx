@@ -57,15 +57,6 @@ export function RoomVisualizationFlow({
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
-  // Explicit pixel dimensions per image — the container adapts to whichever
-  // image is currently displayed. Matches Google NanoBanana's approach: full
-  // image always visible in its natural ratio, whether portrait or landscape.
-  // Two separate states so toggling between "New Design" and "Original Room"
-  // resizes the container to fit each image individually.
-  const [resultSize, setResultSize] = useState<{ w: number; h: number } | null>(null);
-  const [originalSize, setOriginalSize] = useState<{ w: number; h: number } | null>(null);
-  const containerSize = showOriginalImage ? originalSize : resultSize;
-
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
   const [zoomState, setZoomState] = useState<{ scale: number; forImage: string | null }>({
@@ -271,8 +262,6 @@ export function RoomVisualizationFlow({
     setStep('upload');
     setUploadedImage(null);
     setResultImage(null);
-    setResultSize(null);
-    setOriginalSize(null);
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -892,16 +881,17 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Container uses explicit pixel dimensions computed from the Gemini
-            result and viewport. No aspectRatio/maxHeight — those break on iOS
-            Safari inside nested flex. Falls back to a square while loading. */}
+        {/* Wrapper is display:inline-block so it shrinks to the image's actual
+            rendered dimensions. Overlays (label, favorite, thumbs) positioned
+            absolute against this wrapper are guaranteed to sit on the image
+            regardless of viewport size or image aspect ratio — no JS dimension
+            computation needed. */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
-            width: containerSize ? `${containerSize.w}px` : '100%',
-            height: containerSize ? `${containerSize.h}px` : 'auto',
-            aspectRatio: containerSize ? undefined : '1/1',
+            display: 'inline-block',
+            maxWidth: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
             cursor: imageScale > 1 ? 'grab' : 'default',
@@ -917,35 +907,13 @@ export function RoomVisualizationFlow({
                 console.log(
                   `[DEBUG] <img> onLoad (${label}): naturalSize=${img.naturalWidth}x${img.naturalHeight} ratio=${(img.naturalWidth / img.naturalHeight).toFixed(3)}`
                 );
-                if (!img.naturalWidth || !img.naturalHeight) {
-                  return;
-                }
-
-                // Size the container to fit THIS image's natural ratio within
-                // the modal — parent width bound, height capped at 60% of
-                // window.innerHeight (px, from JS — not the CSS dvh unit).
-                const parent = imageContainerRef.current?.parentElement;
-                const availableWidth = parent?.clientWidth ?? window.innerWidth;
-                const maxHeightPx = Math.round(window.innerHeight * 0.6);
-                const ratio = img.naturalWidth / img.naturalHeight;
-                let w = availableWidth;
-                let h = Math.round(w / ratio);
-                if (h > maxHeightPx) {
-                  h = maxHeightPx;
-                  w = Math.round(h * ratio);
-                }
-                console.log(`[DEBUG] container computed (${label}): ${w}x${h}`);
-                if (showOriginalImage) {
-                  setOriginalSize({ w, h });
-                } else {
-                  setResultSize({ w, h });
-                }
               }}
               style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
                 display: 'block',
+                maxWidth: '100%',
+                maxHeight: '60vh',
+                width: 'auto',
+                height: 'auto',
                 transform: `scale(${imageScale})`,
                 transformOrigin: 'center center',
                 transition: imageScale === 1 ? 'transform 0.25s ease' : 'none',
