@@ -1011,8 +1011,8 @@ export function RoomVisualizationFlow({
             <div
               style={{
                 position: 'absolute',
-                bottom: '8px',
-                right: '8px',
+                bottom: '16px',
+                right: '16px',
                 display: 'flex',
                 gap: '8px',
                 zIndex: 10,
