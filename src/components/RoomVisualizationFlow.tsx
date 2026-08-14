@@ -892,7 +892,6 @@ export function RoomVisualizationFlow({
             position: 'relative',
             display: 'inline-block',
             maxWidth: '100%',
-            maxHeight: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
             cursor: imageScale > 1 ? 'grab' : 'default',
@@ -912,7 +911,11 @@ export function RoomVisualizationFlow({
               style={{
                 display: 'block',
                 maxWidth: '100%',
-                maxHeight: '100%',
+                // 55dvh (dynamic viewport height) auto-adjusts as iOS Safari's
+                // browser chrome shows/hides. Leaves ~45dvh for header + action
+                // buttons. Percentage max-height on inline-block wrapper
+                // collapses to zero — dvh sidesteps the cascade issue.
+                maxHeight: '55dvh',
                 width: 'auto',
                 height: 'auto',
                 transform: `scale(${imageScale})`,
