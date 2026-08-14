@@ -230,23 +230,10 @@ code {
 }
 /* Modal container — injected into Shadow DOM so must live here, not App.css.
    dvh (dynamic viewport height) sizes to the visible area on mobile Safari
-   regardless of whether the address bar is expanded or collapsed.
-   Responsive max-width: mobile stays at 520px (unchanged UX), tablet gets
-   700px, desktop gets 900px so users on larger screens see a larger image. */
+   regardless of whether the address bar is expanded or collapsed. */
 .getroomly-modal-container {
-  max-height: 85vh;
-  max-height: 85dvh;
-  max-width: 520px;
-}
-@media (min-width: 641px) {
-  .getroomly-modal-container {
-    max-width: 700px;
-  }
-}
-@media (min-width: 1025px) {
-  .getroomly-modal-container {
-    max-width: 900px;
-  }
+  max-height: 80vh;
+  max-height: 80dvh;
 }
 /* Upload step — on wider/desktop viewports the square container is much taller
    than on mobile, so space-between pushes the icon to the very top. Switch to
