@@ -888,7 +888,7 @@ export function RoomVisualizationFlow({
           width: '100%',
           height: '100%',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'center',
         }}
       >
@@ -922,13 +922,10 @@ export function RoomVisualizationFlow({
                 }
 
                 // Size the container to fit THIS image's natural ratio within
-                // the modal — parent width bound, 75dvh height cap. 75% gives
-                // the image enough room to render at its actual size so users
-                // can see full detail without pinch-zoom, and feedback thumbs
-                // (positioned at container bottom) sit visually on the image.
+                // the modal — parent width bound, 60dvh height cap.
                 const parent = imageContainerRef.current?.parentElement;
                 const availableWidth = parent?.clientWidth ?? window.innerWidth;
-                const maxHeightPx = Math.round(window.innerHeight * 0.75);
+                const maxHeightPx = Math.round(window.innerHeight * 0.6);
                 const ratio = img.naturalWidth / img.naturalHeight;
                 let w = availableWidth;
                 let h = Math.round(w / ratio);
