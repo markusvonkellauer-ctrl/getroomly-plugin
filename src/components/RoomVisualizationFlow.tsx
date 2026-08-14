@@ -57,14 +57,6 @@ export function RoomVisualizationFlow({
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
-  // Aspect ratio of the currently-shown image (result or original). Applied to
-  // the wrapper via CSS aspect-ratio so it fills the available modal space
-  // while keeping the correct shape. Image inside fills wrapper — thumbs
-  // positioned against wrapper land on the image.
-  const [resultRatio, setResultRatio] = useState<number | null>(null);
-  const [originalRatio, setOriginalRatio] = useState<number | null>(null);
-  const activeRatio = showOriginalImage ? originalRatio : resultRatio;
-
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
   const [zoomState, setZoomState] = useState<{ scale: number; forImage: string | null }>({
@@ -270,8 +262,6 @@ export function RoomVisualizationFlow({
     setStep('upload');
     setUploadedImage(null);
     setResultImage(null);
-    setResultRatio(null);
-    setOriginalRatio(null);
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -896,18 +886,12 @@ export function RoomVisualizationFlow({
             absolute against this wrapper are guaranteed to sit on the image
             regardless of viewport size or image aspect ratio — no JS dimension
             computation needed. */}
-        {/* Wrapper fills the modal's available width while respecting the
-            image's natural aspect ratio (via CSS aspect-ratio). Image fills
-            wrapper exactly (same ratio) so overlays positioned against the
-            wrapper always land on the image. maxHeight caps total to leave
-            room for header + action buttons. */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
-            width: '100%',
-            aspectRatio: activeRatio ? String(activeRatio) : '1/1',
-            maxHeight: '55dvh',
+            display: 'inline-block',
+            maxWidth: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
             cursor: imageScale > 1 ? 'grab' : 'default',
@@ -923,20 +907,17 @@ export function RoomVisualizationFlow({
                 console.log(
                   `[DEBUG] <img> onLoad (${label}): naturalSize=${img.naturalWidth}x${img.naturalHeight} ratio=${(img.naturalWidth / img.naturalHeight).toFixed(3)}`
                 );
-                if (img.naturalWidth && img.naturalHeight) {
-                  const ratio = img.naturalWidth / img.naturalHeight;
-                  if (showOriginalImage) {
-                    setOriginalRatio(ratio);
-                  } else {
-                    setResultRatio(ratio);
-                  }
-                }
               }}
               style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
                 display: 'block',
+                maxWidth: '100%',
+                // 55dvh (dynamic viewport height) auto-adjusts as iOS Safari's
+                // browser chrome shows/hides. Leaves ~45dvh for header + action
+                // buttons. Percentage max-height on inline-block wrapper
+                // collapses to zero — dvh sidesteps the cascade issue.
+                maxHeight: '55dvh',
+                width: 'auto',
+                height: 'auto',
                 transform: `scale(${imageScale})`,
                 transformOrigin: 'center center',
                 transition: imageScale === 1 ? 'transform 0.25s ease' : 'none',
