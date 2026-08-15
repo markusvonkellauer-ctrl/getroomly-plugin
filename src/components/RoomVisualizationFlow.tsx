@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { generateRoomVisualization, validateImageFile } from '@/services/ai-generation';
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
@@ -16,6 +16,7 @@ interface RoomVisualizationFlowProps {
     height: number;
   };
   showSteps?: boolean;
+  onClose?: () => void;
   onComplete?: (imageUrl: string) => void;
   onError?: (error: string) => void;
   config?: EmbedConfig;
@@ -29,6 +30,7 @@ export function RoomVisualizationFlow({
   productPrice: _productPrice,
   measurements,
   showSteps = true,
+  onClose,
   onComplete,
   onError,
   config,
@@ -54,6 +56,32 @@ export function RoomVisualizationFlow({
   const [saveShareDropdownOpen, setSaveShareDropdownOpen] = useState(false);
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
+
+  // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
+  // resets automatically whenever resultImage changes — no effect needed.
+  const [zoomState, setZoomState] = useState<{ scale: number; forImage: string | null }>({
+    scale: 1,
+    forImage: null,
+  });
+  const imageScale = zoomState.forImage === resultImage ? zoomState.scale : 1;
+
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null);
+  const lastTapRef = useRef(0);
+
+  // Mutable refs so touch handlers can read latest values without being in the
+  // effect dep array (avoids re-registering listeners on every scale update).
+  const imageScaleRef = useRef(imageScale);
+  const resultImageRef = useRef(resultImage);
+  useEffect(() => {
+    imageScaleRef.current = imageScale;
+    resultImageRef.current = resultImage;
+  });
+
+  const setImageScale = useCallback(
+    (next: number) => setZoomState({ scale: next, forImage: resultImageRef.current }),
+    []
+  );
 
   // Listen for external favorite state changes from host page
   useEffect(() => {
@@ -240,6 +268,58 @@ export function RoomVisualizationFlow({
     };
   }, []);
 
+  // Pinch-to-zoom helpers (non-passive listeners required for e.preventDefault())
+  const getDistance = useCallback(
+    (t1: Touch, t2: Touch) =>
+      Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2)),
+    []
+  );
+
+  useEffect(() => {
+    const el = imageContainerRef.current;
+    if (!el) {
+      return;
+    }
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        pinchRef.current = {
+          startDist: getDistance(e.touches[0], e.touches[1]),
+          startScale: imageScaleRef.current,
+        };
+      } else if (e.touches.length === 1) {
+        const now = Date.now();
+        if (now - lastTapRef.current < 300) {
+          setImageScale(1);
+        }
+        lastTapRef.current = now;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && pinchRef.current) {
+        e.preventDefault();
+        const newDist = getDistance(e.touches[0], e.touches[1]);
+        const ratio = newDist / pinchRef.current.startDist;
+        const next = Math.min(Math.max(pinchRef.current.startScale * ratio, 1), 4);
+        setImageScale(next);
+      }
+    };
+
+    const onTouchEnd = () => {
+      pinchRef.current = null;
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [getDistance, setImageScale]);
+
   const renderStepIndicator = (currentStep: 'upload' | 'processing' | 'result') => {
     const steps = [
       { key: 'upload', label: t.stepIndicatorUpload, number: 1 },
@@ -320,6 +400,7 @@ export function RoomVisualizationFlow({
 
   const renderUploadStep = () => (
     <div
+      className="getroomly-upload-step"
       style={{
         width: '100%',
         aspectRatio: '5/5',
@@ -439,9 +520,11 @@ export function RoomVisualizationFlow({
       {/* Guidance Text - matching shadow plugin */}
       <div
         style={{
-          width: '100%',
-          maxWidth: '450px',
-          margin: '34px auto auto auto',
+          // alignSelf:stretch fills the flex cross-axis (horizontal) width
+          // reliably in iOS Safari. Using width:'100%' in a flex-column with
+          // alignItems:'center' can resolve to the parent's border-box (390px)
+          // instead of content-box (342px) in Safari, causing text to overflow.
+          alignSelf: 'stretch',
           padding: '16px', // p-4
           backgroundColor: 'hsla(30, 20%, 98%, 0.4)', // bg-background/40
           backdropFilter: 'blur(2px)', // backdrop-blur-[2px]
@@ -494,7 +577,7 @@ export function RoomVisualizationFlow({
             >
               1
             </span>
-            <p style={{ margin: 0, textAlign: 'left' }}>
+            <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
               <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
                 {t.tip1Label}
               </span>
@@ -520,7 +603,7 @@ export function RoomVisualizationFlow({
             >
               2
             </span>
-            <p style={{ margin: 0, textAlign: 'left' }}>
+            <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
               <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
                 {t.tip2Label}
               </span>
@@ -546,7 +629,7 @@ export function RoomVisualizationFlow({
             >
               3
             </span>
-            <p style={{ margin: 0, textAlign: 'left' }}>
+            <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
               <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
                 {t.tip3Label}
               </span>
@@ -783,19 +866,24 @@ export function RoomVisualizationFlow({
           width: '100%',
           height: '100%',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'center',
         }}
       >
-        {/* Fixed aspect ratio container - prevents resize when toggling images */}
+        {/* Wrapper is display:inline-block so it shrinks to the image's actual
+            rendered dimensions. Overlays (label, favorite, thumbs) positioned
+            absolute against this wrapper are guaranteed to sit on the image
+            regardless of viewport size or image aspect ratio — no JS dimension
+            computation needed. */}
         <div
+          ref={imageContainerRef}
           style={{
             position: 'relative',
-            width: '100%',
-            aspectRatio: '5/5',
-            maxHeight: '100%',
+            display: 'inline-block',
+            maxWidth: '100%',
             borderRadius: '8px',
             overflow: 'hidden',
+            cursor: imageScale > 1 ? 'grab' : 'default',
           }}
         >
           {(resultImage || uploadedImage) && (
@@ -803,10 +891,19 @@ export function RoomVisualizationFlow({
               src={showOriginalImage ? uploadedImage || '' : resultImage || ''}
               alt={showOriginalImage ? t.labelOriginal : t.labelNew}
               style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
                 display: 'block',
+                maxWidth: '100%',
+                // 55dvh (dynamic viewport height) auto-adjusts as iOS Safari's
+                // browser chrome shows/hides. Leaves ~45dvh for header + action
+                // buttons. Percentage max-height on inline-block wrapper
+                // collapses to zero — dvh sidesteps the cascade issue.
+                maxHeight: '55dvh',
+                width: 'auto',
+                height: 'auto',
+                transform: `scale(${imageScale})`,
+                transformOrigin: 'center center',
+                transition: imageScale === 1 ? 'transform 0.25s ease' : 'none',
+                willChange: 'transform',
               }}
             />
           )}
@@ -1215,151 +1312,173 @@ export function RoomVisualizationFlow({
           bottom: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.8)',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'center',
           zIndex: 10000,
           backdropFilter: 'blur(4px)',
         }}
         onClick={() => setShowTermsDialog(false)}
       >
+        {/* Inline styles handle the critical layout (flex column, background,
+            shadow). The CSS class adds dvh max-height + mobile margin/radius
+            overrides that require two-value fallbacks or media queries. */}
         <div
+          className="getroomly-terms-content"
           style={{
             backgroundColor: '#ffffff',
-            borderRadius: '12px',
-            maxWidth: '500px',
-            maxHeight: '80vh',
-            overflow: 'auto',
-            position: 'relative',
-            margin: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
             width: '100%',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
+            // No margin or maxWidth — fills the backdrop edge-to-edge on all
+            // screen sizes. The plugin dialog's overflow:hidden + rounded-2xl
+            // clips the corners naturally so no dark gutter appears.
           }}
           onClick={e => e.stopPropagation()}
         >
-          <div style={{ padding: '24px' }}>
-            <div
+          {/* Sticky header — always visible, never scrolls away */}
+          <div
+            style={{
+              padding: '16px 20px',
+              flexShrink: 0,
+              borderBottom: '1px solid #f3f4f6',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: '#374151' }}>
+              {t.termsTitle}
+            </h2>
+            <button
+              onClick={() => setShowTermsDialog(false)}
               style={{
+                background: 'rgba(0, 0, 0, 0.1)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
                 display: 'flex',
-                justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: '20px',
+                justifyContent: 'center',
+                color: '#6b7280',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                flexShrink: 0,
               }}
             >
-              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: '#374151' }}>
-                {t.termsTitle}
-              </h2>
-              <button
-                onClick={() => setShowTermsDialog(false)}
+              ×
+            </button>
+          </div>
+
+          {/* Scrollable content — only this section scrolls */}
+          <div
+            style={{
+              flex: '1 1 auto',
+              overflow: 'auto',
+              padding: '16px 20px',
+              fontSize: '14px',
+              lineHeight: '1.6',
+              color: '#4b5563',
+            }}
+          >
+            <div style={{ marginBottom: '16px' }}>
+              <h3
                 style={{
-                  background: 'rgba(0, 0, 0, 0.1)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '32px',
-                  height: '32px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#6b7280',
                   fontSize: '16px',
-                  fontWeight: 'bold',
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ fontSize: '14px', lineHeight: '1.6', color: '#4b5563' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <h3
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: '#374151',
-                    marginBottom: '8px',
-                  }}
-                >
-                  {t.termsSection1Title}
-                </h3>
-                <p style={{ margin: 0 }}>{t.termsSection1Body}</p>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <h3
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: '#374151',
-                    marginBottom: '8px',
-                  }}
-                >
-                  {t.termsSection2Title}
-                </h3>
-                <p style={{ margin: '0 0 8px 0' }}>
-                  <strong>{t.termsNoPersonalDataTitle}:</strong> {t.termsNoPersonalDataBody}
-                </p>
-                <p style={{ margin: '0 0 8px 0' }}>
-                  <strong>{t.termsEphemeralTitle}:</strong> {t.termsEphemeralBody}
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>{t.termsContinuousTitle}:</strong> {t.termsContinuousBody}
-                </p>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <h3
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: '#374151',
-                    marginBottom: '8px',
-                  }}
-                >
-                  {t.termsSection3Title}
-                </h3>
-                <p style={{ margin: 0 }}>{t.termsSection3Body}</p>
-              </div>
-
-              <div>
-                <h3
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: '#374151',
-                    marginBottom: '8px',
-                  }}
-                >
-                  {t.termsSection4Title}
-                </h3>
-                <p style={{ margin: 0 }}>{t.termsSection4Body}</p>
-              </div>
-            </div>
-
-            <div style={{ marginTop: '24px', textAlign: 'center' }}>
-              <button
-                onClick={() => setShowTermsDialog(false)}
-                style={{
-                  backgroundColor: 'var(--getroomly-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '10px 20px',
-                  fontSize: '14px',
                   fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.filter = 'brightness(0.9)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.filter = 'brightness(1)';
+                  color: '#374151',
+                  marginBottom: '8px',
                 }}
               >
-                {t.termsClose}
-              </button>
+                {t.termsSection1Title}
+              </h3>
+              <p style={{ margin: 0 }}>{t.termsSection1Body}</p>
             </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <h3
+                style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  marginBottom: '8px',
+                }}
+              >
+                {t.termsSection2Title}
+              </h3>
+              <p style={{ margin: '0 0 8px 0' }}>
+                <strong>{t.termsNoPersonalDataTitle}:</strong> {t.termsNoPersonalDataBody}
+              </p>
+              <p style={{ margin: '0 0 8px 0' }}>
+                <strong>{t.termsEphemeralTitle}:</strong> {t.termsEphemeralBody}
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong>{t.termsContinuousTitle}:</strong> {t.termsContinuousBody}
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <h3
+                style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  marginBottom: '8px',
+                }}
+              >
+                {t.termsSection3Title}
+              </h3>
+              <p style={{ margin: 0 }}>{t.termsSection3Body}</p>
+            </div>
+
+            <div>
+              <h3
+                style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  marginBottom: '8px',
+                }}
+              >
+                {t.termsSection4Title}
+              </h3>
+              <p style={{ margin: 0 }}>{t.termsSection4Body}</p>
+            </div>
+          </div>
+
+          {/* Sticky footer — always visible, never scrolls away */}
+          <div
+            style={{
+              padding: '12px 20px 16px',
+              flexShrink: 0,
+              borderTop: '1px solid #f3f4f6',
+              textAlign: 'center',
+            }}
+          >
+            <button
+              onClick={() => setShowTermsDialog(false)}
+              style={{
+                backgroundColor: 'var(--getroomly-primary)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '10px 20px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.filter = 'brightness(0.9)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.filter = 'brightness(1)';
+              }}
+            >
+              {t.termsClose}
+            </button>
           </div>
         </div>
       </div>
@@ -1368,26 +1487,28 @@ export function RoomVisualizationFlow({
 
   return (
     <>
-      {/* Header - Step Titles */}
+      {/* Header - Step Titles + Close button */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'center',
-          padding: '10px 16px 20px',
+          padding: '4px var(--getroomly-space-sm)',
           flexShrink: 0,
+          gap: '4px',
         }}
       >
+        {/* Left spacer balances the close button so the title stays centred */}
+        <div style={{ width: '28px', flexShrink: 0 }} />
+
         <h2
           style={{
+            flex: 1,
             textAlign: 'center',
-            width: '100%',
             fontSize: '18px',
             fontWeight: 'bold',
             letterSpacing: '-0.025em',
-            marginTop: '0',
-            marginBottom: '0',
+            margin: '0',
             color: 'rgba(0, 0, 0, 0.8)',
           }}
         >
@@ -1395,6 +1516,50 @@ export function RoomVisualizationFlow({
           {step === 'processing' && t.stepProcessing}
           {step === 'result' && t.stepResult}
         </h2>
+
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              flexShrink: 0,
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0, 0, 0, 0.06)',
+              color: '#374151',
+              transition: 'all var(--getroomly-transition-fast)',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.12)';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.06)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Content - Like original content structure */}
@@ -1410,8 +1575,7 @@ export function RoomVisualizationFlow({
           padding: '0',
           margin: '0 auto',
           position: 'relative',
-          minHeight: '400px',
-          maxHeight: 'calc(100vh - 122px)',
+          minHeight: '0',
           textAlign: 'center',
         }}
       >
@@ -1423,7 +1587,7 @@ export function RoomVisualizationFlow({
       {/* Footer - Dynamic based on step */}
       <div
         style={{
-          padding: '10px 0',
+          padding: '8px var(--getroomly-space-sm) var(--getroomly-space-sm)',
           backgroundColor: '#ffffff',
           flexShrink: 0,
         }}
