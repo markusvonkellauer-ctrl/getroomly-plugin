@@ -54,10 +54,6 @@ function drawAndCompress(
   let width = sourceWidth;
   let height = sourceHeight;
 
-  console.log(
-    `[DEBUG] drawAndCompress input: ${sourceWidth}x${sourceHeight} ratio=${(sourceWidth / sourceHeight).toFixed(3)}`
-  );
-
   if (width > maxWidth || height > maxWidth) {
     if (width > height) {
       height = (height / width) * maxWidth;
@@ -73,10 +69,6 @@ function drawAndCompress(
   // 1px clipping/stretching.
   width = Math.round(width);
   height = Math.round(height);
-
-  console.log(
-    `[DEBUG] drawAndCompress canvas: ${width}x${height} ratio=${(width / height).toFixed(3)}`
-  );
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -115,9 +107,6 @@ function compressImageFallback(
   img.src = URL.createObjectURL(blob);
   img.onload = () => {
     URL.revokeObjectURL(img.src);
-    console.log(
-      `[DEBUG] compressImageFallback (new Image, no EXIF): ${img.width}x${img.height} ratio=${(img.width / img.height).toFixed(3)}`
-    );
     drawAndCompress(img, img.width, img.height, maxWidth, quality, blob, resolve, reject);
   };
   img.onerror = () => {
@@ -128,18 +117,12 @@ function compressImageFallback(
 
 /** Compresses an image to stay under the backend's 20MB body limit. */
 async function compressImage(blob: Blob | File, maxWidth = 1600, quality = 0.75): Promise<Blob> {
-  console.log(
-    `[DEBUG] compressImage: blob size=${(blob.size / 1024 / 1024).toFixed(2)}MB type=${blob.type}`
-  );
-
   if (blob.size < 400 * 1024) {
-    console.log('[DEBUG] compressImage: blob under 400KB, skipping compression');
     return blob;
   }
 
   return new Promise((resolve, reject) => {
     if (typeof createImageBitmap !== 'function') {
-      console.log('[DEBUG] compressImage: createImageBitmap not available, using fallback');
       return compressImageFallback(blob, maxWidth, quality, resolve, reject);
     }
 
@@ -150,9 +133,6 @@ async function compressImage(blob: Blob | File, maxWidth = 1600, quality = 0.75)
     try {
       createImageBitmap(blob, { imageOrientation: 'from-image' })
         .then(bitmap => {
-          console.log(
-            `[DEBUG] createImageBitmap (with EXIF): ${bitmap.width}x${bitmap.height} ratio=${(bitmap.width / bitmap.height).toFixed(3)}`
-          );
           drawAndCompress(
             bitmap,
             bitmap.width,

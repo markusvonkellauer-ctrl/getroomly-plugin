@@ -236,17 +236,6 @@ export function RoomVisualizationFlow({
     const url = URL.createObjectURL(file);
     uploadedImageRef.current = url;
     setUploadedImage(url);
-
-    // DEBUG: log what iOS delivers to the browser
-    const debugImg = new Image();
-    debugImg.onload = () => {
-      console.log(`[DEBUG] iOS-delivered file: ${file.size} bytes, type=${file.type}`);
-      console.log(
-        `[DEBUG] new Image() naturalSize: ${debugImg.naturalWidth}x${debugImg.naturalHeight} ratio=${(debugImg.naturalWidth / debugImg.naturalHeight).toFixed(3)}`
-      );
-    };
-    debugImg.src = url;
-
     handleGenerate(file);
   };
 
@@ -901,13 +890,6 @@ export function RoomVisualizationFlow({
             <img
               src={showOriginalImage ? uploadedImage || '' : resultImage || ''}
               alt={showOriginalImage ? t.labelOriginal : t.labelNew}
-              onLoad={e => {
-                const img = e.currentTarget;
-                const label = showOriginalImage ? 'Original' : 'Gemini result';
-                console.log(
-                  `[DEBUG] <img> onLoad (${label}): naturalSize=${img.naturalWidth}x${img.naturalHeight} ratio=${(img.naturalWidth / img.naturalHeight).toFixed(3)}`
-                );
-              }}
               style={{
                 display: 'block',
                 maxWidth: '100%',
