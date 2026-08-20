@@ -1409,7 +1409,8 @@ export function RoomVisualizationFlow({
                 {t.termsSection2Title}
               </h3>
               <p style={{ margin: '0 0 8px 0' }}>
-                <strong>{t.termsLimitedDataCollectionTitle}:</strong> {t.termsLimitedDataCollectionBody}
+                <strong>{t.termsLimitedDataCollectionTitle}:</strong>{' '}
+                {t.termsLimitedDataCollectionBody}
               </p>
               <p style={{ margin: 0 }}>
                 <strong>{t.termsQualityRetentionTitle}:</strong> {t.termsQualityRetentionBody}
