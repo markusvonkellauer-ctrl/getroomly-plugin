@@ -53,18 +53,15 @@ export const translations = {
     termsSection1Body:
       'By uploading an image, you grant GetRoomly a temporary licence to process the photo to visualise furniture products in your environment. The AI analyses room geometry and lighting to provide a realistic preview.',
     termsSection2Title: '2. Data Minimisation & Privacy',
-    termsNoPersonalDataTitle: 'No Personal Data',
-    termsNoPersonalDataBody:
-      'We do not collect names, emails (unless explicitly provided for saving results), or IP addresses linked to your identity.',
-    termsEphemeralTitle: 'Ephemeral Storage',
-    termsEphemeralBody:
-      'Images are processed in real-time and are automatically deleted after your session ends.',
-    termsContinuousTitle: 'Continuous Improvement',
-    termsContinuousBody:
-      'If you choose to provide feedback (e.g., "Thumbs Up/Down"), the image may be stored anonymously and temporarily to improve our AI\'s rendering accuracy.',
+    termsLimitedDataCollectionTitle: 'Limited Data Collection',
+    termsLimitedDataCollectionBody:
+      'We do not collect names, email addresses, or IP addresses linked to your identity.',
+    termsQualityRetentionTitle: 'Quality Assurance Retention',
+    termsQualityRetentionBody:
+      'Your photo and the generated visualisation are stored on secure servers within the EU/EEA for up to 14 days for internal quality review, then automatically deleted. They are never used to train AI models or shared with third parties, and are linked only to a temporary session reference — never to your name, email, or IP address.',
     termsSection3Title: '3. Data Security',
     termsSection3Body:
-      'All data is processed using industry-standard encryption via Google Cloud (Vertex AI) within the EU/EEA, ensuring full compliance with GDPR.',
+      'Your photo is processed using a leading global cloud technology platform trusted by major international businesses, under contractual data protection safeguards equivalent to GDPR requirements (such as Standard Contractual Clauses) wherever processing occurs. Your data is never used to train third-party AI models. Photos retained for quality evaluation are stored as described in Section 2, with access restricted to authorised GetRoomly personnel only.',
     termsSection4Title: '4. Ownership',
     termsSection4Body:
       'You retain all ownership of your original photos. GetRoomly and its partners retain all rights to the product visualisations and the underlying AI technology.',
@@ -109,18 +106,15 @@ export const translations = {
     termsSection1Body:
       'Genom att ladda upp en bild ger du GetRoomly en tillfällig licens att behandla fotot för att visualisera möbelprodukter i din miljö. AI:n analyserar rumsgeometri och ljussättning för att ge en realistisk förhandsgranskning.',
     termsSection2Title: '2. Dataminimering & Integritet',
-    termsNoPersonalDataTitle: 'Inga personuppgifter',
-    termsNoPersonalDataBody:
-      'Vi samlar inte in namn, e-postadresser (om du inte uttryckligen anger dem för att spara resultat) eller IP-adresser kopplade till din identitet.',
-    termsEphemeralTitle: 'Tillfällig lagring',
-    termsEphemeralBody:
-      'Bilder bearbetas i realtid och raderas automatiskt när din session avslutas.',
-    termsContinuousTitle: 'Kontinuerlig förbättring',
-    termsContinuousBody:
-      'Om du väljer att ge feedback (t.ex. "Tumme upp/ned") kan bilden lagras anonymt och tillfälligt för att förbättra vår AI:s renderingsnoggrannhet.',
+    termsLimitedDataCollectionTitle: 'Begränsad datainsamling',
+    termsLimitedDataCollectionBody:
+      'Vi samlar inte in namn, e-postadresser eller IP-adresser kopplade till din identitet.',
+    termsQualityRetentionTitle: 'Lagring för kvalitetssäkring',
+    termsQualityRetentionBody:
+      'Ditt foto och den genererade visualiseringen lagras på säkra servrar inom EU/EES i upp till 14 dagar för intern kvalitetsgranskning och raderas därefter automatiskt. De används aldrig för att träna AI-modeller eller delas med tredje part, och kopplas endast till en tillfällig sessionsreferens — aldrig till ditt namn, e-post eller IP-adress.',
     termsSection3Title: '3. Datasäkerhet',
     termsSection3Body:
-      'All data behandlas med branschstandardkryptering via Google Cloud (Vertex AI) inom EU/EES, vilket säkerställer full efterlevnad av GDPR.',
+      'Ditt foto behandlas via en ledande global molnplattform som används av stora internationella företag, med avtalsmässiga dataskyddsgarantier som motsvarar GDPR-kraven (exempelvis Standardavtalsklausuler) oavsett var behandlingen sker. Din data används aldrig för att träna tredjeparts-AI-modeller. Bilder som sparas för kvalitetsutvärdering lagras enligt beskrivningen i avsnitt 2, med åtkomst begränsad till behöriga GetRoomly-medarbetare.',
     termsSection4Title: '4. Äganderätt',
     termsSection4Body:
       'Du behåller all äganderätt till dina originalfoton. GetRoomly och dess partners behåller alla rättigheter till produktvisualiseringarna och den underliggande AI-tekniken.',
