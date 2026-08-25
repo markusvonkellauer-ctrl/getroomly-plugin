@@ -405,7 +405,7 @@ The backend API enforces two independent layers, and you need to be on both:
 
 ### Prerequisites
 
-- Node.js 20+ (CI runs 22, the Docker build image is 20)
+- Node.js (LTS)
 
 ### Setup
 
@@ -413,13 +413,13 @@ The backend API enforces two independent layers, and you need to be on both:
 git clone https://github.com/markusvonkellauer-ctrl/getroomly-plugin.git
 cd getroomly-plugin
 npm install
-cp .env.example .env   # set VITE_API_BASE_URL and VITE_GETROOMLY_API_KEY
+cp .env.example .env   # set VITE_GETROOMLY_API_KEY (dev partner key) and VITE_API_BASE_URL
 npm run dev
 ```
 
-The Vite dev server runs at `http://localhost:5173`. The hosted demo page is [https://demo.getroomly.ai](https://demo.getroomly.ai) (sandbox: [https://dev.getroomly.ai](https://dev.getroomly.ai)) — that's the one to send people to.
+The Vite dev server runs at `http://localhost:5173`. The hosted demo page is [https://plugin.getroomly.ai](https://plugin.getroomly.ai).
 
-**`VITE_API_BASE_URL` is required for local dev.** There is no usable default — the built-in value is the literal placeholder `__API_BASE_URL__`, which is only substituted inside the Docker image at container start (see [Environment variables](#environment-variables)). Without it, requests go to `__API_BASE_URL__/v1/generate` and fail.
+**`VITE_API_BASE_URL` is required for local dev.** There is no usable default — the built-in value is the literal placeholder `__API_BASE_URL__`, which is only substituted inside the Docker image at container start. Without it, requests go to `__API_BASE_URL__/v1/generate` and fail.
 
 The dev server loads `src/main.tsx`, which renders `<App>` directly into `#root` with a hardcoded demo product — **it does not exercise the shadow-DOM entry point**. To test the real embed path, run `npm run build` and `npm run preview`, or use the Docker image's demo page.
 
@@ -444,47 +444,6 @@ The dev server loads `src/main.tsx`, which renders `<App>` directly into `#root`
 
 Jest config lives at `tests/jest.config.js`; see `tests/README.md`.
 
-## Build output
-
-`vite.config.ts` runs in **library mode** with `src/shadow-entry.tsx` as the entry point. `dist/` contains:
-
-- `plugin.js` — the ES module partners load (~540 KB)
-- `style.css` — emitted from the non-inline `App.css` import
-- `favicon.svg`, `icons.svg` — copied from `public/`
-
-Most of the plugin's CSS is inlined into the bundle (`index.css?inline`) and injected into the shadow root, so the widget renders without `style.css`. The nginx image serves `style.css` alongside `plugin.js` and the demo page links it.
-
-The production Docker image wraps `dist/` in nginx with:
-
-- CORS headers (`Access-Control-Allow-Origin: *`) and an OPTIONS preflight short-circuit
-- A demo `index.html` at `/` so you can sanity-check a deploy by opening the root URL
-- A `/health` endpoint for container healthchecks
-- An entrypoint that substitutes `__API_BASE_URL__` in `plugin.js` before nginx starts
-
-## Environment variables
-
-Vite inlines `VITE_*` vars at **build** time, so they are baked into `plugin.js`. The API base URL is the exception: it is baked in as a placeholder and replaced at **container start**.
-
-| Var | Scope | Notes |
-|---|---|---|
-| `VITE_API_BASE_URL` | build | Where the plugin POSTs `/v1/generate`. Defaults to the literal placeholder `__API_BASE_URL__`. Set it for local dev; leave it unset for Docker builds so the entrypoint can substitute it. |
-| `API_BASE_URL` | container runtime | Read by `deploy/entrypoint.sh` and sed-substituted into `plugin.js`. Supplied on the server via `env_file` (`/opt/getroomly/secrets/plugin.env`). **The container refuses to start if it is unset or the placeholder is missing.** |
-| `VITE_GETROOMLY_API_KEY` | dev only | Convenience for local dev — when set, it satisfies the `apiKey` requirement so the demo page works without one. **Never set in production builds.** The published bundle has no fallback key. |
-| `VITE_APP_ENV` | build | `development` / `staging` / `production` (default `development`) — controls dev-only console logging and warnings. |
-| `VITE_GA_MEASUREMENT_ID` | build | Enables the GA4 tracking described in [Analytics](#analytics). Tracking no-ops when unset. |
-
-`src/config/app-config.ts` reads a number of additional `VITE_*` vars (image limits, timeouts, retry counts, demo image URLs). They all have working defaults; see that file for the full list.
-
-## Architecture
-
-Three pieces:
-
-1. **Shadow-DOM mount** — `shadow-entry.tsx` registers a `<getroomly-plugin>` custom element and appends it to `#getroomly-plugin-container`. It attaches an open shadow root and injects the plugin's CSS as inline text, so styles don't bleed into (or get clobbered by) the host page. See [GET-23](https://linear.app/getroomly/issue/GET-23).
-2. **Room upload** — the user uploads a room photo. It is validated (JPEG/PNG/WebP, max 10 MB) and compressed client-side to a max dimension of 1600px, applying EXIF orientation so phone photos aren't rotated.
-3. **API call** — POST to `/v1/generate` with the room image, product image, category, product ID, dimensions and language, authenticated with `X-API-Key`. The backend owns the Gemini call, all prompt construction and re-encoding, and responds with `{ image: { data, mimeType }, latencyMs, ... }`. The plugin builds a data URL from `image.mimeType` + base64 `image.data` and renders it in the shadow DOM. The render is normally WebP, but the backend falls back to the model's original bytes if re-encoding fails — always trust `image.mimeType` rather than assuming a format.
-
-The product placement is chosen by the model from the room photo and dimensions; there is no click-to-place step in the current flow.
-
 ## Deploy
 
 Pushes to `main` and `development` both auto-deploy to Hetzner via GitHub Actions (`.github/workflows/deploy.yml`):
@@ -499,11 +458,9 @@ Pushes to `main` and `development` both auto-deploy to Hetzner via GitHub Action
 | `main` | `plugin-cdn` | `/opt/getroomly/compose` | `:latest`, `:main-<sha>` |
 | `development` | `plugin-cdn-dev` | `/opt/getroomly-dev/compose` | `:development`, `:development-<sha>` |
 
-The container binds to `127.0.0.1:8081` only; the host nginx reverse-proxies `https://plugin.getroomly.ai/plugin.js` to it (GET-17).
+The container binds to `127.0.0.1:8081` only; the host nginx reverse-proxies `https://plugin.getroomly.ai/plugin.js` to it.
 
 CI (`.github/workflows/ci.yml`) runs lint, format check, typecheck and unit tests on every PR and push to those branches. Note the Docker build runs `npx vite build` directly and skips typechecking — CI is what catches type errors.
-
-Pipeline details: see [GET-33](https://linear.app/getroomly/issue/GET-33).
 
 ## Browser support
 
