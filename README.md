@@ -65,9 +65,24 @@ If any required field is missing, the mount container renders a clear init-time 
 </script>
 ```
 
-The plugin renders a trigger button inside `#getroomly-plugin-container`. Clicking it opens a modal with a three-step flow: **upload** a room photo → **processing** → **result**. The generated render is returned as a data URL and drawn back into the shadow DOM.
+The plugin renders a trigger button inside `#getroomly-plugin-container`. Clicking it opens a modal with a three-step flow: **upload** a room photo → **processing** → **result**. The generated render is returned as a data URL and drawn back into the shadow DOM. On the result screen the user can pinch-to-zoom the render (1×–4×, touch only); the zoom resets whenever a new image is generated.
 
 > **Error display is your responsibility.** On any failure the plugin resets silently to the upload step and shows nothing to the user. You must handle the `getroomly-error` event or the `onError` callback to tell the customer what happened. See [Error handling](#error-handling).
+
+### What the modal does to your page
+
+The widget is style-isolated in a shadow root, but it is *not* completely inert on the host page. Two things reach outside it:
+
+- **Scroll lock.** While the modal is open the plugin sets `document.body.style.overflow = 'hidden'` and restores it (to `''`, not to your previous value) on close or unmount. This stops iOS rubber-band scrolling from moving the fixed modal. If your page sets `body { overflow }` itself, or you run your own scroll-lock for a header/drawer, expect to have it cleared after the modal closes.
+- **A document-level click listener** for Mode B analytics — see [Analytics](#analytics). It is passive and only reads `data-getroomly-sku` attributes.
+
+The modal is fixed-position at `z-index: 50`, capped at `520px` wide and `80dvh` tall, with the backdrop set to `touch-action: none`.
+
+### Terms & privacy dialog
+
+The modal contains a user-openable terms dialog covering image processing, data retention and ownership, in both supported languages (`src/lib/i18n.ts`). It currently states that the uploaded photo and the generated visualisation are **retained in the EU/EEA for up to 14 days** for quality review — including for refused generations — linked only to a session reference, never used to train models, then deleted automatically.
+
+This is partner-facing legal copy that ships inside the bundle. If your own privacy policy describes what happens to customer uploads, keep the two consistent, and re-check this section when you upgrade the plugin.
 
 See **Authentication** below before going to production.
 
