@@ -63,16 +63,7 @@ export interface EmbedConfig {
   /** UI language */
   language?: 'en' | 'sv';
 
-  /** Target DOM selector for "Add to Cart" clicks (optional) */
-  addToCartSelector?: string;
-
-  /** Target DOM selector for "Wishlist" clicks (optional) */
-  wishlistSelector?: string;
-
-  /** Enable coordinate debug overlay (optional) */
-  debugCoordinates?: boolean;
-
-  /** Show steps progress bar (optional, default: true) */
+  /** Show steps progress bar (optional, default: false) */
   showSteps?: boolean;
 
   /** Hide the built-in embed button (when modal controlled externally) */
@@ -105,11 +96,9 @@ export interface EmbedConfig {
     onModalOpen?: () => void;
     onModalClose?: () => void;
     onImageGenerated?: (imageUrl: string) => void;
-    onAddToCart?: () => void;
-    onWishlist?: () => void;
     onError?: (error: string) => void;
 
-    // New result action callbacks
+    // Result action callbacks
     onAddToBasket?: (imageUrl: string, productId: string) => void;
     onFavorite?: (imageUrl: string, productId: string) => void;
     onLike?: (imageUrl: string, productId: string) => void;

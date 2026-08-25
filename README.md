@@ -28,7 +28,7 @@ This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend
 <script type="module" src="https://plugin.getroomly.ai/plugin.js"></script>
 ```
 
-If any required field is missing, the mount container renders a clear init-time error (`"Partner API key is required in GetRoomlyEmbedConfig.apiKey"`, etc.) and the modal never opens. Real partners always pass these six — there is no silent fallback.
+If any required field is missing, the mount container renders a clear init-time error (`"Partner API key is required in GetRoomlyEmbedConfig.apiKey"`, etc.) and the modal never opens. Validation happens in `src/hooks/use-embed-config.ts`.
 
 ### With common optional fields
 
@@ -48,12 +48,9 @@ If any required field is missing, the mount container renders a clear init-time 
     language:     'en',                                       // 'en' | 'sv'
     buttonText:   'See it in your room',
     hideButton:   false,                                      // hide built-in trigger
+    showSteps:    false,                                      // step progress bar
     styling:      { buttonColor: '#0d9488', borderRadius: '8px' },
-
-    // optional integrations
-    addToCartSelector: '#add-to-cart-btn',
-    wishlistSelector:  '#wishlist-btn',
-    isFavorite:        false,
+    isFavorite:   false,
 
     // optional in-modal action toggles (all default true)
     buttons: { addToBasket: true, favorite: true, feedback: true, showOriginal: true, saveShare: true },
@@ -68,52 +65,76 @@ If any required field is missing, the mount container renders a clear init-time 
 </script>
 ```
 
-The plugin renders a trigger button inside `#getroomly-plugin-container`. When clicked, it opens a modal where the user uploads a room photo, picks a point on it, and gets the Gemini render back. See **Authentication** below before going to production.
+The plugin renders a trigger button inside `#getroomly-plugin-container`. Clicking it opens a modal with a three-step flow: **upload** a room photo → **processing** → **result**. The generated render is returned as a data URL and drawn back into the shadow DOM.
+
+> **Error display is your responsibility.** On any failure the plugin resets silently to the upload step and shows nothing to the user. You must handle the `getroomly-error` event or the `onError` callback to tell the customer what happened. See [Error handling](#error-handling).
+
+See **Authentication** below before going to production.
 
 ## Authentication — read this first
 
 You need two things from GetRoomly before going live:
 
-1. **A partner API key** (`grm_pub_...`) — set as `window.GetRoomlyEmbedConfig.apiKey`. Treat it like a public API key: it lives in your HTML, but the backend enforces per-domain origin checks so a leaked key can only be abused from approved origins.
+1. **A partner API key** (`grm_pub_...`) — set as `window.GetRoomlyEmbedConfig.apiKey`, sent to the backend as the `X-API-Key` header. Treat it like a public API key: it lives in your HTML, but the backend enforces per-domain origin checks so a leaked key can only be abused from approved origins.
 2. **Your domain on the partner allowlist.** The backend rejects any request whose `Origin` header isn't on your partner record's `allowedOrigins`. Subdomains are covered automatically — if `example.com` is on the list, `shop.example.com` works too.
 
 To get added, contact GetRoomly with the list of domains you'll embed from.
 
-### Error semantics
+## Error handling
 
-The plugin surfaces backend errors via the `onError` callback (see below). Status codes:
+The plugin never renders an error state of its own. When generation or file validation fails it clears the uploaded photo, returns to step 1, and hands the error to the host page through **both** channels:
 
-| Status | Code | What it means | What to do |
-|---|---|---|---|
-| 401 | `unauthorized` | Bad or missing `apiKey` | Check `GetRoomlyEmbedConfig.apiKey` |
-| 403 | `forbidden` | Your origin isn't on the allowlist for this key | Contact GetRoomly to add your domain |
-| 429 | `quotaExceeded` | Daily render cap exceeded for this partner | Resets at next UTC midnight; contact GetRoomly to raise the cap |
-| 503 | `tooBusy` | Upstream model returned no image (often a content refusal) | Retry once or twice; if persistent, the specific (room photo + product) combo may need a different angle |
+- the `getroomly-error` window event, with `detail: { error, productId, sessionId }`
+- the `callbacks.onError(error)` function, if configured
+
+```js
+window.addEventListener('getroomly-error', (e) => {
+  const { error, sessionId } = e.detail;
+  showYourToast(error);
+  console.error('GetRoomly failed', { error, sessionId }); // sessionId is the backend trace ID
+});
+```
+
+`sessionId` is generated once per plugin instance and sent on every `/v1/generate` call, where the backend indexes it in `RenderLog`. Include it in support requests.
+
+### Error codes
+
+Client-side codes raised by the plugin before or after the network call:
+
+| Code | Meaning |
+|---|---|
+| `NO_API_KEY` | No `apiKey` in config and no dev-time fallback |
+| `NO_PRODUCT_IMAGE` | `productImage` was empty at request time |
+| `INVALID_RESPONSE` | Backend returned 200 but no `image.data` |
+| `BACKEND_ERROR` | Backend returned an error without a `code` field |
+
+For non-2xx responses the plugin surfaces the backend's own `code` and `description` verbatim (`src/services/ai-generation.ts`). Refer to the [backend repo](https://github.com/markusvonkellauer-ctrl/GetRoomly-Backend) for the authoritative status/code list — commonly seen are 401 (bad key), 403 (origin not allowlisted), 429 (partner quota exhausted) and 503 (upstream model returned no image; retry, or the specific room-photo/product combination may need a different angle).
 
 ## Configuration: `window.GetRoomlyEmbedConfig`
 
-Full shape (defined in `src/types/embed-config.ts`):
+Full shape defined in `src/types/embed-config.ts`.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `apiKey` | `string` | **yes** | `grm_pub_...`. Issued via the backend `CreatePartner` tool. The published plugin bundle ships with no fallback key — every host page must provide one. |
-| `productImage` | `string` | **yes** | Public URL of the product image |
+| `productImage` | `string` | **yes** | Public URL (or data URL) of the product image |
 | `sku` | `string` | **yes** | Product SKU / ID |
 | `productName` | `string` | **yes** | Display name shown in the modal |
 | `category` | `string` | **yes** | Free-form. The backend uses it to pick the render prompt — `carpets` (or any string containing `carpet`) triggers the carpet-replacement path; small-accessory tokens (`lamp`, `vase`, `decor`, `lighting`, `candle`, `plant`, `pot`, `bowl`, `accessory`) get size-aware copy; everything else (`sofas`, `chairs`, `tables`, `beds`, custom taxonomies, ...) goes through the general furniture prompt |
-| `measurements` | `{ width, depth, height }` | **yes** | Product dimensions in cm — backend rejects placement requests without these |
-| `productPrice` | `number` | no | Price in cents |
-| `language` | `'en' \| 'sv'` | no | UI language (default `en`) |
-| `addToCartSelector` | `string` | no | CSS selector the plugin clicks when the user hits "Add to cart" inside the modal |
-| `wishlistSelector` | `string` | no | Same, for "Wishlist" |
-| `debugCoordinates` | `boolean` | no | Show a coordinate debug overlay (dev only) |
-| `showSteps` | `boolean` | no | Show steps progress bar (default `false`) |
+| `measurements` | `{ width, depth, height }` | **yes** | Product dimensions in cm — all three must be numbers or init fails |
+| `productPrice` | `number` | no | Price in cents. Forwarded in cart events only; not shown in the modal. |
+| `language` | `'en' \| 'sv'` | no | UI language. If omitted, detected from the page's TLD (`.se` → `sv`, otherwise `en`). |
+| `showSteps` | `boolean` | no | Show the step progress indicator (default `false`) |
 | `hideButton` | `boolean` | no | Hide the built-in trigger button (use when you control opening via `window.GetRoomly.open()`) |
-| `isFavorite` | `boolean` | no | Initial favorite/wishlist state |
+| `isFavorite` | `boolean` | no | Initial favorite/wishlist state (default `false`) |
 | `buttonText` | `string` | no | Override the trigger button label |
 | `buttons` | `object` | no | Toggle in-modal action buttons individually (see below) |
-| `styling` | `object` | no | `buttonColor`, `buttonTextColor`, `borderRadius` |
+| `styling` | `object` | no | `buttonColor`, `buttonTextColor`, `borderRadius` — applies to the trigger button only |
 | `callbacks` | `object` | no | Function callbacks for plugin events (see below) |
+
+### Config is re-read on every open
+
+The shadow-DOM root is created once per page load, but the plugin re-reads `window.GetRoomlyEmbedConfig` on every `getroomly-open-modal` event. On a listing page you can mutate the global between opens (different product, newly picked size) and the modal will pick up the change — no remount needed.
 
 ### `buttons` — toggle in-modal actions
 
@@ -127,13 +148,15 @@ buttons: {
 }
 ```
 
+Only an explicit `false` hides a button.
+
 ### `styling` — light theming
 
 ```js
 styling: {
-  buttonColor:     '#0d9488',
-  buttonTextColor: '#ffffff',
-  borderRadius:    '8px',
+  buttonColor:     '#0d9488',   // default '#000'
+  buttonTextColor: '#ffffff',   // default '#fff'
+  borderRadius:    '8px',       // default '0'
 }
 ```
 
@@ -142,13 +165,15 @@ styling: {
 Once the plugin script loads it attaches a global with four methods:
 
 ```js
-window.GetRoomly.open();   // open the modal programmatically
+window.GetRoomly.open();   // mount if needed, then open the modal
 window.GetRoomly.close();  // close the modal
-window.GetRoomly.isOpen(); // -> boolean
-window.GetRoomly.init();   // re-init (mounts plugin if container exists)
+window.GetRoomly.isOpen(); // -> boolean, see caveat below
+window.GetRoomly.init();   // mount the plugin if the container exists (idempotent)
 ```
 
 Useful when you want to trigger the plugin from your own button. Pair with `hideButton: true` to hide the built-in trigger.
+
+> ⚠️ `isOpen()` only tracks calls made through this API. If the user closes the modal with the X button or by clicking the backdrop, `isOpen()` keeps returning `true`. Listen for `getroomly-modal-closed` if you need reliable state.
 
 ## Listening to events
 
@@ -158,20 +183,23 @@ The plugin dispatches `CustomEvent`s on `window`. The host page can listen and r
 
 | Event | `detail` payload | When |
 |---|---|---|
-| `getroomly-open-modal` | — | Modal opens |
-| `getroomly-close-modal` | — | Modal closes (user action or `GetRoomly.close()`) |
-| `getroomly-modal-closed` | — | Fired alongside `getroomly-close-modal` (legacy alias) |
+| `getroomly-error` | `{ error, productId, sessionId }` | Generation or file validation failed. **The plugin shows no error UI — handle this.** |
+| `getroomly-modal-closed` | — | Modal closed, by any means (X button, backdrop, or `GetRoomly.close()`) |
+| `getroomly-close-modal` | — | Only when `GetRoomly.close()` is called (it is both dispatched and listened for) |
+| `getroomly-open-modal` | — | Only when `GetRoomly.open()` is called — **not** when the built-in button is clicked |
 | `getroomly-add-to-cart` | `{ productId, imageUrl, productName, productPrice, product: { id, name, price, category } }` | User clicks "Add to cart" in the modal |
 | `getroomly-add-to-wishlist` | `{ productId, isFavorite, isCurrentlyWishlisted, imageUrl }` | User clicks the heart/wishlist button |
-| `getroomly-like` | `{ imageUrl, productId }` | Thumbs-up feedback |
-| `getroomly-dislike` | `{ imageUrl, productId }` | Thumbs-down feedback |
+| `getroomly-like` | `{ imageUrl, productId }` | Thumbs-up feedback (once per result) |
+| `getroomly-dislike` | `{ imageUrl, productId }` | Thumbs-down feedback (once per result) |
 | `getroomly-check-favorite` | `{ productId }` | Plugin asks the host page whether this product is favorited — respond with `getroomly-set-favorite` |
+
+To detect *every* modal open (including the built-in button), use the `callbacks.onModalOpen` callback rather than the event.
 
 ### Events the plugin listens for
 
 | Event | `detail` payload | What it does |
 |---|---|---|
-| `getroomly-open-modal` | — | Opens the modal (same as `GetRoomly.open()`) |
+| `getroomly-open-modal` | — | Opens the modal and re-reads `GetRoomlyEmbedConfig` |
 | `getroomly-close-modal` | — | Closes the modal |
 | `getroomly-set-favorite` | `{ productId, isFavorite }` | Reply to `getroomly-check-favorite`; updates the heart state |
 
@@ -179,7 +207,6 @@ The plugin dispatches `CustomEvent`s on `window`. The host page can listen and r
 
 ```js
 window.addEventListener('getroomly-add-to-cart', (e) => {
-  console.log('Adding to cart:', e.detail.productId);
   yourCart.add(e.detail.productId, { imageUrl: e.detail.imageUrl });
 });
 
@@ -207,27 +234,38 @@ If you prefer plain function references over events, set them on `GetRoomlyEmbed
 window.GetRoomlyEmbedConfig = {
   ...,
   callbacks: {
-    onModalOpen:       () => console.log('opened'),
-    onModalClose:      () => console.log('closed'),
-    onImageGenerated:  (imageUrl) => console.log('rendered', imageUrl),
-    onError:           (error) => alert(error),
+    onModalOpen:       () => {},                    // built-in trigger button clicked
+    onModalClose:      () => {},
+    onImageGenerated:  (imageUrl) => {},
+    onError:           (error) => {},               // error is a string
 
-    // Result-screen action callbacks
-    onAddToBasket:  (imageUrl, productId) => { ... },
-    onFavorite:     (imageUrl, productId) => { ... },
-    onLike:         (imageUrl, productId) => { ... },
-    onDislike:      (imageUrl, productId) => { ... },
-    onShowOriginal: (originalImage, productId) => { ... },
-    onSaveShare:    (imageUrl, productId) => { ... },
-
-    // Legacy convenience
-    onAddToCart:  () => { ... },
-    onWishlist:   () => { ... },
+    // Result-screen action callbacks — (imageUrl, productId)
+    onAddToBasket:  (imageUrl, productId) => {},
+    onFavorite:     (imageUrl, productId) => {},
+    onLike:         (imageUrl, productId) => {},
+    onDislike:      (imageUrl, productId) => {},
+    onShowOriginal: (originalImage, productId) => {},
+    onSaveShare:    (imageUrl, productId) => {},
   },
 };
 ```
 
-Use whichever model is more convenient: events are decoupled and work well when multiple parts of your page need to react; callbacks keep all the logic in one config object.
+Use whichever model is more convenient: events are decoupled and work well when multiple parts of your page need to react; callbacks keep all the logic in one config object. Note the asymmetry — `onModalOpen` fires only for the built-in button, while `getroomly-open-modal` fires only for the programmatic API.
+
+## Analytics
+
+If the host page has Google Analytics (`gtag`) loaded, the plugin fires a GA4 `getroomly_interaction` event with `product_sku` and `product_category`, and sets the `getroomly_active_user` user property. It no-ops silently when `gtag` is absent and can never throw into the host page.
+
+Two triggers:
+
+- **Mode A** — the built-in trigger button is clicked. Uses `sku` and `category` from the config.
+- **Mode B** — *any* element on the page carrying a `data-getroomly-sku` attribute is clicked. The plugin installs one delegated `click` listener on `document` and reads the SKU from the attribute:
+
+```html
+<button data-getroomly-sku="sofa-12345">Add to cart</button>
+```
+
+Mode B lets you attribute your own storefront buttons without wiring up the widget on them.
 
 ## CORS / cross-origin
 
@@ -237,7 +275,7 @@ The plugin file (`plugin.js`) is served with `Access-Control-Allow-Origin: *` so
 
 ### Prerequisites
 
-- Node.js (LTS)
+- Node.js 20+ (CI runs 22, the Docker build image is 20)
 
 ### Setup
 
@@ -245,66 +283,103 @@ The plugin file (`plugin.js`) is served with `Access-Control-Allow-Origin: *` so
 git clone https://github.com/markusvonkellauer-ctrl/getroomly-plugin.git
 cd getroomly-plugin
 npm install
-cp .env.example .env   # set VITE_GETROOMLY_API_KEY (dev partner key); VITE_API_BASE_URL has a sensible default
+cp .env.example .env   # set VITE_API_BASE_URL and VITE_GETROOMLY_API_KEY
 npm run dev
 ```
 
 Demo page at [http://localhost:5173](http://localhost:5173).
 
+**`VITE_API_BASE_URL` is required for local dev.** There is no usable default — the built-in value is the literal placeholder `__API_BASE_URL__`, which is only substituted inside the Docker image at container start (see [Environment variables](#environment-variables)). Without it, requests go to `__API_BASE_URL__/v1/generate` and fail.
+
+The dev server loads `src/main.tsx`, which renders `<App>` directly into `#root` with a hardcoded demo product — **it does not exercise the shadow-DOM entry point**. To test the real embed path, run `npm run build` and `npm run preview`, or use the Docker image's demo page.
+
 ### Scripts
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Vite dev server with HMR (root `index.html` loads the plugin entry) |
-| `npm run build` | Library build → `dist/plugin.js` (ES module, ~525 KB) |
+| `npm run dev` | Vite dev server with HMR (loads `src/main.tsx`, not the plugin entry) |
+| `npm run build` | Typecheck (`tsc -b`) then library build → `dist/` |
+| `npm run watch` | Library build in watch mode |
 | `npm run preview` | Serve the built artifact locally |
-| `npm run lint` | ESLint |
+| `npm run lint` / `lint:fix` | ESLint |
+| `npm run format` / `format:check` | Prettier |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Full Jest suite |
+| `npm run test:unit` | Component / util / api tests |
+| `npm run test:integration` | Integration tests |
+| `npm run test:shadow-dom` | Shadow-DOM isolation tests |
+| `npm run test:e2e` | Puppeteer end-to-end (serial) |
+| `npm run test:all` | unit → integration → shadow-dom → e2e |
+| `npm run test:coverage` | Coverage report |
 
-## Build modes
+Jest config lives at `tests/jest.config.js`; see `tests/README.md`.
 
-`vite.config.ts` runs in **library mode** with `src/shadow-entry.tsx` as the entry point. Output is a single ES-module file (`dist/plugin.js`) that is what partners ultimately load.
+## Build output
 
-The production Docker image wraps that artifact in nginx with:
+`vite.config.ts` runs in **library mode** with `src/shadow-entry.tsx` as the entry point. `dist/` contains:
+
+- `plugin.js` — the ES module partners load (~540 KB)
+- `style.css` — emitted from the non-inline `App.css` import
+- `favicon.svg`, `icons.svg` — copied from `public/`
+
+Most of the plugin's CSS is inlined into the bundle (`index.css?inline`) and injected into the shadow root, so the widget renders without `style.css`. The nginx image serves `style.css` alongside `plugin.js` and the demo page links it.
+
+The production Docker image wraps `dist/` in nginx with:
+
 - CORS headers (`Access-Control-Allow-Origin: *`) and an OPTIONS preflight short-circuit
 - A demo `index.html` at `/` so you can sanity-check a deploy by opening the root URL
 - A `/health` endpoint for container healthchecks
+- An entrypoint that substitutes `__API_BASE_URL__` in `plugin.js` before nginx starts
 
 ## Environment variables
 
-Vite inlines `VITE_*` vars at build time. The runtime values come from `window.GetRoomlyEmbedConfig`, so the `.env` is mostly for local dev:
+Vite inlines `VITE_*` vars at **build** time, so they are baked into `plugin.js`. The API base URL is the exception: it is baked in as a placeholder and replaced at **container start**.
 
-| Var | Required | Default | Notes |
-|---|---|---|---|
-| `VITE_API_BASE_URL` | no | `https://api.getroomly.ai` | Where the plugin POSTs `/v1/generate`. The built-in default points at the live HTTPS backend. |
-| `VITE_GETROOMLY_API_KEY` | dev only | — | Convenience for local plugin dev — when set, the dev demo at `npm run dev` uses it as the partner key. **Never set in production builds.** The published plugin bundle has no fallback key; production host pages must always pass `window.GetRoomlyEmbedConfig.apiKey` themselves. |
-| `VITE_APP_ENV` | no | `development` | `development` / `staging` / `production` — controls dev-only console logging and warnings. |
+| Var | Scope | Notes |
+|---|---|---|
+| `VITE_API_BASE_URL` | build | Where the plugin POSTs `/v1/generate`. Defaults to the literal placeholder `__API_BASE_URL__`. Set it for local dev; leave it unset for Docker builds so the entrypoint can substitute it. |
+| `API_BASE_URL` | container runtime | Read by `deploy/entrypoint.sh` and sed-substituted into `plugin.js`. Supplied on the server via `env_file` (`/opt/getroomly/secrets/plugin.env`). **The container refuses to start if it is unset or the placeholder is missing.** |
+| `VITE_GETROOMLY_API_KEY` | dev only | Convenience for local dev — when set, it satisfies the `apiKey` requirement so the demo page works without one. **Never set in production builds.** The published bundle has no fallback key. |
+| `VITE_APP_ENV` | build | `development` / `staging` / `production` (default `development`) — controls dev-only console logging and warnings. |
+| `VITE_GA_MEASUREMENT_ID` | build | Enables the GA4 tracking described in [Analytics](#analytics). Tracking no-ops when unset. |
+
+`src/config/app-config.ts` reads a number of additional `VITE_*` vars (image limits, timeouts, retry counts, demo image URLs). They all have working defaults; see that file for the full list.
 
 ## Architecture
 
 Three pieces:
 
-1. **Shadow-DOM mount** — the plugin attaches a shadow root inside `#getroomly-plugin-container` so its CSS doesn't bleed into (or get clobbered by) the host page's styles. See [GET-23](https://linear.app/getroomly/issue/GET-23).
-2. **Room upload + click capture** — user uploads a room photo, clicks the point where they want the product placed. Coordinates are sent along with the product info.
-3. **API call** — POST to `/v1/generate` with the room image, product image, click coordinates, and product metadata. The response is a WebP render that's drawn back into the shadow DOM.
+1. **Shadow-DOM mount** — `shadow-entry.tsx` registers a `<getroomly-plugin>` custom element and appends it to `#getroomly-plugin-container`. It attaches an open shadow root and injects the plugin's CSS as inline text, so styles don't bleed into (or get clobbered by) the host page. See [GET-23](https://linear.app/getroomly/issue/GET-23).
+2. **Room upload** — the user uploads a room photo. It is validated (JPEG/PNG/WebP, max 10 MB) and compressed client-side to a max dimension of 1600px, applying EXIF orientation so phone photos aren't rotated.
+3. **API call** — POST to `/v1/generate` with the room image, product image, category, product ID, dimensions and language, authenticated with `X-API-Key`. The backend owns the Gemini call, all prompt construction and re-encoding. The response image is turned into a data URL and rendered in the shadow DOM.
 
-⚠️ **Known issue**: the coordinate handoff has accuracy problems for non-trivial image / container sizes. See [GET-35](https://linear.app/getroomly/issue/GET-35) for the audit and planned fixes.
+The product placement is chosen by the model from the room photo and dimensions; there is no click-to-place step in the current flow.
 
 ## Deploy
 
-`main` push → auto-deploy to Hetzner via GitHub Actions:
+Pushes to `main` and `development` both auto-deploy to Hetzner via GitHub Actions (`.github/workflows/deploy.yml`):
 
-1. Vite library build
-2. Two-stage Docker image (Node 20-alpine build → nginx 1.27-alpine runtime), pushed to `ghcr.io/markusvonkellauer-ctrl/getroomly-plugin`
-3. SCP deploy compose, pull, roll, health-check
+1. Two-stage Docker build (Node 20-alpine build → nginx 1.27-alpine runtime), pushed to `ghcr.io/markusvonkellauer-ctrl/getroomly-plugin`
+2. SCP the branch's compose file to the server and merge it into the top-level compose via an `include:`
+3. `docker compose pull` + `up -d`, then poll the container healthcheck for up to 90s
+4. Slack notification with the result
 
-Live CDN: [http://178.105.148.65:8081/plugin.js](http://178.105.148.65:8081/plugin.js).
+| Branch | Container | Compose dir | Image tags |
+|---|---|---|---|
+| `main` | `plugin-cdn` | `/opt/getroomly/compose` | `:latest`, `:main-<sha>` |
+| `development` | `plugin-cdn-dev` | `/opt/getroomly-dev/compose` | `:development`, `:development-<sha>` |
+
+The container binds to `127.0.0.1:8081` only; the host nginx reverse-proxies `https://plugin.getroomly.ai/plugin.js` to it (GET-17).
+
+CI (`.github/workflows/ci.yml`) runs lint, format check, typecheck and unit tests on every PR and push to those branches. Note the Docker build runs `npx vite build` directly and skips typechecking — CI is what catches type errors.
+
 Pipeline details: see [GET-33](https://linear.app/getroomly/issue/GET-33).
 
 ## Browser support
 
-Modern evergreen browsers (Chrome, Edge, Firefox, Safari current + 1). Plugin ships as an ES module — no IE / legacy support.
+Modern evergreen browsers (Chrome, Edge, Firefox, Safari current + 1). Plugin ships as an ES module — no IE / legacy support. Uses `customElements`, shadow DOM, `createImageBitmap` (with an `Image()` fallback) and `crypto.randomUUID` (with a fallback).
 
-Bundle size budget: keep `plugin.js` under ~600 KB minified. Currently ~525 KB.
+Bundle size budget: keep `plugin.js` under ~600 KB minified. Currently ~540 KB.
 
 ## License
 
