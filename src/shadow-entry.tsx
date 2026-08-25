@@ -35,6 +35,9 @@ class GetRoomlyPlugin extends HTMLElement {
     // Set default config if not provided
     if (!window.GetRoomlyEmbedConfig) {
       window.GetRoomlyEmbedConfig = {
+        // Empty in the published bundle — host pages must supply their own key,
+        // and useEmbedConfig surfaces a clear init error when they don't.
+        apiKey: AppConfig.ai.defaultApiKey ?? '',
         productImage: AppConfig.demo.chairImageUrl,
         sku: 'SHADOW-TEST-001',
         productName: 'Shadow DOM Test Product',

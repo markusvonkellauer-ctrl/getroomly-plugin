@@ -8,8 +8,8 @@ export function trackInteraction(sku: string, category?: string): void {
     return;
   }
   try {
-    if (typeof (window as Window & { gtag?: unknown }).gtag === 'function') {
-      const gtag = (window as Window & { gtag: (...args: unknown[]) => void }).gtag;
+    const { gtag } = window as Window & { gtag?: (...args: unknown[]) => void };
+    if (typeof gtag === 'function') {
       gtag('set', 'user_properties', { getroomly_active_user: 'true' });
       gtag('event', 'getroomly_interaction', {
         product_sku: sku,
