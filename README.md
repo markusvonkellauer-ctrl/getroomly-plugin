@@ -41,7 +41,9 @@ You never configure the backend URL: it is baked into the bundle you load. You o
 
 If any required field is missing, the mount container renders a clear init-time error (`"Partner API key is required in GetRoomlyEmbedConfig.apiKey"`, etc.) and the modal never opens. Validation happens in `src/hooks/use-embed-config.ts`.
 
-**Order matters.** `window.GetRoomlyEmbedConfig` must be assigned *before* `plugin.js` executes. The script is an ES module, so it is deferred by default and normally runs after inline scripts earlier in the document — but if you inject the script tag dynamically, or load the config asynchronously, set the config first and only then append the script. There is no "config arrived late" retry beyond the `getroomly-open-modal` re-read described below.
+**Order matters.** `window.GetRoomlyEmbedConfig` must be assigned *before* `plugin.js` executes. The script is an ES module, so it is deferred by default and normally runs after inline scripts earlier in the document — but if you inject the script tag dynamically, or load the config asynchronously, set the config first and only then append the script.
+
+The plugin re-checks the config in two cases (`src/hooks/use-embed-config.ts`): on `DOMContentLoaded`, but *only* if the document was still parsing when it first looked, and on every `getroomly-open-modal`. So a config that arrives after the document has finished loading is picked up only when the modal is next opened programmatically — don't rely on it landing on its own.
 
 ### Before you go live, you need
 
@@ -52,7 +54,7 @@ If any required field is missing, the mount container renders a clear init-time 
 ### Verify the install
 
 1. Load the page — you should see the trigger button inside `#getroomly-plugin-container`. If you see an error message there instead, a required config field is missing.
-2. Open the browser console and confirm there is no `Failed to fetch product image` error.
+2. Open the browser console and confirm the product image isn't blocked. A missing CORS header on your CDN surfaces as a browser-level `TypeError: Failed to fetch` (plus a CORS warning), *not* as a tidy plugin message — the fetch rejects before the plugin can inspect the response.
 3. Click through a real generation with a room photo. A successful run POSTs once to `https://api.getroomly.ai/v1/generate` and returns a render.
 4. If it fails, listen for `getroomly-error` — the plugin deliberately shows nothing itself. See [Error handling](#error-handling).
 
@@ -356,7 +358,7 @@ From the customer's browser, the plugin makes exactly two network requests of it
 
 | Request | To | Why it can fail |
 |---|---|---|
-| `fetch(productImage)` | **your** CDN | `src/services/ai-generation.ts` fetches the product image and converts it to base64 before sending it to the backend. It is a `fetch`, not an `<img>` — so your CDN **must** return `Access-Control-Allow-Origin` for your storefront's origin. If it doesn't, generation fails with `Failed to fetch product image` even though the image displays fine elsewhere on the page. |
+| `fetch(productImage)` | **your** CDN | `src/services/ai-generation.ts` fetches the product image and converts it to base64 before sending it to the backend. It is a `fetch`, not an `<img>` — so your CDN **must** return `Access-Control-Allow-Origin` for your storefront's origin. If it doesn't, the fetch is rejected by the browser (`TypeError: Failed to fetch`) before the plugin ever sees a response — even though an `<img>` pointing at the same URL displays fine elsewhere on the page. A non-CORS failure such as a 404 gives the clearer `Failed to fetch product image: 404`. |
 | `POST /v1/generate` | `https://api.getroomly.ai` | Subject to the two allowlist layers below |
 
 Passing a `data:` URL as `productImage` skips the fetch entirely, which is a useful workaround if you can't add CORS headers to your CDN.
@@ -368,10 +370,10 @@ If your storefront sends a CSP, it needs to permit:
 ```
 script-src  https://plugin.getroomly.ai
 connect-src https://api.getroomly.ai <your-product-image-cdn>
-img-src     data: <your-product-image-cdn>
+img-src     data: blob: <your-product-image-cdn>
 ```
 
-`img-src data:` is required because the finished render is returned as base64 and drawn from a data URL, not from a remote file.
+`img-src` needs both schemes: `data:` because the finished render is returned as base64 and drawn from a data URL, and `blob:` because the customer's uploaded room photo is previewed via `URL.createObjectURL()` before it is ever sent anywhere.
 
 **`style-src` must include `'unsafe-inline'`.** This is not optional, and it is measured, not assumed — under `style-src 'self'` the plugin injects its `<style>` element into the shadow root as normal, but the browser refuses the contents (`Refused to apply inline style`) and the stylesheet parses to **zero rules**. The widget still mounts and is still clickable, because React applies its own inline styles through the CSSOM, which CSP does not block — so it fails in the worst way possible: visibly broken layout rather than an obvious hard error. Verified in headless Chrome against the built bundle:
 
