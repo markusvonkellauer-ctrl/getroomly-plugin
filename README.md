@@ -4,6 +4,16 @@ Drop-in JavaScript widget that lets your customers preview products in a photo o
 
 This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend**](https://github.com/markusvonkellauer-ctrl/GetRoomly-Backend); the showcase demo is [**GetRoomly Frontend**](https://github.com/markusvonkellauer-ctrl/GetRoomly).
 
+## Production endpoints
+
+| What | URL |
+|---|---|
+| Plugin bundle | `https://plugin.getroomly.ai/plugin.js` |
+| Stylesheet (optional) | `https://plugin.getroomly.ai/style.css` |
+| Backend API | `https://api.getroomly.ai` — the plugin POSTs `/v1/generate` |
+
+You never configure the backend URL: it is baked into the bundle you load. You only ever set `apiKey` and the product fields.
+
 ## 5-minute integration
 
 ### Minimum required (6 fields)
@@ -29,6 +39,21 @@ This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend
 ```
 
 If any required field is missing, the mount container renders a clear init-time error (`"Partner API key is required in GetRoomlyEmbedConfig.apiKey"`, etc.) and the modal never opens. Validation happens in `src/hooks/use-embed-config.ts`.
+
+**Order matters.** `window.GetRoomlyEmbedConfig` must be assigned *before* `plugin.js` executes. The script is an ES module, so it is deferred by default and normally runs after inline scripts earlier in the document — but if you inject the script tag dynamically, or load the config asynchronously, set the config first and only then append the script. There is no "config arrived late" retry beyond the `getroomly-open-modal` re-read described below.
+
+### Before you go live, you need
+
+1. **A partner API key** (`grm_pub_...`) from GetRoomly.
+2. **Your domain allowlisted** on the backend — see [Authentication](#authentication--read-this-first). Without this every render returns `403 forbidden`.
+3. **CORS on your product-image CDN** — see [What the plugin fetches](#what-the-plugin-fetches). This is the most common cause of a working-looking install that fails at generation time.
+
+### Verify the install
+
+1. Load the page — you should see the trigger button inside `#getroomly-plugin-container`. If you see an error message there instead, a required config field is missing.
+2. Open the browser console and confirm there is no `Failed to fetch product image` error.
+3. Click through a real generation with a room photo. A successful run POSTs once to `https://api.getroomly.ai/v1/generate` and returns a render.
+4. If it fails, listen for `getroomly-error` — the plugin deliberately shows nothing itself. See [Error handling](#error-handling).
 
 ### With common optional fields
 
@@ -302,6 +327,33 @@ Two triggers:
 Mode B lets you attribute your own storefront buttons without wiring up the widget on them.
 
 ## CORS / cross-origin
+
+### What the plugin fetches
+
+From the customer's browser, the plugin makes exactly two network requests of its own:
+
+| Request | To | Why it can fail |
+|---|---|---|
+| `fetch(productImage)` | **your** CDN | `src/services/ai-generation.ts` fetches the product image and converts it to base64 before sending it to the backend. It is a `fetch`, not an `<img>` — so your CDN **must** return `Access-Control-Allow-Origin` for your storefront's origin. If it doesn't, generation fails with `Failed to fetch product image` even though the image displays fine elsewhere on the page. |
+| `POST /v1/generate` | `https://api.getroomly.ai` | Subject to the two allowlist layers below |
+
+Passing a `data:` URL as `productImage` skips the fetch entirely, which is a useful workaround if you can't add CORS headers to your CDN.
+
+### Content Security Policy
+
+If your storefront sends a CSP, it needs to permit:
+
+```
+script-src  https://plugin.getroomly.ai
+connect-src https://api.getroomly.ai <your-product-image-cdn>
+img-src     data: <your-product-image-cdn>
+```
+
+`img-src data:` is required because the finished render is returned as base64 and drawn from a data URL, not from a remote file.
+
+Be aware of `style-src` too: the plugin injects a `<style>` element into its shadow root and renders components that set inline styles, so a strict policy without `'unsafe-inline'` is likely to break the widget's appearance. We haven't verified this against every browser — if you enforce a strict `style-src`, test a full generation before rolling out.
+
+### Allowlists
 
 The plugin file (`plugin.js`) is served with `Access-Control-Allow-Origin: *` so any partner site can embed it.
 
