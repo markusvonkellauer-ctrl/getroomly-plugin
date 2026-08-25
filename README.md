@@ -11,6 +11,7 @@ This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend
 | Plugin bundle | `https://plugin.getroomly.ai/plugin.js` |
 | Stylesheet (optional) | `https://plugin.getroomly.ai/style.css` |
 | Backend API | `https://api.getroomly.ai` — the plugin POSTs `/v1/generate` |
+| Backend API (staging) | `https://dev-api.getroomly.ai` — used by the `development` build only |
 
 You never configure the backend URL: it is baked into the bundle you load. You only ever set `apiKey` and the product fields.
 
@@ -234,6 +235,27 @@ Useful when you want to trigger the plugin from your own button. Pair with `hide
 
 > ⚠️ `isOpen()` only tracks calls made through this API. If the user closes the modal with the X button or by clicking the backdrop, `isOpen()` keeps returning `true`. Listen for `getroomly-modal-closed` if you need reliable state.
 
+### Loading the script dynamically (SPA integration)
+
+If you inject the script tag from JavaScript instead of putting it in your HTML, `window.GetRoomly` does **not** exist immediately after `appendChild` — the module still has to load and execute. Set the config first, then wait for `onload` before calling `open()`:
+
+```js
+window.GetRoomlyEmbedConfig = { apiKey: '...', /* ...product fields... */ hideButton: true };
+
+const script = document.createElement('script');
+script.type = 'module';
+script.src = 'https://plugin.getroomly.ai/plugin.js';
+script.onload = () => window.GetRoomly.open();
+document.head.appendChild(script);
+```
+
+Load the script **once** for the lifetime of the page, not once per product. To show a different product, mutate `window.GetRoomlyEmbedConfig` and call `open()` again — the plugin re-reads it on every open (see [Config is re-read on every open](#config-is-re-read-on-every-open)).
+
+Two things to get right in a component-based framework:
+
+- **Don't let re-renders unmount `#getroomly-plugin-container`.** The plugin mounts a custom element into it once; if your framework recreates that node the widget disappears. Memoize the wrapper so it only re-renders when the product actually changes.
+- **Use the `getroomly-modal-closed` event to sync state back**, rather than polling `isOpen()` on an interval. The event fires however the modal was closed; `isOpen()` does not (see the caveat above).
+
 ## Listening to events
 
 The plugin dispatches `CustomEvent`s on `window`. The host page can listen and react.
@@ -351,7 +373,15 @@ img-src     data: <your-product-image-cdn>
 
 `img-src data:` is required because the finished render is returned as base64 and drawn from a data URL, not from a remote file.
 
-Be aware of `style-src` too: the plugin injects a `<style>` element into its shadow root and renders components that set inline styles, so a strict policy without `'unsafe-inline'` is likely to break the widget's appearance. We haven't verified this against every browser — if you enforce a strict `style-src`, test a full generation before rolling out.
+**`style-src` must include `'unsafe-inline'`.** This is not optional, and it is measured, not assumed — under `style-src 'self'` the plugin injects its `<style>` element into the shadow root as normal, but the browser refuses the contents (`Refused to apply inline style`) and the stylesheet parses to **zero rules**. The widget still mounts and is still clickable, because React applies its own inline styles through the CSSOM, which CSP does not block — so it fails in the worst way possible: visibly broken layout rather than an obvious hard error. Verified in headless Chrome against the built bundle:
+
+| `style-src` | Parsed CSS rules | Button padding | Result |
+|---|---|---|---|
+| *(no CSP)* | 92 | `32px` | correct |
+| `'self' 'unsafe-inline'` | 92 | `32px` | correct |
+| `'self'` | **0** | `0px` | broken |
+
+**If you set `GetRoomlyEmbedConfig` in an inline `<script>`** — as the examples in this README do — that block is also subject to `script-src`. Under a strict `script-src 'self'` it is refused, the plugin never receives a config, and no button renders at all. Either allow it with a nonce/hash, or move the config into an external `.js` file served from your own origin.
 
 ### Allowlists
 
