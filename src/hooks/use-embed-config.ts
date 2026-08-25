@@ -66,7 +66,6 @@ export function useEmbedConfig() {
         // set one; otherwise fall back to TLD detection (.se -> sv) before
         // finally defaulting to English.
         language: detectLanguageFromTLD(),
-        debugCoordinates: AppConfig.features.debugCoordinates,
         showSteps: false,
         buttons: {
           addToBasket: true,

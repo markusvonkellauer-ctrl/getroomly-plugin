@@ -11,7 +11,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b",
     "preview": "vite preview",
     "test": "jest --config=tests/jest.config.js",
     "test:watch": "jest --config=tests/jest.config.js --watch",

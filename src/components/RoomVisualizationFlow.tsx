@@ -29,7 +29,7 @@ export function RoomVisualizationFlow({
   productName,
   productPrice: _productPrice,
   measurements,
-  showSteps = true,
+  showSteps = false,
   onClose,
   onComplete,
   onError,
