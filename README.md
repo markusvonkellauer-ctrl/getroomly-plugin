@@ -4,6 +4,24 @@ Drop-in JavaScript widget that lets your customers preview products in a photo o
 
 This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend**](https://github.com/markusvonkellauer-ctrl/GetRoomly-Backend); the showcase demo is [**GetRoomly Frontend**](https://github.com/markusvonkellauer-ctrl/GetRoomly).
 
+## Environments
+
+| | Production | Sandbox |
+|---|---|---|
+| Plugin bundle | `https://plugin.getroomly.ai/plugin.js` | `https://dev-plugin.getroomly.ai/plugin.js` |
+| Stylesheet (optional) | `https://plugin.getroomly.ai/style.css` | `https://dev-plugin.getroomly.ai/style.css` |
+| Backend API | `https://api.getroomly.ai` | `https://dev-api.getroomly.ai` |
+| Demo page | `https://demo.getroomly.ai` | `https://dev.getroomly.ai` |
+| Built from | `main` | `development` |
+
+**You never configure the backend URL.** Each bundle already points at its own backend — load the sandbox bundle and it talks to the sandbox API, load the production bundle and it talks to production. The only things you set are `apiKey` and the product fields.
+
+Sandbox tracks the `development` branch, so it can change without notice. Integrate against it, then switch the single script URL to production when you go live.
+
+> ### You need an API key from us
+>
+> The plugin will not work without a partner API key (`grm_pub_...`), and keys are issued manually — there is no self-service signup. Email **[hello@getroomly.ai](mailto:hello@getroomly.ai)** to request one, telling us the domains you'll embed from, since your key only works from origins we've allowlisted. Keys are per-environment: a sandbox key will not authenticate against production. See [Authentication](#authentication--read-this-first).
+
 ## 5-minute integration
 
 ### Minimum required (6 fields)
@@ -29,6 +47,23 @@ This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend
 ```
 
 If any required field is missing, the mount container renders a clear init-time error (`"Partner API key is required in GetRoomlyEmbedConfig.apiKey"`, etc.) and the modal never opens. Validation happens in `src/hooks/use-embed-config.ts`.
+
+**Order matters.** `window.GetRoomlyEmbedConfig` must be assigned *before* `plugin.js` executes. The script is an ES module, so it is deferred by default and normally runs after inline scripts earlier in the document — but if you inject the script tag dynamically, or load the config asynchronously, set the config first and only then append the script.
+
+The plugin re-checks the config in two cases (`src/hooks/use-embed-config.ts`): on `DOMContentLoaded`, but *only* if the document was still parsing when it first looked, and on every `getroomly-open-modal`. So a config that arrives after the document has finished loading is picked up only when the modal is next opened programmatically — don't rely on it landing on its own.
+
+### Before you go live, you need
+
+1. **A partner API key** (`grm_pub_...`) from GetRoomly.
+2. **Your domain allowlisted** on the backend — see [Authentication](#authentication--read-this-first). Without this every render returns `403 forbidden`.
+3. **CORS on your product-image CDN** — see [What the plugin fetches](#what-the-plugin-fetches). This is the most common cause of a working-looking install that fails at generation time.
+
+### Verify the install
+
+1. Load the page — you should see the trigger button inside `#getroomly-plugin-container`. If you see an error message there instead, a required config field is missing.
+2. Open the browser console and confirm the product image isn't blocked. A missing CORS header on your CDN surfaces as a browser-level `TypeError: Failed to fetch` (plus a CORS warning), *not* as a tidy plugin message — the fetch rejects before the plugin can inspect the response.
+3. Click through a real generation with a room photo. A successful run POSTs once to `https://api.getroomly.ai/v1/generate` and returns a render.
+4. If it fails, listen for `getroomly-error` — the plugin deliberately shows nothing itself. See [Error handling](#error-handling).
 
 ### With common optional fields
 
@@ -93,7 +128,7 @@ You need two things from GetRoomly before going live:
 1. **A partner API key** (`grm_pub_...`) — set as `window.GetRoomlyEmbedConfig.apiKey`, sent to the backend as the `X-API-Key` header. Treat it like a public API key: it lives in your HTML, but the backend enforces per-domain origin checks so a leaked key can only be abused from approved origins.
 2. **Your domain on two allowlists.** Your partner record's `allowedOrigins` (a mismatch, or a missing `Origin` header, returns `403 forbidden`) *and* the backend's global `CORS_ALLOWED_ORIGINS`. Subdomains are covered automatically on both — if `example.com` is listed, `shop.example.com` works. Matching is hostname-only: scheme and port are ignored, and entries are bare hosts with no `*.` wildcards.
 
-To get added, contact GetRoomly with the list of domains you'll embed from.
+To get added, email [hello@getroomly.ai](mailto:hello@getroomly.ai) with the list of domains you'll embed from.
 
 ## Error handling
 
@@ -110,7 +145,7 @@ window.addEventListener('getroomly-error', (e) => {
 });
 ```
 
-`sessionId` is generated once per plugin instance and sent on every `/v1/generate` call, where the backend indexes it in `RenderLog`. Include it in support requests.
+`sessionId` is generated once per plugin instance and sent on every `/v1/generate` call, where the backend indexes it in `RenderLog`. Include it when you report a problem to [hello@getroomly.ai](mailto:hello@getroomly.ai) — it's how we trace your exact request.
 
 ### Backend error codes
 
@@ -120,7 +155,7 @@ For non-2xx responses the plugin surfaces the backend's `code` and `description`
 |---|---|---|---|
 | 400 | `badParams` | Request body failed validation | Check `measurements` are numbers and images resolved |
 | 401 | `unauthorized` | Missing `X-API-Key`, or the key matches no partner | Check `GetRoomlyEmbedConfig.apiKey` |
-| 403 | `forbidden` | Your `Origin` isn't on the partner allowlist, no `Origin` was sent, **or** your partner record is suspended (including quota suspension — see below) | Contact GetRoomly to add your domain or lift the suspension |
+| 403 | `forbidden` | Your `Origin` isn't on the partner allowlist, no `Origin` was sent, **or** your partner record is suspended (including quota suspension — see below) | Email [hello@getroomly.ai](mailto:hello@getroomly.ai) to add your domain or lift the suspension |
 | 413 | `entityTooLarge` | Request body over the 20 MB limit | Shouldn't happen — the plugin compresses to 1600px first |
 | 422 | `generationFailed` | The model returned no image after 3 attempts, often a content refusal | Retry once or twice; if persistent, that room-photo/product combination may need a different angle |
 | 429 | `quotaExceeded` | Daily render cap reached | See quota note below |
@@ -208,6 +243,27 @@ window.GetRoomly.init();   // mount the plugin if the container exists (idempote
 Useful when you want to trigger the plugin from your own button. Pair with `hideButton: true` to hide the built-in trigger.
 
 > ⚠️ `isOpen()` only tracks calls made through this API. If the user closes the modal with the X button or by clicking the backdrop, `isOpen()` keeps returning `true`. Listen for `getroomly-modal-closed` if you need reliable state.
+
+### Loading the script dynamically (SPA integration)
+
+If you inject the script tag from JavaScript instead of putting it in your HTML, `window.GetRoomly` does **not** exist immediately after `appendChild` — the module still has to load and execute. Set the config first, then wait for `onload` before calling `open()`:
+
+```js
+window.GetRoomlyEmbedConfig = { apiKey: '...', /* ...product fields... */ hideButton: true };
+
+const script = document.createElement('script');
+script.type = 'module';
+script.src = 'https://plugin.getroomly.ai/plugin.js';
+script.onload = () => window.GetRoomly.open();
+document.head.appendChild(script);
+```
+
+Load the script **once** for the lifetime of the page, not once per product. To show a different product, mutate `window.GetRoomlyEmbedConfig` and call `open()` again — the plugin re-reads it on every open (see [Config is re-read on every open](#config-is-re-read-on-every-open)).
+
+Two things to get right in a component-based framework:
+
+- **Don't let re-renders unmount `#getroomly-plugin-container`.** The plugin mounts a custom element into it once; if your framework recreates that node the widget disappears. Memoize the wrapper so it only re-renders when the product actually changes.
+- **Use the `getroomly-modal-closed` event to sync state back**, rather than polling `isOpen()` on an interval. The event fires however the modal was closed; `isOpen()` does not (see the caveat above).
 
 ## Listening to events
 
@@ -302,6 +358,41 @@ Two triggers:
 Mode B lets you attribute your own storefront buttons without wiring up the widget on them.
 
 ## CORS / cross-origin
+
+### What the plugin fetches
+
+From the customer's browser, the plugin makes exactly two network requests of its own:
+
+| Request | To | Why it can fail |
+|---|---|---|
+| `fetch(productImage)` | **your** CDN | `src/services/ai-generation.ts` fetches the product image and converts it to base64 before sending it to the backend. It is a `fetch`, not an `<img>` — so your CDN **must** return `Access-Control-Allow-Origin` for your storefront's origin. If it doesn't, the fetch is rejected by the browser (`TypeError: Failed to fetch`) before the plugin ever sees a response — even though an `<img>` pointing at the same URL displays fine elsewhere on the page. A non-CORS failure such as a 404 gives the clearer `Failed to fetch product image: 404`. |
+| `POST /v1/generate` | `https://api.getroomly.ai` | Subject to the two allowlist layers below |
+
+Passing a `data:` URL as `productImage` skips the fetch entirely, which is a useful workaround if you can't add CORS headers to your CDN.
+
+### Content Security Policy
+
+If your storefront sends a CSP, it needs to permit:
+
+```
+script-src  https://plugin.getroomly.ai
+connect-src https://api.getroomly.ai <your-product-image-cdn>
+img-src     data: blob: <your-product-image-cdn>
+```
+
+`img-src` needs both schemes: `data:` because the finished render is returned as base64 and drawn from a data URL, and `blob:` because the customer's uploaded room photo is previewed via `URL.createObjectURL()` before it is ever sent anywhere.
+
+**`style-src` must include `'unsafe-inline'`.** This is not optional, and it is measured, not assumed — under `style-src 'self'` the plugin injects its `<style>` element into the shadow root as normal, but the browser refuses the contents (`Refused to apply inline style`) and the stylesheet parses to **zero rules**. The widget still mounts and is still clickable, because React applies its own inline styles through the CSSOM, which CSP does not block — so it fails in the worst way possible: visibly broken layout rather than an obvious hard error. Verified in headless Chrome against the built bundle:
+
+| `style-src` | Parsed CSS rules | Button padding | Result |
+|---|---|---|---|
+| *(no CSP)* | 92 | `32px` | correct |
+| `'self' 'unsafe-inline'` | 92 | `32px` | correct |
+| `'self'` | **0** | `0px` | broken |
+
+**If you set `GetRoomlyEmbedConfig` in an inline `<script>`** — as the examples in this README do — that block is also subject to `script-src`. Under a strict `script-src 'self'` it is refused, the plugin never receives a config, and no button renders at all. Either allow it with a nonce/hash, or move the config into an external `.js` file served from your own origin.
+
+### Allowlists
 
 The plugin file (`plugin.js`) is served with `Access-Control-Allow-Origin: *` so any partner site can embed it.
 
@@ -419,6 +510,56 @@ Pipeline details: see [GET-33](https://linear.app/getroomly/issue/GET-33).
 Modern evergreen browsers (Chrome, Edge, Firefox, Safari current + 1). Plugin ships as an ES module — no IE / legacy support. Uses `customElements`, shadow DOM, `createImageBitmap` (with an `Image()` fallback) and `crypto.randomUUID` (with a fallback).
 
 Bundle size budget: keep `plugin.js` under ~600 KB minified. Currently ~540 KB.
+
+## Reference
+
+### Environments at a glance
+
+Full URL list in [Environments](#environments). The two things that differ in practice:
+
+| | Production | Sandbox |
+|---|---|---|
+| Script tag | `<script type="module" src="https://plugin.getroomly.ai/plugin.js"></script>` | `<script type="module" src="https://dev-plugin.getroomly.ai/plugin.js"></script>` |
+| API key | production `grm_pub_...` | sandbox `grm_pub_...` (not interchangeable) |
+| Stability | released deliberately from `main` | tracks `development`, may change without notice |
+
+### Getting access
+
+API keys are issued manually — there is no signup form. Email **[hello@getroomly.ai](mailto:hello@getroomly.ai)** with:
+
+1. The domains you'll embed from (needed for the origin allowlist — subdomains are covered automatically)
+2. Which environment you want first, sandbox or production
+3. Your expected daily render volume, if it's above the default 100/day cap
+
+### Jump to
+
+| Topic | Section |
+|---|---|
+| Copy-paste integration | [5-minute integration](#5-minute-integration) |
+| Every config field | [Configuration](#configuration-windowgetroomlyembedconfig) |
+| Opening from your own button | [JavaScript control API](#javascript-control-api-windowgetroomly) |
+| React / Vue / dynamic loading | [Loading the script dynamically](#loading-the-script-dynamically-spa-integration) |
+| Cart, wishlist, feedback hooks | [Listening to events](#listening-to-events) · [Callbacks](#callback-functions-alternative-to-events) |
+| Nothing renders / 403 / 429 | [Error handling](#error-handling) · [Authentication](#authentication--read-this-first) |
+| Product image won't load | [What the plugin fetches](#what-the-plugin-fetches) |
+| Strict CSP on your storefront | [Content Security Policy](#content-security-policy) |
+| GA4 attribution | [Analytics](#analytics) |
+
+### Related repositories
+
+| Repo | What it is |
+|---|---|
+| [GetRoomly Backend](https://github.com/markusvonkellauer-ctrl/GetRoomly-Backend) | Owns the model call, prompts, partner auth and quota |
+| [GetRoomly Frontend](https://github.com/markusvonkellauer-ctrl/GetRoomly) | Showcase demo — also a working reference integration of this plugin |
+
+### Source files worth knowing
+
+| File | Why you'd read it |
+|---|---|
+| `src/types/embed-config.ts` | The authoritative config shape |
+| `src/hooks/use-embed-config.ts` | Which fields are validated, and when config is re-read |
+| `src/services/ai-generation.ts` | The exact request/response contract with the backend |
+| `src/lib/i18n.ts` | All user-facing copy, including the terms dialog |
 
 ## License
 
