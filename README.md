@@ -76,7 +76,7 @@ See **Authentication** below before going to production.
 You need two things from GetRoomly before going live:
 
 1. **A partner API key** (`grm_pub_...`) — set as `window.GetRoomlyEmbedConfig.apiKey`, sent to the backend as the `X-API-Key` header. Treat it like a public API key: it lives in your HTML, but the backend enforces per-domain origin checks so a leaked key can only be abused from approved origins.
-2. **Your domain on the partner allowlist.** The backend rejects any request whose `Origin` header isn't on your partner record's `allowedOrigins`. Subdomains are covered automatically — if `example.com` is on the list, `shop.example.com` works too.
+2. **Your domain on two allowlists.** Your partner record's `allowedOrigins` (a mismatch, or a missing `Origin` header, returns `403 forbidden`) *and* the backend's global `CORS_ALLOWED_ORIGINS`. Subdomains are covered automatically on both — if `example.com` is listed, `shop.example.com` works. Matching is hostname-only: scheme and port are ignored, and entries are bare hosts with no `*.` wildcards.
 
 To get added, contact GetRoomly with the list of domains you'll embed from.
 
@@ -97,9 +97,21 @@ window.addEventListener('getroomly-error', (e) => {
 
 `sessionId` is generated once per plugin instance and sent on every `/v1/generate` call, where the backend indexes it in `RenderLog`. Include it in support requests.
 
-### Error codes
+### Backend error codes
 
-Client-side codes raised by the plugin before or after the network call:
+For non-2xx responses the plugin surfaces the backend's `code` and `description` verbatim (`src/services/ai-generation.ts`). Codes are lowerCamelCase:
+
+| Status | Code | What it means | What to do |
+|---|---|---|---|
+| 400 | `badParams` | Request body failed validation | Check `measurements` are numbers and images resolved |
+| 401 | `unauthorized` | Missing `X-API-Key`, or the key matches no partner | Check `GetRoomlyEmbedConfig.apiKey` |
+| 403 | `forbidden` | Your `Origin` isn't on the partner allowlist, no `Origin` was sent, **or** your partner record is suspended (including quota suspension — see below) | Contact GetRoomly to add your domain or lift the suspension |
+| 413 | `entityTooLarge` | Request body over the 20 MB limit | Shouldn't happen — the plugin compresses to 1600px first |
+| 422 | `generationFailed` | The model returned no image after 3 attempts, often a content refusal | Retry once or twice; if persistent, that room-photo/product combination may need a different angle |
+| 429 | `quotaExceeded` | Daily render cap reached | See quota note below |
+| 500 | `unknownError` | Unhandled backend error | Report with the `sessionId` |
+
+Client-side codes raised by the plugin itself, before or after the network call:
 
 | Code | Meaning |
 |---|---|
@@ -108,7 +120,14 @@ Client-side codes raised by the plugin before or after the network call:
 | `INVALID_RESPONSE` | Backend returned 200 but no `image.data` |
 | `BACKEND_ERROR` | Backend returned an error without a `code` field |
 
-For non-2xx responses the plugin surfaces the backend's own `code` and `description` verbatim (`src/services/ai-generation.ts`). Refer to the [backend repo](https://github.com/markusvonkellauer-ctrl/GetRoomly-Backend) for the authoritative status/code list — commonly seen are 401 (bad key), 403 (origin not allowlisted), 429 (partner quota exhausted) and 503 (upstream model returned no image; retry, or the specific room-photo/product combination may need a different angle).
+### Quota: you'll see 403 more often than 429
+
+The daily cap (100 renders unless your partner record says otherwise) is counted per UTC calendar day, so it resets at UTC midnight. But crossing the cap **suspends the partner record**, which means:
+
+- only the single request that crosses the cap returns `429 quotaExceeded`
+- every subsequent request returns `403 forbidden` until the first request after UTC rollover un-suspends you
+
+So don't treat 403 as exclusively an allowlist problem — if it starts mid-day after normal traffic, you're most likely quota-suspended. The counter increments before the cap check, so blocked attempts count too.
 
 ## Configuration: `window.GetRoomlyEmbedConfig`
 
@@ -269,7 +288,12 @@ Mode B lets you attribute your own storefront buttons without wiring up the widg
 
 ## CORS / cross-origin
 
-The plugin file (`plugin.js`) is served with `Access-Control-Allow-Origin: *` so any partner site can embed it. The backend API uses a separate CORS allowlist — your domain must also be in the backend's `CORS_ALLOWED_ORIGINS` env var, in addition to the per-partner `allowedOrigins`.
+The plugin file (`plugin.js`) is served with `Access-Control-Allow-Origin: *` so any partner site can embed it.
+
+The backend API enforces two independent layers, and you need to be on both:
+
+- **`allowedOrigins`** on your partner record — enforced server-side. A mismatch returns `403 forbidden` and the render never runs.
+- **`CORS_ALLOWED_ORIGINS`**, a global backend env allowlist — this one only controls whether the `Access-Control-Allow-Origin` response header is sent. If you're missing from it the request still *executes* on the backend (and burns quota); the browser just blocks you from reading the response. A generation that appears to fail with a CORS console error but still counts against your daily cap is the signature of this.
 
 ## Local development
 
@@ -351,7 +375,7 @@ Three pieces:
 
 1. **Shadow-DOM mount** — `shadow-entry.tsx` registers a `<getroomly-plugin>` custom element and appends it to `#getroomly-plugin-container`. It attaches an open shadow root and injects the plugin's CSS as inline text, so styles don't bleed into (or get clobbered by) the host page. See [GET-23](https://linear.app/getroomly/issue/GET-23).
 2. **Room upload** — the user uploads a room photo. It is validated (JPEG/PNG/WebP, max 10 MB) and compressed client-side to a max dimension of 1600px, applying EXIF orientation so phone photos aren't rotated.
-3. **API call** — POST to `/v1/generate` with the room image, product image, category, product ID, dimensions and language, authenticated with `X-API-Key`. The backend owns the Gemini call, all prompt construction and re-encoding. The response image is turned into a data URL and rendered in the shadow DOM.
+3. **API call** — POST to `/v1/generate` with the room image, product image, category, product ID, dimensions and language, authenticated with `X-API-Key`. The backend owns the Gemini call, all prompt construction and re-encoding, and responds with `{ image: { data, mimeType }, latencyMs, ... }`. The plugin builds a data URL from `image.mimeType` + base64 `image.data` and renders it in the shadow DOM. The render is normally WebP, but the backend falls back to the model's original bytes if re-encoding fails — always trust `image.mimeType` rather than assuming a format.
 
 The product placement is chosen by the model from the room photo and dimensions; there is no click-to-place step in the current flow.
 
