@@ -20,7 +20,7 @@ Sandbox tracks the `development` branch, so it can change without notice. Integr
 
 > ### You need an API key from us
 >
-> The plugin will not work without a partner API key (`grm_pub_...`), and keys are issued manually — there is no self-service signup. **Contact GetRoomly** to request one, telling us the domains you'll embed from, since your key only works from origins we've allowlisted. Keys are per-environment: a sandbox key will not authenticate against production. See [Authentication](#authentication--read-this-first).
+> The plugin will not work without a partner API key (`grm_pub_...`), and keys are issued manually — there is no self-service signup. Email **[hello@getroomly.ai](mailto:hello@getroomly.ai)** to request one, telling us the domains you'll embed from, since your key only works from origins we've allowlisted. Keys are per-environment: a sandbox key will not authenticate against production. See [Authentication](#authentication--read-this-first).
 
 ## 5-minute integration
 
@@ -128,7 +128,7 @@ You need two things from GetRoomly before going live:
 1. **A partner API key** (`grm_pub_...`) — set as `window.GetRoomlyEmbedConfig.apiKey`, sent to the backend as the `X-API-Key` header. Treat it like a public API key: it lives in your HTML, but the backend enforces per-domain origin checks so a leaked key can only be abused from approved origins.
 2. **Your domain on two allowlists.** Your partner record's `allowedOrigins` (a mismatch, or a missing `Origin` header, returns `403 forbidden`) *and* the backend's global `CORS_ALLOWED_ORIGINS`. Subdomains are covered automatically on both — if `example.com` is listed, `shop.example.com` works. Matching is hostname-only: scheme and port are ignored, and entries are bare hosts with no `*.` wildcards.
 
-To get added, contact GetRoomly with the list of domains you'll embed from.
+To get added, email [hello@getroomly.ai](mailto:hello@getroomly.ai) with the list of domains you'll embed from.
 
 ## Error handling
 
@@ -145,7 +145,7 @@ window.addEventListener('getroomly-error', (e) => {
 });
 ```
 
-`sessionId` is generated once per plugin instance and sent on every `/v1/generate` call, where the backend indexes it in `RenderLog`. Include it in support requests.
+`sessionId` is generated once per plugin instance and sent on every `/v1/generate` call, where the backend indexes it in `RenderLog`. Include it when you report a problem to [hello@getroomly.ai](mailto:hello@getroomly.ai) — it's how we trace your exact request.
 
 ### Backend error codes
 
@@ -155,7 +155,7 @@ For non-2xx responses the plugin surfaces the backend's `code` and `description`
 |---|---|---|---|
 | 400 | `badParams` | Request body failed validation | Check `measurements` are numbers and images resolved |
 | 401 | `unauthorized` | Missing `X-API-Key`, or the key matches no partner | Check `GetRoomlyEmbedConfig.apiKey` |
-| 403 | `forbidden` | Your `Origin` isn't on the partner allowlist, no `Origin` was sent, **or** your partner record is suspended (including quota suspension — see below) | Contact GetRoomly to add your domain or lift the suspension |
+| 403 | `forbidden` | Your `Origin` isn't on the partner allowlist, no `Origin` was sent, **or** your partner record is suspended (including quota suspension — see below) | Email [hello@getroomly.ai](mailto:hello@getroomly.ai) to add your domain or lift the suspension |
 | 413 | `entityTooLarge` | Request body over the 20 MB limit | Shouldn't happen — the plugin compresses to 1600px first |
 | 422 | `generationFailed` | The model returned no image after 3 attempts, often a content refusal | Retry once or twice; if persistent, that room-photo/product combination may need a different angle |
 | 429 | `quotaExceeded` | Daily render cap reached | See quota note below |
@@ -525,7 +525,7 @@ Full URL list in [Environments](#environments). The two things that differ in pr
 
 ### Getting access
 
-API keys are issued manually — there is no signup form. **Contact GetRoomly** with:
+API keys are issued manually — there is no signup form. Email **[hello@getroomly.ai](mailto:hello@getroomly.ai)** with:
 
 1. The domains you'll embed from (needed for the origin allowlist — subdomains are covered automatically)
 2. Which environment you want first, sandbox or production
