@@ -327,7 +327,7 @@ The dev server loads `src/main.tsx`, which renders `<App>` directly into `#root`
 | `npm run preview` | Serve the built artifact locally |
 | `npm run lint` / `lint:fix` | ESLint |
 | `npm run format` / `format:check` | Prettier |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run typecheck` | `tsc -b` — builds the project references (both set `noEmit`, so nothing is written) |
 | `npm test` | Full Jest suite |
 | `npm run test:unit` | Component / util / api tests |
 | `npm run test:integration` | Integration tests |
