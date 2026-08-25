@@ -4,16 +4,23 @@ Drop-in JavaScript widget that lets your customers preview products in a photo o
 
 This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend**](https://github.com/markusvonkellauer-ctrl/GetRoomly-Backend); the showcase demo is [**GetRoomly Frontend**](https://github.com/markusvonkellauer-ctrl/GetRoomly).
 
-## Production endpoints
+## Environments
 
-| What | URL |
-|---|---|
-| Plugin bundle | `https://plugin.getroomly.ai/plugin.js` |
-| Stylesheet (optional) | `https://plugin.getroomly.ai/style.css` |
-| Backend API | `https://api.getroomly.ai` — the plugin POSTs `/v1/generate` |
-| Backend API (staging) | `https://dev-api.getroomly.ai` — used by the `development` build only |
+| | Production | Sandbox |
+|---|---|---|
+| Plugin bundle | `https://plugin.getroomly.ai/plugin.js` | `https://dev-plugin.getroomly.ai/plugin.js` |
+| Stylesheet (optional) | `https://plugin.getroomly.ai/style.css` | `https://dev-plugin.getroomly.ai/style.css` |
+| Backend API | `https://api.getroomly.ai` | `https://dev-api.getroomly.ai` |
+| Demo page | `https://demo.getroomly.ai` | `https://dev.getroomly.ai` |
+| Built from | `main` | `development` |
 
-You never configure the backend URL: it is baked into the bundle you load. You only ever set `apiKey` and the product fields.
+**You never configure the backend URL.** Each bundle already points at its own backend — load the sandbox bundle and it talks to the sandbox API, load the production bundle and it talks to production. The only things you set are `apiKey` and the product fields.
+
+Sandbox tracks the `development` branch, so it can change without notice. Integrate against it, then switch the single script URL to production when you go live.
+
+> ### You need an API key from us
+>
+> The plugin will not work without a partner API key (`grm_pub_...`), and keys are issued manually — there is no self-service signup. **Contact GetRoomly** to request one, telling us the domains you'll embed from, since your key only works from origins we've allowlisted. Keys are per-environment: a sandbox key will not authenticate against production. See [Authentication](#authentication--read-this-first).
 
 ## 5-minute integration
 
@@ -503,6 +510,56 @@ Pipeline details: see [GET-33](https://linear.app/getroomly/issue/GET-33).
 Modern evergreen browsers (Chrome, Edge, Firefox, Safari current + 1). Plugin ships as an ES module — no IE / legacy support. Uses `customElements`, shadow DOM, `createImageBitmap` (with an `Image()` fallback) and `crypto.randomUUID` (with a fallback).
 
 Bundle size budget: keep `plugin.js` under ~600 KB minified. Currently ~540 KB.
+
+## Reference
+
+### Environments at a glance
+
+Full URL list in [Environments](#environments). The two things that differ in practice:
+
+| | Production | Sandbox |
+|---|---|---|
+| Script tag | `<script type="module" src="https://plugin.getroomly.ai/plugin.js"></script>` | `<script type="module" src="https://dev-plugin.getroomly.ai/plugin.js"></script>` |
+| API key | production `grm_pub_...` | sandbox `grm_pub_...` (not interchangeable) |
+| Stability | released deliberately from `main` | tracks `development`, may change without notice |
+
+### Getting access
+
+API keys are issued manually — there is no signup form. **Contact GetRoomly** with:
+
+1. The domains you'll embed from (needed for the origin allowlist — subdomains are covered automatically)
+2. Which environment you want first, sandbox or production
+3. Your expected daily render volume, if it's above the default 100/day cap
+
+### Jump to
+
+| Topic | Section |
+|---|---|
+| Copy-paste integration | [5-minute integration](#5-minute-integration) |
+| Every config field | [Configuration](#configuration-windowgetroomlyembedconfig) |
+| Opening from your own button | [JavaScript control API](#javascript-control-api-windowgetroomly) |
+| React / Vue / dynamic loading | [Loading the script dynamically](#loading-the-script-dynamically-spa-integration) |
+| Cart, wishlist, feedback hooks | [Listening to events](#listening-to-events) · [Callbacks](#callback-functions-alternative-to-events) |
+| Nothing renders / 403 / 429 | [Error handling](#error-handling) · [Authentication](#authentication--read-this-first) |
+| Product image won't load | [What the plugin fetches](#what-the-plugin-fetches) |
+| Strict CSP on your storefront | [Content Security Policy](#content-security-policy) |
+| GA4 attribution | [Analytics](#analytics) |
+
+### Related repositories
+
+| Repo | What it is |
+|---|---|
+| [GetRoomly Backend](https://github.com/markusvonkellauer-ctrl/GetRoomly-Backend) | Owns the model call, prompts, partner auth and quota |
+| [GetRoomly Frontend](https://github.com/markusvonkellauer-ctrl/GetRoomly) | Showcase demo — also a working reference integration of this plugin |
+
+### Source files worth knowing
+
+| File | Why you'd read it |
+|---|---|
+| `src/types/embed-config.ts` | The authoritative config shape |
+| `src/hooks/use-embed-config.ts` | Which fields are validated, and when config is re-read |
+| `src/services/ai-generation.ts` | The exact request/response contract with the backend |
+| `src/lib/i18n.ts` | All user-facing copy, including the terms dialog |
 
 ## License
 
