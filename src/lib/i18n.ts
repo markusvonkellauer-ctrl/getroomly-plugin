@@ -58,7 +58,7 @@ export const translations = {
       'We do not collect names, email addresses, or IP addresses linked to your identity.',
     termsQualityRetentionTitle: 'Quality Assurance Retention',
     termsQualityRetentionBody:
-      'Your photo and the generated visualisation are stored on secure servers within the EU/EEA for up to 14 days for internal quality review, then automatically deleted. They are never used to train AI models or shared with third parties, and are linked only to a temporary session reference — never to your name, email, or IP address.',
+      'Your photo and the generated visualisation are stored on secure servers within the EU/EEA for up to 14 days for internal quality review, then automatically deleted. They are never used to train AI models or shared with third parties, and are linked only to a temporary session reference — never to your name, email, or IP address. If a generation attempt is refused, the same photo and the technical details of that attempt are stored under these same terms, so we can investigate and improve reliability.',
     termsSection3Title: '3. Data Security',
     termsSection3Body:
       'Your photo is processed using a leading global cloud technology platform trusted by major international businesses, under contractual data protection safeguards equivalent to GDPR requirements (such as Standard Contractual Clauses) wherever processing occurs. Your data is never used to train third-party AI models. Photos retained for quality evaluation are stored as described in Section 2, with access restricted to authorised GetRoomly personnel only.',
@@ -111,7 +111,7 @@ export const translations = {
       'Vi samlar inte in namn, e-postadresser eller IP-adresser kopplade till din identitet.',
     termsQualityRetentionTitle: 'Lagring för kvalitetssäkring',
     termsQualityRetentionBody:
-      'Ditt foto och den genererade visualiseringen lagras på säkra servrar inom EU/EES i upp till 14 dagar för intern kvalitetsgranskning och raderas därefter automatiskt. De används aldrig för att träna AI-modeller eller delas med tredje part, och kopplas endast till en tillfällig sessionsreferens — aldrig till ditt namn, e-post eller IP-adress.',
+      'Ditt foto och den genererade visualiseringen lagras på säkra servrar inom EU/EES i upp till 14 dagar för intern kvalitetsgranskning och raderas därefter automatiskt. De används aldrig för att träna AI-modeller eller delas med tredje part, och kopplas endast till en tillfällig sessionsreferens — aldrig till ditt namn, e-post eller IP-adress. Om ett genereringsförsök avvisas lagras samma foto och de tekniska detaljerna för det försöket enligt samma villkor, så att vi kan utreda och förbättra tillförlitligheten.',
     termsSection3Title: '3. Datasäkerhet',
     termsSection3Body:
       'Ditt foto behandlas via en ledande global molnplattform som används av stora internationella företag, med avtalsmässiga dataskyddsgarantier som motsvarar GDPR-kraven (exempelvis Standardavtalsklausuler) oavsett var behandlingen sker. Din data används aldrig för att träna tredjeparts-AI-modeller. Bilder som sparas för kvalitetsutvärdering lagras enligt beskrivningen i avsnitt 2, med åtkomst begränsad till behöriga GetRoomly-medarbetare.',
