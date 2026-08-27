@@ -18,9 +18,10 @@
     "test:coverage": "jest --config=tests/jest.config.js --coverage",
     "test:unit": "jest --config=tests/jest.config.js tests/unit tests/components tests/utils tests/api",
     "test:integration": "jest --config=tests/jest.config.js tests/integration",
-    "test:e2e": "jest --config=tests/jest.config.js tests/e2e --runInBand",
-    "test:shadow-dom": "jest --config=tests/jest.config.js tests/shadow-dom",
-    "test:all": "npm run test:unit && npm run test:integration && npm run test:shadow-dom && npm run test:e2e",
+    "test:e2e": "jest --config=tests/jest.config.js tests/e2e --testPathIgnorePatterns=node_modules --runInBand",
+    "test:shadow-dom": "jest --config=tests/jest.config.js tests/shadow-dom --testPathIgnorePatterns=node_modules",
+    "test:visual": "jest --config=tests/jest.config.js tests/visual --testPathIgnorePatterns=node_modules --runInBand",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:shadow-dom && npm run test:e2e && npm run test:visual",
     "test:ci": "jest --config=tests/jest.config.js --coverage --watchAll=false --passWithNoTests"
   },
   "dependencies": {
