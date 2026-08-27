@@ -102,6 +102,24 @@ describe("i18n: TLD detection (Nordic Nest's 16 market domains)", () => {
     window.GetRoomlyEmbedConfig = { language: 'not-a-real-language' };
     expect(detectLanguage()).toBe('ja');
   });
+
+  it('detectLanguageFromTLD() is case-insensitive on the hostname', () => {
+    setHostname('NORDICNEST.DE');
+    expect(detectLanguageFromTLD()).toBe('de');
+  });
+
+  it('getTranslations() falls back safely to the detection chain when passed an invalid language string', () => {
+    // Simulates a host page's untyped JS sending a typo'd or stale value
+    // (e.g. window.GetRoomlyEmbedConfig.language = 'ger' instead of 'de')
+    // straight into getTranslations() — must never return undefined.
+    setHostname('nordicnest.jp');
+    expect(getTranslations('not-a-real-language')).toBe(translations.ja);
+  });
+
+  it('getTranslations() falls back safely when passed undefined', () => {
+    setHostname('nordicnest.it');
+    expect(getTranslations(undefined)).toBe(translations.it);
+  });
 });
 
 describe('i18n: translation completeness across all 16 languages', () => {

@@ -117,34 +117,47 @@ const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = Object.keys(
   translations
 ) as SupportedLanguage[];
 
+/**
+ * Runtime type guard — the TypeScript type on window.GetRoomlyEmbedConfig
+ * only describes what a well-behaved host page WOULD send. It's actual
+ * untyped JS written by partners, so a value that reaches us at runtime can
+ * be any string (typo, stale integration, copy-pasted example code). This
+ * is the one place that distrust is checked, so every caller downstream —
+ * detectLanguage() and getTranslations() — gets the same protection.
+ */
+function isSupportedLanguage(value: unknown): value is SupportedLanguage {
+  return typeof value === 'string' && (SUPPORTED_LANGUAGES as readonly string[]).includes(value);
+}
+
 // Nordic Nest's 16 market domains, confirmed 2026-08-27. .com has no entry —
 // it's the generic/UK domain and falls through to the 'en' default below.
-const TLD_MAP: Record<string, SupportedLanguage> = {
-  se: 'sv',
-  dk: 'da',
-  no: 'no',
-  fi: 'fi',
-  de: 'de',
-  nl: 'nl',
-  fr: 'fr',
-  pl: 'pl',
-  cn: 'zh', // Simplified Chinese, mainland China market
-  kr: 'ko',
-  jp: 'ja',
-  es: 'es',
-  pt: 'pt', // European Portuguese
-  gr: 'el',
-  it: 'it',
-};
+// A Map (not a plain object) so lookup can never accidentally hit an
+// inherited Object.prototype property (e.g. a hostname ending in a segment
+// that happens to match "toString" or "constructor").
+const TLD_MAP: ReadonlyMap<string, SupportedLanguage> = new Map([
+  ['se', 'sv'],
+  ['dk', 'da'],
+  ['no', 'no'],
+  ['fi', 'fi'],
+  ['de', 'de'],
+  ['nl', 'nl'],
+  ['fr', 'fr'],
+  ['pl', 'pl'],
+  ['cn', 'zh'], // Simplified Chinese, mainland China market
+  ['kr', 'ko'],
+  ['jp', 'ja'],
+  ['es', 'es'],
+  ['pt', 'pt'], // European Portuguese
+  ['gr', 'el'],
+  ['it', 'it'],
+]);
 
 /** TLD-based fallback: see TLD_MAP above. Unmapped TLDs (incl. .com) -> English. */
 export function detectLanguageFromTLD(): SupportedLanguage {
-  const hostname = window.location.hostname;
+  const hostname = window.location.hostname.toLowerCase();
   const tld = hostname.split('.').pop();
-  if (tld && tld in TLD_MAP) {
-    return TLD_MAP[tld];
-  }
-  return 'en';
+  const mapped = tld && TLD_MAP.get(tld);
+  return mapped || 'en';
 }
 
 /**
@@ -154,7 +167,7 @@ export function detectLanguageFromTLD(): SupportedLanguage {
  */
 export function detectLanguage(): SupportedLanguage {
   const configLang = window.GetRoomlyEmbedConfig?.language;
-  if (configLang && SUPPORTED_LANGUAGES.includes(configLang)) {
+  if (isSupportedLanguage(configLang)) {
     return configLang;
   }
   return detectLanguageFromTLD();
@@ -165,7 +178,14 @@ export function detectLanguage(): SupportedLanguage {
  * `config?.language` where available (components downstream of
  * useEmbedConfig always have one, since the hook fills in a default) — falls
  * back to running the full detection chain itself if omitted.
+ *
+ * Accepts `string` rather than trusting the `SupportedLanguage` type alone:
+ * callers may be forwarding a value that ultimately came from an untyped
+ * host page (see isSupportedLanguage above), so this validates again at the
+ * point of use rather than assuming an upstream check already happened —
+ * an invalid/unrecognised value falls back through the same detection chain
+ * instead of returning `undefined` and crashing the caller.
  */
-export function getTranslations(lang?: SupportedLanguage): Translations {
-  return translations[lang ?? detectLanguage()];
+export function getTranslations(lang?: string): Translations {
+  return translations[isSupportedLanguage(lang) ? lang : detectLanguage()];
 }
