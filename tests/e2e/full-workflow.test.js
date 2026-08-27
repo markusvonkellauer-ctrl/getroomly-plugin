@@ -1,4 +1,13 @@
 /**
+ * @jest-environment node
+ *
+ * Puppeteer drives a real, separate Chrome process over the Node.js CDP
+ * client — jest.config.js's global `testEnvironment: 'jsdom'` provides a
+ * fake window/document this file doesn't use, but jsdom's environment
+ * patching interferes with Puppeteer's own Node networking/process
+ * handling badly enough to hang page operations indefinitely. See
+ * tests/visual/overflow.test.js for where this was diagnosed.
+ *
  * End-to-End Full Workflow Test
  *
  * Tests the complete user journey from button click to image generation
@@ -21,12 +30,12 @@ describe('Full Plugin Workflow E2E', () => {
 
   test('Complete workflow: button click → upload → generate → download', async () => {
     // 1. Load plugin
-    await page.goto('http://localhost:5174');
+    await page.goto('http://localhost:5173');
     await page.waitForSelector('.getroomly-embed button', { timeout: 10000 });
 
     // 2. Click embed button
     await page.click('.getroomly-embed button');
-    await page.waitForTimeout(1000);
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // 3. Verify modal opens
     const modalVisible = await page.evaluate(() => {
@@ -63,7 +72,7 @@ describe('Full Plugin Workflow E2E', () => {
   }, 60000); // 1 minute timeout for full workflow
 
   test('Error handling: invalid file upload', async () => {
-    await page.goto('http://localhost:5174');
+    await page.goto('http://localhost:5173');
     await page.click('.getroomly-embed button');
 
     // Try to upload invalid file type
@@ -78,12 +87,12 @@ describe('Full Plugin Workflow E2E', () => {
   });
 
   test('Modal close functionality', async () => {
-    await page.goto('http://localhost:5174');
+    await page.goto('http://localhost:5173');
     await page.click('.getroomly-embed button');
 
     // Click close button
     await page.click('button:contains("×")');
-    await page.waitForTimeout(500);
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     // Verify modal is closed
     const modalVisible = await page.evaluate(() => {

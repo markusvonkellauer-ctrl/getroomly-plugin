@@ -41,6 +41,23 @@ const fs = require('fs');
 const path = require('path');
 const { translations } = require('../../src/lib/i18n');
 
+/**
+ * Translated strings are interpolated straight into an HTML template
+ * (see spec.render() below, then page.setContent()) — any of the 16
+ * languages introducing an untranslated brand name or punctuation
+ * containing &, <, >, or a quote character would otherwise be parsed as
+ * markup instead of measured as the literal text a user would see,
+ * silently skewing the overflow measurement or breaking the DOM.
+ */
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const SCREENSHOT_DIR = path.join(__dirname, '__overflow_failures__');
 
 // --- CSS variables actually used by the styles below (src/index.css) ---
@@ -190,7 +207,11 @@ describe('Cross-language button overflow', () => {
   }, 30000);
 
   afterAll(async () => {
-    await browser.close();
+    // Guarded: if puppeteer.launch() itself failed above (e.g. missing
+    // Chromium deps in a minimal CI image), `browser` is undefined —
+    // calling close() unconditionally would throw a second, unrelated
+    // error here that buries the real launch failure in the report.
+    if (browser) await browser.close();
   });
 
   for (const spec of BUTTON_SPECS) {
@@ -203,7 +224,7 @@ describe('Cross-language button overflow', () => {
           try {
             await page.setViewport({ width: width + 40, height: 200 });
             await page.setContent(
-              `<!DOCTYPE html><html><body style="margin:0; padding:20px;">${spec.render(text, width)}</body></html>`
+              `<!DOCTYPE html><html><body style="margin:0; padding:20px;">${spec.render(escapeHtml(text), width)}</body></html>`
             );
 
             const box = await page.evaluate(() => {
