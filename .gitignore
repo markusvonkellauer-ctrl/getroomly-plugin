@@ -34,3 +34,4 @@ docs
 CLAUDE.md
 shadow-*.png
 *.spec.png
+tests/visual/__overflow_failures__/
