@@ -14,6 +14,7 @@
  */
 
 const puppeteer = require('puppeteer');
+const path = require('path');
 
 describe('Full Plugin Workflow E2E', () => {
   let browser;
@@ -54,21 +55,28 @@ describe('Full Plugin Workflow E2E', () => {
     await page.waitForSelector('img[alt="Uploaded room"]', { timeout: 5000 });
 
     // 6. Click generate button
-    await page.click('button:contains("Generate Visualization")');
+    // :contains(...) is a jQuery pseudo-selector — not valid CSS, and
+    // Puppeteer's click()/waitForSelector() resolve through the browser's
+    // real querySelector, so it throws at runtime rather than matching
+    // anything. ::-p-text(...) is Puppeteer's own native text-matching
+    // pseudo-selector (Puppeteer >=22), confirmed working against this
+    // installed version (^23.11.1) with a standalone smoke test before
+    // applying it here.
+    await page.click('button::-p-text(Generate Visualization)');
 
     // 7. Wait for processing
-    await page.waitForSelector('h2:contains("Creating your visualization")', { timeout: 2000 });
+    await page.waitForSelector('h2::-p-text(Creating your visualization)', { timeout: 2000 });
 
     // 8. Wait for result (mock API response)
     await page.waitForSelector('img[alt="Generated visualization"]', { timeout: 30000 });
 
     // 9. Verify download button appears
-    const downloadButton = await page.$('button:contains("Download")');
+    const downloadButton = await page.$('button::-p-text(Download)');
     expect(downloadButton).not.toBeNull();
 
     // 10. Test new photo button
-    await page.click('button:contains("Try New Photo")');
-    await page.waitForSelector('h2:contains("Upload a room photo")', { timeout: 2000 });
+    await page.click('button::-p-text(Try New Photo)');
+    await page.waitForSelector('h2::-p-text(Upload a room photo)', { timeout: 2000 });
   }, 60000); // 1 minute timeout for full workflow
 
   test('Error handling: invalid file upload', async () => {
@@ -91,7 +99,7 @@ describe('Full Plugin Workflow E2E', () => {
     await page.click('.getroomly-embed button');
 
     // Click close button
-    await page.click('button:contains("×")');
+    await page.click('button::-p-text(×)');
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // Verify modal is closed
