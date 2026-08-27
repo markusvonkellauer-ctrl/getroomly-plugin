@@ -37,9 +37,18 @@ const ALL_LANGUAGES = [
 const REQUIRED_KEYS = Object.keys(translations.en);
 
 function setHostname(hostname) {
+  // configurable: true is required, not optional here — without it, the
+  // FIRST call in a suite would still succeed (a partial descriptor on an
+  // already-configurable property preserves its current configurable
+  // value rather than resetting it to false), but that's incidental to
+  // jsdom's current default, not guaranteed. Making it explicit removes
+  // the dependency on that default, so a later jsdom/jest version can't
+  // turn this into "Cannot redefine property: location" partway through
+  // a suite.
   Object.defineProperty(window, 'location', {
     value: { hostname },
     writable: true,
+    configurable: true,
   });
 }
 
@@ -47,7 +56,11 @@ describe("i18n: TLD detection (Nordic Nest's 16 market domains)", () => {
   const originalLocation = window.location;
 
   afterEach(() => {
-    Object.defineProperty(window, 'location', { value: originalLocation, writable: true });
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      writable: true,
+      configurable: true,
+    });
     delete window.GetRoomlyEmbedConfig;
   });
 
