@@ -1,4 +1,5 @@
 import { AppConfig } from '@/config/app-config';
+import type { SupportedLanguage } from '@/lib/i18n';
 import type { GenerationResult } from '@/types/product';
 
 /**
@@ -33,7 +34,7 @@ export interface PlacementRequest {
       height: number;
     };
   };
-  language?: 'en' | 'sv';
+  language?: SupportedLanguage;
   /** Partner API key. Required — host pages set it via window.GetRoomlyEmbedConfig.apiKey. */
   apiKey?: string;
   /** Optional trace ID. Stored in backend RenderLog for support lookups. */

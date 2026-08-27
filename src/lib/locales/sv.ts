@@ -1,0 +1,55 @@
+import type { TranslationStrings } from '../i18n';
+
+export const sv: TranslationStrings = {
+  stepUpload: 'Ladda upp foto',
+  stepProcessing: 'Transformerar ditt rum...',
+  stepResult: 'Granska ditt nya rum',
+  stepIndicatorUpload: 'Ladda upp',
+  stepIndicatorProcessing: 'Bearbetar',
+  stepIndicatorResult: 'Resultat',
+  launchButton: 'Visualisera i ditt rum',
+  uploadButton: 'Ladda upp foto',
+  uploadHint: 'JPEG, PNG • MAX 10MB',
+  tipsHeading: 'För bästa resultat:',
+  tip1Label: 'Vinkel & avstånd:',
+  tip1Body: 'Stå 1–2 meter bort och rikta kameran mot golvet. Fånga med möbler för skala.',
+  tip2Label: 'Belysning:',
+  tip2Body: 'Se till att rummet är välbelyst. Undvik djupa skuggor eller mörka hörn.',
+  tip3Label: 'Rent golv:',
+  tip3Body: 'Ta bort skräp från golvytan där mattan ska placeras.',
+  termsLink: 'Användarvillkor & Integritet',
+  loadingMessages: [
+    'Analyserar rumsgeometri...',
+    'Identifierar ljussättning...',
+    'Skalar produkt mot golvet...',
+    'Applicerar neurala texturer...',
+    'Slutför fotorealistisk rendering...',
+  ],
+  labelOriginal: 'Originalrum',
+  labelNew: 'Ny design',
+  addToBasket: 'Lägg i varukorg',
+  showNew: 'Visa ny',
+  showOriginal: 'Visa original',
+  saveShare: 'Spara / Dela',
+  downloadToDevice: 'Ladda ner till enhet',
+  shareWithFriends: 'Dela med vänner',
+  newPhoto: 'Nytt foto',
+  termsTitle: 'Användarvillkor & Integritet',
+  termsSection1Title: '1. Syfte med bildbehandling',
+  termsSection1Body:
+    'Genom att ladda upp en bild ger du GetRoomly en tillfällig licens att behandla fotot för att visualisera möbelprodukter i din miljö. AI:n analyserar rumsgeometri och ljussättning för att ge en realistisk förhandsgranskning.',
+  termsSection2Title: '2. Dataminimering & Integritet',
+  termsLimitedDataCollectionTitle: 'Begränsad datainsamling',
+  termsLimitedDataCollectionBody:
+    'Vi samlar inte in namn, e-postadresser eller IP-adresser kopplade till din identitet.',
+  termsQualityRetentionTitle: 'Lagring för kvalitetssäkring',
+  termsQualityRetentionBody:
+    'Ditt foto och den genererade visualiseringen lagras på säkra servrar inom EU/EES i upp till 14 dagar för intern kvalitetsgranskning och raderas därefter automatiskt. De används aldrig för att träna AI-modeller eller delas med tredje part, och kopplas endast till en tillfällig sessionsreferens — aldrig till ditt namn, e-post eller IP-adress. Om ett genereringsförsök avvisas lagras samma foto och de tekniska detaljerna för det försöket enligt samma villkor, så att vi kan utreda och förbättra tillförlitligheten.',
+  termsSection3Title: '3. Datasäkerhet',
+  termsSection3Body:
+    'Ditt foto behandlas via en ledande global molnplattform som används av stora internationella företag, med avtalsmässiga dataskyddsgarantier som motsvarar GDPR-kraven (exempelvis Standardavtalsklausuler) oavsett var behandlingen sker. Din data används aldrig för att träna tredjeparts-AI-modeller. Bilder som sparas för kvalitetsutvärdering lagras enligt beskrivningen i avsnitt 2, med åtkomst begränsad till behöriga GetRoomly-medarbetare.',
+  termsSection4Title: '4. Äganderätt',
+  termsSection4Body:
+    'Du behåller all äganderätt till dina originalfoton. GetRoomly och dess partners behåller alla rättigheter till produktvisualiseringarna och den underliggande AI-tekniken.',
+  termsClose: 'Stäng',
+};
