@@ -220,6 +220,16 @@ describe('Cross-language button overflow', () => {
         const text = translations[lang][spec.translationKey];
 
         it(`${spec.name} — "${lang}" at ${width}px fits without clipping/wrapping-overflow`, async () => {
+          // A typo'd translationKey in BUTTON_SPECS above (or an
+          // incomplete translations object slipping past tests/unit/
+          // i18n.test.js's own completeness check) would make `text`
+          // undefined here — without this guard, escapeHtml(undefined)
+          // renders the 9-character literal string "undefined", which
+          // fits in every button width and passes every case, silently
+          // measuring nothing meaningful for that (spec, language) pair.
+          expect(typeof text).toBe('string');
+          expect(text.length).toBeGreaterThan(0);
+
           const page = await browser.newPage();
           try {
             await page.setViewport({ width: width + 40, height: 200 });
@@ -229,6 +239,16 @@ describe('Cross-language button overflow', () => {
 
             const box = await page.evaluate(() => {
               const el = document.getElementById('target');
+              if (!el) {
+                // Without this, a missing #target (a future spec.render()
+                // forgetting the id, or setContent partially failing)
+                // throws "Cannot read properties of null" deep inside a
+                // page.evaluate context — a generic error with no hint of
+                // which button/language/width caused it.
+                throw new Error(
+                  '#target not found in rendered content — spec.render() must include id="target"'
+                );
+              }
               return {
                 scrollWidth: el.scrollWidth,
                 clientWidth: el.clientWidth,
