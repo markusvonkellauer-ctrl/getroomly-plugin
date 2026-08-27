@@ -125,7 +125,7 @@ const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = Object.keys(
  * is the one place that distrust is checked, so every caller downstream —
  * detectLanguage() and getTranslations() — gets the same protection.
  */
-function isSupportedLanguage(value: unknown): value is SupportedLanguage {
+export function isSupportedLanguage(value: unknown): value is SupportedLanguage {
   return typeof value === 'string' && (SUPPORTED_LANGUAGES as readonly string[]).includes(value);
 }
 
