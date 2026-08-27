@@ -154,6 +154,52 @@ describe('AI Generation Service', () => {
     });
   });
 
+  describe('generateRoomVisualization — language validation', () => {
+    // request.language is typed as SupportedLanguage, but this module can be
+    // called with a value that ultimately traces back to an untyped host
+    // page's window.GetRoomlyEmbedConfig — the type doesn't guarantee the
+    // runtime value is actually valid. The backend hard-rejects (400) any
+    // code outside its 16-value allowlist, so an invalid string reaching
+    // this request breaks generation entirely, not just UI text.
+    test('forwards a valid language unchanged', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ image: { data: 'dGVzdA==', mimeType: 'image/webp' } }),
+      });
+
+      await generateRoomVisualization({ ...baseParams, language: 'de' });
+
+      const body = JSON.parse(fetch.mock.calls[0][1].body);
+      expect(body.language).toBe('de');
+    });
+
+    test('falls back to "en" for an invalid runtime language string (e.g. a typo from host-page config)', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ image: { data: 'dGVzdA==', mimeType: 'image/webp' } }),
+      });
+
+      // Simulates an untyped host page sending a typo — TypeScript can't
+      // catch this at compile time since it originates outside our code.
+      await generateRoomVisualization({ ...baseParams, language: 'ger' });
+
+      const body = JSON.parse(fetch.mock.calls[0][1].body);
+      expect(body.language).toBe('en');
+    });
+
+    test('falls back to "en" when language is omitted', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ image: { data: 'dGVzdA==', mimeType: 'image/webp' } }),
+      });
+
+      await generateRoomVisualization(baseParams);
+
+      const body = JSON.parse(fetch.mock.calls[0][1].body);
+      expect(body.language).toBe('en');
+    });
+  });
+
   describe('generateRoomVisualization — image compression (EXIF orientation)', () => {
     const makeLargeFile = () => {
       const file = new File(['test'], 'room.jpg', { type: 'image/jpeg' });

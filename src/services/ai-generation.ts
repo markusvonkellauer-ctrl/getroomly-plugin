@@ -1,4 +1,5 @@
 import { AppConfig } from '@/config/app-config';
+import { isSupportedLanguage, type SupportedLanguage } from '@/lib/i18n';
 import type { GenerationResult } from '@/types/product';
 
 /**
@@ -33,7 +34,7 @@ export interface PlacementRequest {
       height: number;
     };
   };
-  language?: 'en' | 'sv';
+  language?: SupportedLanguage;
   /** Partner API key. Required — host pages set it via window.GetRoomlyEmbedConfig.apiKey. */
   apiKey?: string;
   /** Optional trace ID. Stored in backend RenderLog for support lookups. */
@@ -241,10 +242,20 @@ export async function generateRoomVisualization(
   // 3. Build the request body
   const category = request.productInfo.category;
 
+  // request.language is typed as SupportedLanguage, but this module can be
+  // called by anything holding a PlacementRequest — the type doesn't
+  // guarantee the value actually originated from a validated source. The
+  // backend's /v1/generate hard-rejects (400) any code outside its 16-value
+  // allowlist, so an invalid string reaching this POST breaks generation
+  // entirely, not just the UI text. `|| 'en'` alone only catches falsy
+  // values (undefined, '') — a truthy-but-invalid string like 'ger' would
+  // have passed straight through.
+  const language = isSupportedLanguage(request.language) ? request.language : 'en';
+
   const body = {
     kind: 'placement' as const,
     sessionId: request.sessionId,
-    language: request.language || 'en',
+    language,
     roomImage,
     furnitureImage,
     category,
