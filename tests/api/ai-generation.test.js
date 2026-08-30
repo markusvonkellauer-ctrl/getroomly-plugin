@@ -308,7 +308,7 @@ describe('AI Generation Service', () => {
   // ─── submitFeedback ─────────────────────────────────────────────────────
 
   describe('submitFeedback', () => {
-    test('PATCHes the feedback endpoint with the generationId, rating, and API key header', async () => {
+    test('PATCHes the feedback endpoint with the generationId, feedback value, and API key header', async () => {
       fetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
 
       await submitFeedback('507f1f77bcf86cd799439011', 'up', 'partner-abc');

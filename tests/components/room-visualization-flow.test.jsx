@@ -275,7 +275,7 @@ describe('RoomVisualizationFlow', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Like this result' }));
       });
 
-      // Still renders the result step — a failed feedback POST must never break the UI.
+      // Still renders the result step — a failed feedback PATCH must never break the UI.
       expect(screen.getByText('Review Your New Room')).toBeInTheDocument();
     });
   });
