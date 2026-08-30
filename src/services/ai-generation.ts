@@ -312,7 +312,48 @@ export async function generateRoomVisualization(
     base64Data: result.image.data,
     prompt: '',
     latency: result.latencyMs ?? endTime - startTime,
+    generationId: result.generationId,
   };
+}
+
+/**
+ * Submits thumbs up/down feedback for a specific generation.
+ *
+ * Fire-and-forget by design from the caller's perspective — feedback is a
+ * non-critical signal, so a failure here must never disrupt the result UI.
+ * Callers should not await this on the critical path; catch errors for
+ * logging only.
+ */
+export async function submitFeedback(
+  generationId: string,
+  feedback: 'up' | 'down',
+  apiKey?: string
+): Promise<void> {
+  const key = apiKey || AppConfig.ai.defaultApiKey;
+  if (!key) {
+    throw new AIGenerationError(
+      'Missing GetRoomly API key. Set window.GetRoomlyEmbedConfig.apiKey to your partner key.',
+      'NO_API_KEY',
+      0
+    );
+  }
+
+  const endpoint = `${AppConfig.api.baseUrl}/v1/generate/${generationId}/feedback`;
+  const res = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': key,
+    },
+    body: JSON.stringify({ feedback }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}) as Record<string, unknown>);
+    const code = (err.code as string) ?? 'BACKEND_ERROR';
+    const description = (err.description as string) ?? res.statusText;
+    throw new AIGenerationError(description, code, res.status);
+  }
 }
 
 /** Validates uploaded image file. */
