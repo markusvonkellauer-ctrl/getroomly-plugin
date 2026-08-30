@@ -29,4 +29,6 @@ export interface GenerationResult {
   base64Data: string;
   prompt: string;
   latency: number;
+  /** Backend RenderLog id for this generation. Used to attribute thumbs up/down feedback to the right image. */
+  generationId?: string;
 }

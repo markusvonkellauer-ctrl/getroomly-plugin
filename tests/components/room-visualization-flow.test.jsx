@@ -9,10 +9,15 @@ import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlo
 
 jest.mock('../../src/services/ai-generation', () => ({
   generateRoomVisualization: jest.fn(),
+  submitFeedback: jest.fn(),
   validateImageFile: jest.fn(() => ({ isValid: true, error: null })),
 }));
 
-import { generateRoomVisualization, validateImageFile } from '../../src/services/ai-generation';
+import {
+  generateRoomVisualization,
+  submitFeedback,
+  validateImageFile,
+} from '../../src/services/ai-generation';
 
 global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
 global.URL.revokeObjectURL = jest.fn();
@@ -38,6 +43,7 @@ describe('RoomVisualizationFlow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     validateImageFile.mockReturnValue({ isValid: true, error: null });
+    submitFeedback.mockResolvedValue(undefined);
   });
 
   // ─── Initial render ───────────────────────────────────────────────────────
@@ -212,5 +218,69 @@ describe('RoomVisualizationFlow', () => {
 
     expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
     expect(input.value).toBe('');
+  });
+
+  // ─── Like/Dislike feedback ─────────────────────────────────────────────────
+
+  describe('feedback buttons', () => {
+    const renderAtResult = async (generationResult) => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(
+        <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+      );
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    test('Like button submits "up" feedback for the generationId with the partner API key', async () => {
+      await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Like this result' }));
+
+      expect(submitFeedback).toHaveBeenCalledWith('gen-1', 'up', 'partner-abc');
+    });
+
+    test('Dislike button submits "down" feedback for the generationId', async () => {
+      await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dislike this result' }));
+
+      expect(submitFeedback).toHaveBeenCalledWith('gen-1', 'down', 'partner-abc');
+    });
+
+    test('does not call submitFeedback when the result has no generationId', async () => {
+      await renderAtResult({ imageUrl: 'blob:result' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Like this result' }));
+
+      expect(submitFeedback).not.toHaveBeenCalled();
+    });
+
+    test('a second click on the same button is a no-op (feedback already submitted)', async () => {
+      await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
+
+      const likeButton = screen.getByRole('button', { name: 'Like this result' });
+      fireEvent.click(likeButton);
+      // Buttons unmount once feedback is submitted (guarded by hasSubmittedFeedback),
+      // so a stale reference can't be clicked twice — this asserts that guard.
+      expect(
+        screen.queryByRole('button', { name: 'Dislike this result' })
+      ).not.toBeInTheDocument();
+      expect(submitFeedback).toHaveBeenCalledTimes(1);
+    });
+
+    test('a rejected submitFeedback call does not throw or crash the component', async () => {
+      submitFeedback.mockRejectedValueOnce(new Error('network error'));
+      await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Like this result' }));
+      });
+
+      // Still renders the result step — a failed feedback POST must never break the UI.
+      expect(screen.getByText('Review Your New Room')).toBeInTheDocument();
+    });
   });
 });
