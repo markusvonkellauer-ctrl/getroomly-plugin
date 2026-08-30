@@ -223,11 +223,9 @@ describe('RoomVisualizationFlow', () => {
   // ─── Like/Dislike feedback ─────────────────────────────────────────────────
 
   describe('feedback buttons', () => {
-    const renderAtResult = async (generationResult) => {
+    const renderAtResult = async generationResult => {
       generateRoomVisualization.mockResolvedValueOnce(generationResult);
-      render(
-        <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
-      );
+      render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
       await act(async () => {
         uploadFile(document.querySelector('input[type="file"]'), makeFile());
       });
@@ -265,9 +263,7 @@ describe('RoomVisualizationFlow', () => {
       fireEvent.click(likeButton);
       // Buttons unmount once feedback is submitted (guarded by hasSubmittedFeedback),
       // so a stale reference can't be clicked twice — this asserts that guard.
-      expect(
-        screen.queryByRole('button', { name: 'Dislike this result' })
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Dislike this result' })).not.toBeInTheDocument();
       expect(submitFeedback).toHaveBeenCalledTimes(1);
     });
 

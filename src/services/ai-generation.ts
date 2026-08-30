@@ -331,7 +331,11 @@ export async function submitFeedback(
 ): Promise<void> {
   const key = apiKey || AppConfig.ai.defaultApiKey;
   if (!key) {
-    throw new AIGenerationError('Missing GetRoomly API key', 'NO_API_KEY', 0);
+    throw new AIGenerationError(
+      'Missing GetRoomly API key. Set window.GetRoomlyEmbedConfig.apiKey to your partner key.',
+      'NO_API_KEY',
+      0
+    );
   }
 
   const endpoint = `${AppConfig.api.baseUrl}/v1/generate/${generationId}/feedback`;

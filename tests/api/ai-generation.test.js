@@ -349,9 +349,9 @@ describe('AI Generation Service', () => {
     });
 
     test('throws NO_API_KEY when no key is available', async () => {
-      await expect(submitFeedback('507f1f77bcf86cd799439011', 'up', undefined)).rejects.toMatchObject(
-        { name: 'AIGenerationError', code: 'NO_API_KEY' }
-      );
+      await expect(
+        submitFeedback('507f1f77bcf86cd799439011', 'up', undefined)
+      ).rejects.toMatchObject({ name: 'AIGenerationError', code: 'NO_API_KEY' });
       expect(fetch).not.toHaveBeenCalled();
     });
   });

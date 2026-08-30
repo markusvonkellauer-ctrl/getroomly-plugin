@@ -1,5 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { generateRoomVisualization, submitFeedback, validateImageFile } from '@/services/ai-generation';
+import {
+  generateRoomVisualization,
+  submitFeedback,
+  validateImageFile,
+} from '@/services/ai-generation';
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
