@@ -1,5 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { generateRoomVisualization, validateImageFile } from '@/services/ai-generation';
+import {
+  generateRoomVisualization,
+  submitFeedback,
+  validateImageFile,
+} from '@/services/ai-generation';
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -40,6 +44,11 @@ export function RoomVisualizationFlow({
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Backend RenderLog id for the current result — distinct from sessionId,
+  // which stays the same across multiple generations in one widget
+  // instance. Feedback needs to be attributed to this specific image.
+  const [generationId, setGenerationId] = useState<string | null>(null);
 
   // One sessionId per plugin instance — sent on every generate, indexed in backend RenderLog for support tracing
   const [sessionId] = useState<string>(
@@ -180,6 +189,7 @@ export function RoomVisualizationFlow({
       });
 
       setResultImage(result.imageUrl);
+      setGenerationId(result.generationId ?? null);
       setStep('result');
       onComplete?.(result.imageUrl);
     } catch (err) {
@@ -194,6 +204,7 @@ export function RoomVisualizationFlow({
       }
       setUploadedImage(null);
       setResultImage(null);
+      setGenerationId(null);
       setStep('upload');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -251,6 +262,7 @@ export function RoomVisualizationFlow({
     setStep('upload');
     setUploadedImage(null);
     setResultImage(null);
+    setGenerationId(null);
     setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
   };
@@ -798,6 +810,14 @@ export function RoomVisualizationFlow({
         detail: { imageUrl: resultImage, productId },
       })
     );
+
+    // Fire-and-forget: this is a non-critical signal, a failure here must
+    // never disrupt the (already-optimistic) result UI.
+    if (generationId) {
+      submitFeedback(generationId, 'up', config?.apiKey).catch(err =>
+        console.warn('[Plugin] Failed to submit like feedback:', err)
+      );
+    }
   };
 
   const handleDislike = () => {
@@ -813,6 +833,12 @@ export function RoomVisualizationFlow({
         detail: { imageUrl: resultImage, productId },
       })
     );
+
+    if (generationId) {
+      submitFeedback(generationId, 'down', config?.apiKey).catch(err =>
+        console.warn('[Plugin] Failed to submit dislike feedback:', err)
+      );
+    }
   };
 
   const handleShowOriginal = () => {
@@ -975,6 +1001,7 @@ export function RoomVisualizationFlow({
             >
               <button
                 onClick={handleLike}
+                aria-label="Like this result"
                 style={{
                   height: '32px',
                   width: '32px',
@@ -1002,6 +1029,7 @@ export function RoomVisualizationFlow({
               </button>
               <button
                 onClick={handleDislike}
+                aria-label="Dislike this result"
                 style={{
                   height: '32px',
                   width: '32px',

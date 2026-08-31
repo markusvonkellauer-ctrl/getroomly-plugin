@@ -1,0 +1,55 @@
+import type { TranslationStrings } from '../i18n';
+
+export const no: TranslationStrings = {
+  stepUpload: 'Last opp bilde',
+  stepProcessing: 'Transformerer rommet ditt...',
+  stepResult: 'Se gjennom ditt nye rom',
+  stepIndicatorUpload: 'Last opp',
+  stepIndicatorProcessing: 'Behandler',
+  stepIndicatorResult: 'Resultat',
+  launchButton: 'Visualiser i rommet ditt',
+  uploadButton: 'Last opp bilde',
+  uploadHint: 'JPEG, PNG • MAKS 10MB',
+  tipsHeading: 'For best resultat:',
+  tip1Label: 'Vinkel & avstand:',
+  tip1Body: 'Stå 1–2 meter unna og rett kameraet mot gulvet. Ta med møbler for skala.',
+  tip2Label: 'Belysning:',
+  tip2Body: 'Sørg for at rommet er godt belyst. Unngå dype skygger eller mørke hjørner.',
+  tip3Label: 'Ryddig gulv:',
+  tip3Body: 'Fjern smårot fra gulvarealet der teppet skal plasseres.',
+  termsLink: 'Bruksvilkår & personvern',
+  loadingMessages: [
+    'Analyserer romgeometri...',
+    'Registrerer omgivende lys...',
+    'Skalerer produkt mot gulvet...',
+    'Bruker nevrale teksturer...',
+    'Fullfører fotorealistisk rendering...',
+  ],
+  labelOriginal: 'Opprinnelig rom',
+  labelNew: 'Ny design',
+  addToBasket: 'Legg i handlekurv',
+  showNew: 'Vis ny',
+  showOriginal: 'Vis original',
+  saveShare: 'Lagre / Del',
+  downloadToDevice: 'Last ned til enhet',
+  shareWithFriends: 'Del med venner',
+  newPhoto: 'Nytt bilde',
+  termsTitle: 'Bruksvilkår & personvern',
+  termsSection1Title: '1. Formål med bildebehandling',
+  termsSection1Body:
+    'Ved å laste opp et bilde gir du GetRoomly en midlertidig lisens til å behandle fotoet for å visualisere møbelprodukter i dine omgivelser. AI-modellen analyserer romgeometri og belysning for å gi en realistisk forhåndsvisning.',
+  termsSection2Title: '2. Dataminimering & personvern',
+  termsLimitedDataCollectionTitle: 'Begrenset datainnsamling',
+  termsLimitedDataCollectionBody:
+    'Vi samler ikke inn navn, e-postadresser eller IP-adresser knyttet til din identitet.',
+  termsQualityRetentionTitle: 'Lagring for kvalitetssikring',
+  termsQualityRetentionBody:
+    'Bildet ditt og den genererte visualiseringen lagres på sikre servere innenfor EU/EØS i inntil 14 dager for intern kvalitetsgjennomgang, og slettes deretter automatisk. De brukes aldri til å trene AI-modeller eller deles med tredjeparter, og knyttes kun til en midlertidig øktreferanse — aldri til navnet, e-posten eller IP-adressen din. Hvis et genereringsforsøk avvises, lagres det samme bildet og de tekniske detaljene om forsøket på samme vilkår, slik at vi kan undersøke og forbedre påliteligheten.',
+  termsSection3Title: '3. Datasikkerhet',
+  termsSection3Body:
+    'Bildet ditt behandles ved hjelp av en ledende global skyteknologiplattform som store internasjonale virksomheter har tillit til, under kontraktsmessige databeskyttelsesgarantier tilsvarende GDPR-kravene (som standard personvernbestemmelser), uansett hvor behandlingen finner sted. Dataene dine brukes aldri til å trene tredjeparts-AI-modeller. Bilder som lagres for kvalitetsevaluering, oppbevares som beskrevet i avsnitt 2, med tilgang begrenset til autorisert GetRoomly-personell.',
+  termsSection4Title: '4. Eierskap',
+  termsSection4Body:
+    'Du beholder all eiendomsrett til dine originale bilder. GetRoomly og dets partnere beholder alle rettigheter til produktvisualiseringene og den underliggende AI-teknologien.',
+  termsClose: 'Lukk',
+};

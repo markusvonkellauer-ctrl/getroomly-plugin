@@ -95,7 +95,7 @@ npm run test:ci
 
 ### Prerequisites
 1. **Node.js**: Version 18+ required
-2. **Development Server**: Plugin must be running on http://localhost:5174
+2. **Development Server**: Plugin must be running on http://localhost:5173
 3. **Test Browser**: Puppeteer will download Chromium automatically
 
 ### Environment Setup
@@ -158,7 +158,7 @@ test('complete upload workflow', async () => {
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
   
-  await page.goto('http://localhost:5174');
+  await page.goto('http://localhost:5173');
   await page.click('.embed-button');
   // ... test steps
   
@@ -182,7 +182,7 @@ CI=false npm run test:e2e
 
 ### Common Issues
 
-1. **E2E Tests Timeout**: Ensure dev server is running on port 5174
+1. **E2E Tests Timeout**: Ensure dev server is running on port 5173
 2. **Import Errors**: Check path aliases in jest.config.js  
 3. **Mock Issues**: Verify mocks in \`__mocks__/\` directory
 4. **Coverage Failing**: Add tests for uncovered code paths
@@ -224,10 +224,10 @@ The test suite is designed for CI/CD pipelines:
 ## Troubleshooting
 
 ### Port Conflicts
-If port 5174 is in use:
+If port 5173 is in use:
 \`\`\`bash
-# Find and kill process using port 5174
-lsof -ti:5174 | xargs kill
+# Find and kill process using port 5173
+lsof -ti:5173 | xargs kill
 npm run dev
 \`\`\`
 

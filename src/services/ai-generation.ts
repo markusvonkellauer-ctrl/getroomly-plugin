@@ -1,4 +1,5 @@
 import { AppConfig } from '@/config/app-config';
+import { isSupportedLanguage, type SupportedLanguage } from '@/lib/i18n';
 import type { GenerationResult } from '@/types/product';
 
 /**
@@ -33,7 +34,7 @@ export interface PlacementRequest {
       height: number;
     };
   };
-  language?: 'en' | 'sv';
+  language?: SupportedLanguage;
   /** Partner API key. Required — host pages set it via window.GetRoomlyEmbedConfig.apiKey. */
   apiKey?: string;
   /** Optional trace ID. Stored in backend RenderLog for support lookups. */
@@ -241,10 +242,20 @@ export async function generateRoomVisualization(
   // 3. Build the request body
   const category = request.productInfo.category;
 
+  // request.language is typed as SupportedLanguage, but this module can be
+  // called by anything holding a PlacementRequest — the type doesn't
+  // guarantee the value actually originated from a validated source. The
+  // backend's /v1/generate hard-rejects (400) any code outside its 16-value
+  // allowlist, so an invalid string reaching this POST breaks generation
+  // entirely, not just the UI text. `|| 'en'` alone only catches falsy
+  // values (undefined, '') — a truthy-but-invalid string like 'ger' would
+  // have passed straight through.
+  const language = isSupportedLanguage(request.language) ? request.language : 'en';
+
   const body = {
     kind: 'placement' as const,
     sessionId: request.sessionId,
-    language: request.language || 'en',
+    language,
     roomImage,
     furnitureImage,
     category,
@@ -301,7 +312,48 @@ export async function generateRoomVisualization(
     base64Data: result.image.data,
     prompt: '',
     latency: result.latencyMs ?? endTime - startTime,
+    generationId: result.generationId,
   };
+}
+
+/**
+ * Submits thumbs up/down feedback for a specific generation.
+ *
+ * Fire-and-forget by design from the caller's perspective — feedback is a
+ * non-critical signal, so a failure here must never disrupt the result UI.
+ * Callers should not await this on the critical path; catch errors for
+ * logging only.
+ */
+export async function submitFeedback(
+  generationId: string,
+  feedback: 'up' | 'down',
+  apiKey?: string
+): Promise<void> {
+  const key = apiKey || AppConfig.ai.defaultApiKey;
+  if (!key) {
+    throw new AIGenerationError(
+      'Missing GetRoomly API key. Set window.GetRoomlyEmbedConfig.apiKey to your partner key.',
+      'NO_API_KEY',
+      0
+    );
+  }
+
+  const endpoint = `${AppConfig.api.baseUrl}/v1/generate/${generationId}/feedback`;
+  const res = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': key,
+    },
+    body: JSON.stringify({ feedback }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}) as Record<string, unknown>);
+    const code = (err.code as string) ?? 'BACKEND_ERROR';
+    const description = (err.description as string) ?? res.statusText;
+    throw new AIGenerationError(description, code, res.status);
+  }
 }
 
 /** Validates uploaded image file. */

@@ -58,11 +58,13 @@ export default {
   // Module file extensions
   moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx', 'json'],
 
-  // Ignore patterns — e2e and shadow-dom tests require a real browser (Puppeteer) and run separately
+  // Ignore patterns — e2e, shadow-dom, and visual tests require a real browser
+  // (Puppeteer) and run separately
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
     '<rootDir>/dist/',
     '<rootDir>/e2e/',
     '<rootDir>/shadow-dom/',
+    '<rootDir>/visual/',
   ],
 };
