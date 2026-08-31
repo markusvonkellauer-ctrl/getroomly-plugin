@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AppConfig } from '@/config/app-config';
 import type { EmbedConfig } from '@/types/embed-config';
-import { detectLanguageFromTLD } from '@/lib/i18n';
+import { detectLanguageFromTLD, isSupportedLanguage } from '@/lib/i18n';
 
 /**
  * Hook to manage embed configuration from window.GetRoomlyEmbedConfig
@@ -61,11 +61,19 @@ export function useEmbedConfig() {
         return;
       }
 
+      // window.GetRoomlyEmbedConfig is set by the host page's own untyped JS —
+      // embedConfig.language can be any string at runtime regardless of what
+      // the EmbedConfig type claims. Validate before it's allowed to win over
+      // the TLD-derived default, so a typo'd or stale value (e.g. 'ger'
+      // instead of 'de') falls back safely instead of silently propagating
+      // into every downstream consumer of config.language — including the
+      // /v1/generate request body, where an invalid code gets a hard 400 from
+      // the backend and breaks generation entirely, not just the UI text.
+      const resolvedLanguage = isSupportedLanguage(embedConfig.language)
+        ? embedConfig.language
+        : detectLanguageFromTLD();
+
       const configWithDefaults: EmbedConfig = {
-        // Explicit embedConfig.language (spread below) wins if the host page
-        // set one; otherwise fall back to TLD detection (.se -> sv) before
-        // finally defaulting to English.
-        language: detectLanguageFromTLD(),
         showSteps: false,
         buttons: {
           addToBasket: true,
@@ -76,6 +84,9 @@ export function useEmbedConfig() {
           ...embedConfig.buttons,
         },
         ...embedConfig,
+        // Placed after the spread so the validated value always wins over
+        // whatever embedConfig.language raw held (valid or not).
+        language: resolvedLanguage,
       };
 
       setConfig(configWithDefaults);

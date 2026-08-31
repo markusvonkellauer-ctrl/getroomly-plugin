@@ -5,6 +5,8 @@
  * via window.GetRoomlyEmbedConfig
  */
 
+import type { SupportedLanguage } from '@/lib/i18n';
+
 export interface ProductMeasurements {
   width: number;
   depth: number;
@@ -60,8 +62,8 @@ export interface EmbedConfig {
   /** Product price in cents (optional) */
   productPrice?: number;
 
-  /** UI language */
-  language?: 'en' | 'sv';
+  /** UI language — see SupportedLanguage in lib/i18n.ts for the full list */
+  language?: SupportedLanguage;
 
   /** Show steps progress bar (optional, default: false) */
   showSteps?: boolean;

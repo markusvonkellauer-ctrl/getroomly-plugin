@@ -1,0 +1,55 @@
+import type { TranslationStrings } from '../i18n';
+
+// Simplified Chinese — confirmed for the .cn (mainland China) market, 2026-08-27.
+export const zh: TranslationStrings = {
+  stepUpload: '上传照片',
+  stepProcessing: '正在转换您的空间...',
+  stepResult: '查看您的新房间',
+  stepIndicatorUpload: '上传',
+  stepIndicatorProcessing: '处理中',
+  stepIndicatorResult: '结果',
+  launchButton: '在您的房间中查看效果',
+  uploadButton: '上传照片',
+  uploadHint: 'JPEG、PNG • 最大10MB',
+  tipsHeading: '获得最佳效果的建议：',
+  tip1Label: '角度与距离：',
+  tip1Body: '后退1-2米，将镜头对准地面。拍摄时包含家具以作为比例参考。',
+  tip2Label: '光线：',
+  tip2Body: '确保房间光线充足，避免出现深阴影或昏暗角落。',
+  tip3Label: '清理空间：',
+  tip3Body: '清除地毯将要放置区域地面上的小杂物。',
+  termsLink: '使用条款与隐私政策',
+  loadingMessages: [
+    '正在分析房间几何结构...',
+    '正在检测环境光线...',
+    '正在将产品按比例调整至地面...',
+    '正在应用神经网络纹理...',
+    '正在完成照片级真实渲染...',
+  ],
+  labelOriginal: '原始房间',
+  labelNew: '新设计',
+  addToBasket: '加入购物车',
+  showNew: '显示新效果',
+  showOriginal: '显示原图',
+  saveShare: '保存 / 分享',
+  downloadToDevice: '下载到设备',
+  shareWithFriends: '分享给朋友',
+  newPhoto: '新照片',
+  termsTitle: '使用条款与隐私政策',
+  termsSection1Title: '1. 图像处理目的',
+  termsSection1Body:
+    '上传图像即表示您授予GetRoomly临时许可，以处理该照片，从而在您的环境中可视化家具产品。人工智能会分析房间的几何结构和光照，以提供逼真的预览效果。',
+  termsSection2Title: '2. 数据最小化与隐私',
+  termsLimitedDataCollectionTitle: '有限的数据收集',
+  termsLimitedDataCollectionBody: '我们不会收集与您身份相关联的姓名、电子邮件地址或IP地址。',
+  termsQualityRetentionTitle: '质量保证留存',
+  termsQualityRetentionBody:
+    '您的照片和生成的可视化效果图将存储在欧盟/欧洲经济区境内的安全服务器上，最长保留14天用于内部质量审核，之后将自动删除。这些数据绝不会用于训练人工智能模型，也不会与第三方共享，且仅与临时会话标识关联——绝不与您的姓名、电子邮件或IP地址关联。如果生成请求被拒绝，同一照片及该次尝试的技术细节将按相同条款予以保留，以便我们调查并改进可靠性。',
+  termsSection3Title: '3. 数据安全',
+  termsSection3Body:
+    '您的照片将通过受众多国际大型企业信赖的领先全球云技术平台进行处理，无论处理发生在何地，均遵循与GDPR要求（例如标准合同条款）相当的合同数据保护保障措施。您的数据绝不会用于训练第三方人工智能模型。为质量评估而保留的照片将按第2节所述方式存储，仅限GetRoomly授权人员访问。',
+  termsSection4Title: '4. 所有权',
+  termsSection4Body:
+    '您保留对原始照片的全部所有权。GetRoomly及其合作伙伴保留对产品可视化效果图及其底层人工智能技术的所有权利。',
+  termsClose: '关闭',
+};

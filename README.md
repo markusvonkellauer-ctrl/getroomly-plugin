@@ -417,7 +417,7 @@ cp .env.example .env   # set VITE_GETROOMLY_API_KEY (dev partner key) and VITE_A
 npm run dev
 ```
 
-The Vite dev server runs at `http://localhost:5173`. The hosted demo page is [https://plugin.getroomly.ai](https://plugin.getroomly.ai).
+The Vite dev server runs at `http://localhost:5173`. The hosted demo site is [https://demo.getroomly.ai](https://demo.getroomly.ai) (dev: [https://dev.getroomly.ai](https://dev.getroomly.ai)). Separately, [https://plugin.getroomly.ai](https://plugin.getroomly.ai) serves a bare page that loads the bundle — useful for sanity-checking a plugin deploy on its own.
 
 **`VITE_API_BASE_URL` is required for local dev.** There is no usable default — the built-in value is the literal placeholder `__API_BASE_URL__`, which is only substituted inside the Docker image at container start. Without it, requests go to `__API_BASE_URL__/v1/generate` and fail.
 

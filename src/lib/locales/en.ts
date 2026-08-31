@@ -1,0 +1,55 @@
+import type { TranslationStrings } from '../i18n';
+
+export const en: TranslationStrings = {
+  stepUpload: 'Upload Photo',
+  stepProcessing: 'Transforming your space...',
+  stepResult: 'Review Your New Room',
+  stepIndicatorUpload: 'Upload',
+  stepIndicatorProcessing: 'Processing',
+  stepIndicatorResult: 'Result',
+  launchButton: 'Visualize in Your Room',
+  uploadButton: 'Upload Photo',
+  uploadHint: 'JPEG, PNG • MAX 10MB',
+  tipsHeading: 'For best results:',
+  tip1Label: 'Angle & Distance:',
+  tip1Body: 'Stand 1–2 metres back and point towards the floor. Capture furniture for scale.',
+  tip2Label: 'Lighting:',
+  tip2Body: 'Ensure the room is well-lit. Avoid deep shadows or dark corners.',
+  tip3Label: 'Clear Space:',
+  tip3Body: 'Remove small clutter from the floor area where the rug will be placed.',
+  termsLink: 'Terms of Use & Privacy',
+  loadingMessages: [
+    'Analysing room geometry...',
+    'Detecting ambient light...',
+    'Scaling product to floor...',
+    'Applying neural textures...',
+    'Finalising photorealistic render...',
+  ],
+  labelOriginal: 'Original Room',
+  labelNew: 'New Design',
+  addToBasket: 'Add to Basket',
+  showNew: 'Show New',
+  showOriginal: 'Show Original',
+  saveShare: 'Save / Share',
+  downloadToDevice: 'Download to Device',
+  shareWithFriends: 'Share with Friends',
+  newPhoto: 'New Photo',
+  termsTitle: 'Terms of Use & Privacy',
+  termsSection1Title: '1. Purpose of Image Processing',
+  termsSection1Body:
+    'By uploading an image, you grant GetRoomly a temporary licence to process the photo to visualise furniture products in your environment. The AI analyses room geometry and lighting to provide a realistic preview.',
+  termsSection2Title: '2. Data Minimisation & Privacy',
+  termsLimitedDataCollectionTitle: 'Limited Data Collection',
+  termsLimitedDataCollectionBody:
+    'We do not collect names, email addresses, or IP addresses linked to your identity.',
+  termsQualityRetentionTitle: 'Quality Assurance Retention',
+  termsQualityRetentionBody:
+    'Your photo and the generated visualisation are stored on secure servers within the EU/EEA for up to 14 days for internal quality review, then automatically deleted. They are never used to train AI models or shared with third parties, and are linked only to a temporary session reference — never to your name, email, or IP address. If a generation attempt is refused, the same photo and the technical details of that attempt are stored under these same terms, so we can investigate and improve reliability.',
+  termsSection3Title: '3. Data Security',
+  termsSection3Body:
+    'Your photo is processed using a leading global cloud technology platform trusted by major international businesses, under contractual data protection safeguards equivalent to GDPR requirements (such as Standard Contractual Clauses) wherever processing occurs. Your data is never used to train third-party AI models. Photos retained for quality evaluation are stored as described in Section 2, with access restricted to authorised GetRoomly personnel only.',
+  termsSection4Title: '4. Ownership',
+  termsSection4Body:
+    'You retain all ownership of your original photos. GetRoomly and its partners retain all rights to the product visualisations and the underlying AI technology.',
+  termsClose: 'Close',
+};

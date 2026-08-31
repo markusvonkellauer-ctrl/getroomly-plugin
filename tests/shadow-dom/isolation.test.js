@@ -1,4 +1,13 @@
 /**
+ * @jest-environment node
+ *
+ * Puppeteer drives a real, separate Chrome process over the Node.js CDP
+ * client — jest.config.js's global `testEnvironment: 'jsdom'` provides a
+ * fake window/document this file doesn't use, but jsdom's environment
+ * patching interferes with Puppeteer's own Node networking/process
+ * handling badly enough to hang page operations indefinitely. See
+ * tests/visual/overflow.test.js for where this was diagnosed.
+ *
  * Shadow DOM CSS Isolation Test
  *
  * Tests that the GetRoomly plugin is properly isolated from external CSS
@@ -71,12 +80,12 @@ describe('Shadow DOM CSS Isolation', () => {
       category: 'Test'
     };
   </script>
-  <script type="module" src="http://localhost:5174/src/main.tsx"></script>
+  <script type="module" src="http://localhost:5173/src/main.tsx"></script>
 </body>
 </html>`;
 
     await page.setContent(aggressiveCssHtml);
-    await page.waitForTimeout(2000);
+    await new Promise(resolve => setTimeout(resolve, 2000));
   });
 
   test('Plugin container creates shadow root', async () => {
@@ -137,7 +146,7 @@ describe('Shadow DOM CSS Isolation', () => {
       if (button) button.click();
     });
 
-    await page.waitForTimeout(1000);
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     const modalStyles = await page.evaluate(() => {
       const container = document.querySelector('#getroomly-container');
