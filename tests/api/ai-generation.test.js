@@ -331,6 +331,15 @@ describe('AI Generation Service', () => {
       expect(JSON.parse(opts.body)).toEqual({ feedback: 'down' });
     });
 
+    test('URL-encodes generationId so reserved characters cannot break the request path', async () => {
+      fetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
+
+      await submitFeedback('weird/id?with#chars', 'up', 'partner-abc');
+
+      const [url] = fetch.mock.calls[0];
+      expect(url).toContain('/v1/generate/weird%2Fid%3Fwith%23chars/feedback');
+    });
+
     test('throws AIGenerationError when the backend responds non-ok', async () => {
       fetch.mockResolvedValueOnce({
         ok: false,
