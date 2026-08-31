@@ -338,7 +338,7 @@ export async function submitFeedback(
     );
   }
 
-  const endpoint = `${AppConfig.api.baseUrl}/v1/generate/${generationId}/feedback`;
+  const endpoint = `${AppConfig.api.baseUrl}/v1/generate/${encodeURIComponent(generationId)}/feedback`;
   const res = await fetch(endpoint, {
     method: 'PATCH',
     headers: {
