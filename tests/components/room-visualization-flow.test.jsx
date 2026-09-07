@@ -255,6 +255,36 @@ describe('RoomVisualizationFlow', () => {
     }
   });
 
+  test('a non-string FileReader.result is treated as a read failure, not silently dropped', async () => {
+    const RealFileReader = global.FileReader;
+    class NonStringResultFileReader {
+      readAsDataURL() {
+        this.result = new ArrayBuffer(0); // unexpected — readAsDataURL should yield a string
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    global.FileReader = NonStringResultFileReader;
+    const onError = jest.fn();
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} onError={onError} />);
+      const input = document.querySelector('input[type="file"]');
+
+      await act(async () => {
+        uploadFile(input, makeFile());
+      });
+
+      await waitFor(() => {
+        expect(onError).toHaveBeenCalledWith('Failed to read image file');
+      });
+      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(generateRoomVisualization).not.toHaveBeenCalled();
+      expect(input.value).toBe('');
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
   test('a stale FileReader read from a superseded file selection is ignored', async () => {
     const RealFileReader = global.FileReader;
     const instances = [];

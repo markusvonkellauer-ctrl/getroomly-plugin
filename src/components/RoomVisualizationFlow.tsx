@@ -253,6 +253,25 @@ export function RoomVisualizationFlow({
       return;
     }
 
+    // Shared by onerror and the non-string-result path below: both are "we
+    // couldn't get a usable image out of the file" and must recover the same
+    // way — clear the file input so the browser fires onChange again if the
+    // user retries the same file (an unchanged input value means no change
+    // event), and surface the failure to the host.
+    const failRead = (errorMsg: string) => {
+      uploadedImageRef.current = null;
+      setUploadedImage(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      window.dispatchEvent(
+        new CustomEvent('getroomly-error', {
+          detail: { error: errorMsg, productId, sessionId },
+        })
+      );
+      onError?.(errorMsg);
+    };
+
     // A data URL (not a blob: URL) so the "original" preview stays valid for
     // the whole review session — blob: URLs are backed by browser memory and
     // can be silently reclaimed under memory pressure (e.g. a concurrent
@@ -270,6 +289,7 @@ export function RoomVisualizationFlow({
       // genuinely unexpected value can't slip into state and handleGenerate.
       if (typeof reader.result !== 'string') {
         console.error('[Plugin] FileReader returned a non-string result:', reader.result);
+        failRead('Failed to read image file');
         return;
       }
       const dataUrl = reader.result;
@@ -281,24 +301,8 @@ export function RoomVisualizationFlow({
       if (!isMountedRef.current || fileReadTokenRef.current !== token) {
         return;
       }
-      const errorMsg = 'Failed to read image file';
-      console.error('[Plugin] FileReader error:', errorMsg, reader.error);
-
-      // Clear the file input so the browser fires onChange again if the user
-      // retries the same file — without this, an unchanged input value means
-      // no change event, and the retry silently does nothing.
-      uploadedImageRef.current = null;
-      setUploadedImage(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-
-      window.dispatchEvent(
-        new CustomEvent('getroomly-error', {
-          detail: { error: errorMsg, productId, sessionId },
-        })
-      );
-      onError?.(errorMsg);
+      console.error('[Plugin] FileReader error:', reader.error);
+      failRead('Failed to read image file');
     };
     reader.readAsDataURL(file);
   };
