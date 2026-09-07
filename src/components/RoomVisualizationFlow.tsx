@@ -198,10 +198,7 @@ export function RoomVisualizationFlow({
 
       // Reset to clean upload state — no error shown in the plugin.
       // The host website handles error display via the event / onError callback.
-      if (uploadedImageRef.current) {
-        URL.revokeObjectURL(uploadedImageRef.current);
-        uploadedImageRef.current = null;
-      }
+      uploadedImageRef.current = null;
       setUploadedImage(null);
       setResultImage(null);
       setGenerationId(null);
@@ -240,21 +237,32 @@ export function RoomVisualizationFlow({
       return;
     }
 
-    if (uploadedImageRef.current) {
-      URL.revokeObjectURL(uploadedImageRef.current);
-    }
-
-    const url = URL.createObjectURL(file);
-    uploadedImageRef.current = url;
-    setUploadedImage(url);
-    handleGenerate(file);
+    // A data URL (not a blob: URL) so the "original" preview stays valid for
+    // the whole review session — blob: URLs are backed by browser memory and
+    // can be silently reclaimed under memory pressure (e.g. a concurrent
+    // Google Meet screen share), which broke "Show Original" with no error.
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      uploadedImageRef.current = dataUrl;
+      setUploadedImage(dataUrl);
+      handleGenerate(file);
+    };
+    reader.onerror = () => {
+      const errorMsg = 'Failed to read image file';
+      console.error('[Plugin] FileReader error:', errorMsg);
+      window.dispatchEvent(
+        new CustomEvent('getroomly-error', {
+          detail: { error: errorMsg, productId, sessionId },
+        })
+      );
+      onError?.(errorMsg);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleNewPhoto = () => {
-    if (uploadedImageRef.current) {
-      URL.revokeObjectURL(uploadedImageRef.current);
-      uploadedImageRef.current = null;
-    }
+    uploadedImageRef.current = null;
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -270,15 +278,6 @@ export function RoomVisualizationFlow({
   const handleOpenTerms = () => {
     setShowTermsDialog(true);
   };
-
-  // Cleanup on unmount
-  React.useEffect(() => {
-    return () => {
-      if (uploadedImageRef.current) {
-        URL.revokeObjectURL(uploadedImageRef.current);
-      }
-    };
-  }, []);
 
   // Pinch-to-zoom helpers (non-passive listeners required for e.preventDefault())
   const getDistance = useCallback(

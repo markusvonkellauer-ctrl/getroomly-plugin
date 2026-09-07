@@ -198,6 +198,57 @@ describe('RoomVisualizationFlow', () => {
     expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
   });
 
+  // ─── Original image survives as a data: URL (not blob:) ──────────────────
+  // Regression test: blob: URLs are backed by browser memory and can be
+  // silently reclaimed under memory pressure (observed with a concurrent
+  // Google Meet screen share), which broke "Show Original" with a broken
+  // image and no error. The fix reads the file as a data: URL instead.
+
+  test('"Show Original" displays the uploaded photo as a data: URL, not blob:', async () => {
+    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'data:image/webp;base64,result' });
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => screen.getByText('Review Your New Room'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Show Original' }));
+    });
+
+    const originalImg = await screen.findByAltText('Original Room');
+    expect(originalImg.src).toMatch(/^data:/);
+    expect(originalImg.src).not.toMatch(/^blob:/);
+  });
+
+  test('reading the uploaded file fails gracefully: stays on upload step and calls onError', async () => {
+    const RealFileReader = global.FileReader;
+    class FailingFileReader {
+      readAsDataURL() {
+        queueMicrotask(() => this.onerror?.(new Event('error')));
+      }
+    }
+    global.FileReader = FailingFileReader;
+    const onError = jest.fn();
+
+    render(<RoomVisualizationFlow {...defaultProps} onError={onError} />);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith('Failed to read image file');
+    });
+    expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+    expect(generateRoomVisualization).not.toHaveBeenCalled();
+
+    global.FileReader = RealFileReader;
+  });
+
   // ─── New Photo reset ──────────────────────────────────────────────────────
 
   test('New Photo button resets back to upload step and clears file input', async () => {
