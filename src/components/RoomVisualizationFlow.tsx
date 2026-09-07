@@ -122,15 +122,19 @@ export function RoomVisualizationFlow({
   const messageCyclerRef = useRef<number | null>(null);
   const timeoutTimerRef = useRef<number | null>(null);
 
-  // Bumped on every new file selection (and on unmount) so an in-flight
+  // Bumped on every new file selection (and on New Photo) so an in-flight
   // FileReader read can tell it's been superseded. FileReader callbacks are
   // async, so without this a slow read for a since-replaced file could still
-  // land and call setState / handleGenerate for the wrong file, or after the
-  // component is gone.
+  // land and call setState / handleGenerate for the wrong file.
   const fileReadTokenRef = useRef(0);
+
+  // Plain write in the cleanup (no read of a prior ref value), so a pending
+  // read's onload/onerror can tell the component is gone and no-op instead
+  // of calling setState after unmount.
+  const isMountedRef = useRef(true);
   useEffect(() => {
     return () => {
-      fileReadTokenRef.current++;
+      isMountedRef.current = false;
     };
   }, []);
 
@@ -258,20 +262,27 @@ export function RoomVisualizationFlow({
     reader.onload = () => {
       // Superseded by a newer selection, or the component unmounted, while
       // this read was in flight — ignore it.
-      if (fileReadTokenRef.current !== token) {
+      if (!isMountedRef.current || fileReadTokenRef.current !== token) {
         return;
       }
-      const dataUrl = reader.result as string;
+      // readAsDataURL always yields a string, but result's declared type is
+      // string | ArrayBuffer | null — check rather than blindly cast, so a
+      // genuinely unexpected value can't slip into state and handleGenerate.
+      if (typeof reader.result !== 'string') {
+        console.error('[Plugin] FileReader returned a non-string result:', reader.result);
+        return;
+      }
+      const dataUrl = reader.result;
       uploadedImageRef.current = dataUrl;
       setUploadedImage(dataUrl);
       handleGenerate(file);
     };
     reader.onerror = () => {
-      if (fileReadTokenRef.current !== token) {
+      if (!isMountedRef.current || fileReadTokenRef.current !== token) {
         return;
       }
       const errorMsg = 'Failed to read image file';
-      console.error('[Plugin] FileReader error:', errorMsg);
+      console.error('[Plugin] FileReader error:', errorMsg, reader.error);
 
       // Clear the file input so the browser fires onChange again if the user
       // retries the same file — without this, an unchanged input value means
