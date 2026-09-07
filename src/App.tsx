@@ -18,6 +18,19 @@ function App() {
   // on the normal case — checkPartnerAvailability itself fails open too, so
   // a check that errors out never wrongly hides a working button.
   const [partnerAvailable, setPartnerAvailable] = useState(true);
+
+  // Reset to the optimistic default during render when apiKey changes —
+  // React's sanctioned way to adjust state in response to a prop change
+  // without an extra effect render pass. Without this, a previous key's
+  // `false` result would linger and wrongly keep the button hidden for a
+  // newly-set key until the effect below resolves (e.g. the host page
+  // updates window.GetRoomlyEmbedConfig.apiKey between opens).
+  const [checkedApiKey, setCheckedApiKey] = useState(config?.apiKey);
+  if (config?.apiKey !== checkedApiKey) {
+    setCheckedApiKey(config?.apiKey);
+    setPartnerAvailable(true);
+  }
+
   useEffect(() => {
     if (!config?.apiKey) {
       return;

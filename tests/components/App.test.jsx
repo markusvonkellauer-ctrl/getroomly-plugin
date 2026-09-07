@@ -2,7 +2,7 @@
  * App Component Tests — partner-availability-gated trigger button
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import App from '../../src/App';
 
 jest.mock('../../src/services/partner-status', () => ({
@@ -62,6 +62,33 @@ describe('App — trigger button visibility', () => {
         screen.queryByRole('button', { name: /visualize in your room/i })
       ).not.toBeInTheDocument();
     });
+  });
+
+  it('resets to the optimistic default when apiKey changes, instead of keeping a stale unavailable result', async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(false);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: /visualize in your room/i })
+      ).not.toBeInTheDocument();
+    });
+
+    // Host page swaps in a different partner key and re-opens — a fresh,
+    // never-resolving check for the new key, so we can assert the button is
+    // shown again immediately rather than staying hidden from the old key's
+    // stale `false` result.
+    checkPartnerAvailability.mockReturnValueOnce(new Promise(() => {}));
+    window.GetRoomlyEmbedConfig = { ...baseEmbedConfig, apiKey: 'grm_pub_different' };
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+
+    await waitFor(() => {
+      expect(checkPartnerAvailability).toHaveBeenCalledWith('grm_pub_different');
+    });
+    expect(screen.getByRole('button', { name: /visualize in your room/i })).toBeInTheDocument();
   });
 
   it('still respects config.hideButton regardless of availability', async () => {

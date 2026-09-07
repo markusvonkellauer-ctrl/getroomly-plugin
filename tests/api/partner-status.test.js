@@ -12,6 +12,10 @@ describe('checkPartnerAvailability', () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('returns true when the backend reports the partner as available', async () => {
     fetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ available: true }) });
 
