@@ -14,22 +14,14 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { config, isReady, error } = useEmbedConfig();
 
-  // Optimistic default (true) so the button doesn't flash hidden-then-shown
-  // on the normal case — checkPartnerAvailability itself fails open too, so
-  // a check that errors out never wrongly hides a working button.
-  const [partnerAvailable, setPartnerAvailable] = useState(true);
-
-  // Reset to the optimistic default during render when apiKey changes —
-  // React's sanctioned way to adjust state in response to a prop change
-  // without an extra effect render pass. Without this, a previous key's
-  // `false` result would linger and wrongly keep the button hidden for a
-  // newly-set key until the effect below resolves (e.g. the host page
-  // updates window.GetRoomlyEmbedConfig.apiKey between opens).
-  const [checkedApiKey, setCheckedApiKey] = useState(config?.apiKey);
-  if (config?.apiKey !== checkedApiKey) {
-    setCheckedApiKey(config?.apiKey);
-    setPartnerAvailable(true);
-  }
+  // Tracks which apiKey the stored result actually belongs to, so a stale
+  // result from a previous key can be recognised as stale during render —
+  // no setState-during-render and no synchronous setState inside the effect
+  // (both flagged by lint/review as risky), just a derived comparison below.
+  const [availabilityResult, setAvailabilityResult] = useState({
+    key: undefined as string | undefined,
+    available: true,
+  });
 
   useEffect(() => {
     if (!config?.apiKey) {
@@ -38,13 +30,22 @@ function App() {
     let cancelled = false;
     checkPartnerAvailability(config.apiKey).then(available => {
       if (!cancelled) {
-        setPartnerAvailable(available);
+        setAvailabilityResult({ key: config.apiKey, available });
       }
     });
     return () => {
       cancelled = true;
     };
   }, [config?.apiKey]);
+
+  // Optimistic default (true) for a key whose check hasn't resolved yet, or
+  // whose stored result belongs to a since-replaced key (e.g. the host page
+  // updates window.GetRoomlyEmbedConfig.apiKey between opens) — a stale
+  // `false` from a previous key must never carry over to a new one.
+  // checkPartnerAvailability itself fails open too, so a check that errors
+  // out never wrongly hides a working button either.
+  const partnerAvailable =
+    availabilityResult.key === config?.apiKey ? availabilityResult.available : true;
 
   // Keep a ref to the latest config.category so the Mode B listener
   // always reads the current value without needing to re-register.
