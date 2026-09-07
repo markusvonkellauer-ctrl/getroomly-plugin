@@ -35,7 +35,7 @@ const defaultProps = {
 const makeFile = () => new File(['img'], 'room.jpg', { type: 'image/jpeg' });
 
 const uploadFile = (input, file) => {
-  Object.defineProperty(input, 'files', { value: [file], writable: false });
+  Object.defineProperty(input, 'files', { value: [file], writable: false, configurable: true });
   fireEvent.change(input);
 };
 
@@ -196,6 +196,166 @@ describe('RoomVisualizationFlow', () => {
 
     expect(generateRoomVisualization).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+  });
+
+  // ─── Original image survives as a data: URL (not blob:) ──────────────────
+  // Regression test: blob: URLs are backed by browser memory and can be
+  // silently reclaimed under memory pressure (observed with a concurrent
+  // Google Meet screen share), which broke "Show Original" with a broken
+  // image and no error. The fix reads the file as a data: URL instead.
+
+  test('"Show Original" displays the uploaded photo as a data: URL, not blob:', async () => {
+    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'data:image/webp;base64,result' });
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => screen.getByText('Review Your New Room'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Show Original' }));
+    });
+
+    const originalImg = await screen.findByAltText('Original Room');
+    expect(originalImg.src).toMatch(/^data:/);
+    expect(originalImg.src).not.toMatch(/^blob:/);
+  });
+
+  test('reading the uploaded file fails gracefully: stays on upload step, clears the input, and calls onError', async () => {
+    const RealFileReader = global.FileReader;
+    class FailingFileReader {
+      readAsDataURL() {
+        queueMicrotask(() => this.onerror?.(new Event('error')));
+      }
+    }
+    global.FileReader = FailingFileReader;
+    const onError = jest.fn();
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} onError={onError} />);
+      const input = document.querySelector('input[type="file"]');
+
+      await act(async () => {
+        uploadFile(input, makeFile());
+      });
+
+      await waitFor(() => {
+        expect(onError).toHaveBeenCalledWith('Failed to read image file');
+      });
+      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(generateRoomVisualization).not.toHaveBeenCalled();
+      // Retrying the same file must fire onChange again — an unchanged input
+      // value would silently swallow the retry.
+      expect(input.value).toBe('');
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
+  test('a non-string FileReader.result is treated as a read failure, not silently dropped', async () => {
+    const RealFileReader = global.FileReader;
+    class NonStringResultFileReader {
+      readAsDataURL() {
+        this.result = new ArrayBuffer(0); // unexpected — readAsDataURL should yield a string
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    global.FileReader = NonStringResultFileReader;
+    const onError = jest.fn();
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} onError={onError} />);
+      const input = document.querySelector('input[type="file"]');
+
+      await act(async () => {
+        uploadFile(input, makeFile());
+      });
+
+      await waitFor(() => {
+        expect(onError).toHaveBeenCalledWith('Failed to read image file');
+      });
+      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(generateRoomVisualization).not.toHaveBeenCalled();
+      expect(input.value).toBe('');
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
+  test('a stale FileReader read from a superseded file selection is ignored', async () => {
+    const RealFileReader = global.FileReader;
+    const instances = [];
+    class ManualFileReader {
+      constructor() {
+        instances.push(this);
+      }
+      readAsDataURL(file) {
+        this.result = `data:image/jpeg;base64,${file.name}`;
+      }
+    }
+    global.FileReader = ManualFileReader;
+    generateRoomVisualization.mockResolvedValue({ imageUrl: 'data:image/webp;base64,result' });
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const input = document.querySelector('input[type="file"]');
+      const fileA = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
+      const fileB = new File(['b'], 'b.jpg', { type: 'image/jpeg' });
+
+      // Two selections in a row before either read resolves — the second
+      // supersedes the first (matches a double file-picker/drop in practice).
+      act(() => uploadFile(input, fileA));
+      act(() => uploadFile(input, fileB));
+
+      // The stale read (A) resolves first — must be a no-op.
+      act(() => instances[0].onload?.());
+      expect(generateRoomVisualization).not.toHaveBeenCalled();
+
+      // The current read (B) resolves — this one proceeds.
+      await act(async () => instances[1].onload?.());
+      await waitFor(() => expect(generateRoomVisualization).toHaveBeenCalledTimes(1));
+      expect(generateRoomVisualization.mock.calls[0][0].imageBlob).toBe(fileB);
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
+  test('a pending FileReader read is ignored if it resolves after the component unmounts', async () => {
+    const RealFileReader = global.FileReader;
+    const instances = [];
+    class ManualFileReader {
+      constructor() {
+        instances.push(this);
+      }
+      readAsDataURL() {
+        this.result = 'data:image/jpeg;base64,x';
+      }
+    }
+    global.FileReader = ManualFileReader;
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const { unmount } = render(<RoomVisualizationFlow {...defaultProps} />);
+      act(() => uploadFile(document.querySelector('input[type="file"]'), makeFile()));
+
+      unmount();
+      act(() => instances[0].onload?.());
+
+      expect(generateRoomVisualization).not.toHaveBeenCalled();
+      // React's warning is often split across multiple console.error args
+      // (format string + substitutions) — join them all so a match in a
+      // later arg isn't missed, which would let this test pass incorrectly.
+      const unmountedWarning = errorSpy.mock.calls.some(args =>
+        /unmounted component/i.test(args.map(String).join(' '))
+      );
+      expect(unmountedWarning).toBe(false);
+    } finally {
+      global.FileReader = RealFileReader;
+      errorSpy.mockRestore();
+    }
   });
 
   // ─── New Photo reset ──────────────────────────────────────────────────────
