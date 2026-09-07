@@ -2,6 +2,7 @@ module.exports = {
   AppConfig: {
     ai: { defaultApiKey: undefined },
     api: { baseUrl: 'https://api.getroomly.ai' },
+    ui: { defaultLanguage: 'en', defaultTheme: 'light' },
     images: {
       maxFileSize: 10 * 1024 * 1024,
       allowedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],

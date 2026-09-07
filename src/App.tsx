@@ -5,6 +5,7 @@ import { useEmbedConfig } from '@/hooks/use-embed-config';
 import { EmbedButton } from '@/components/EmbedButton';
 import { RoomVisualizationFlow } from '@/components/RoomVisualizationFlow';
 import { trackInteraction } from '@/lib/analytics';
+import { checkPartnerAvailability } from '@/services/partner-status';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -12,6 +13,39 @@ const queryClient = new QueryClient();
 function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { config, isReady, error } = useEmbedConfig();
+
+  // Tracks which apiKey the stored result actually belongs to, so a stale
+  // result from a previous key can be recognised as stale during render —
+  // no setState-during-render and no synchronous setState inside the effect
+  // (both flagged by lint/review as risky), just a derived comparison below.
+  const [availabilityResult, setAvailabilityResult] = useState({
+    key: undefined as string | undefined,
+    available: true,
+  });
+
+  useEffect(() => {
+    if (!config?.apiKey) {
+      return;
+    }
+    let cancelled = false;
+    checkPartnerAvailability(config.apiKey).then(available => {
+      if (!cancelled) {
+        setAvailabilityResult({ key: config.apiKey, available });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [config?.apiKey]);
+
+  // Optimistic default (true) for a key whose check hasn't resolved yet, or
+  // whose stored result belongs to a since-replaced key (e.g. the host page
+  // updates window.GetRoomlyEmbedConfig.apiKey between opens) — a stale
+  // `false` from a previous key must never carry over to a new one.
+  // checkPartnerAvailability itself fails open too, so a check that errors
+  // out never wrongly hides a working button either.
+  const partnerAvailable =
+    availabilityResult.key === config?.apiKey ? availabilityResult.available : true;
 
   // Keep a ref to the latest config.category so the Mode B listener
   // always reads the current value without needing to re-register.
@@ -105,15 +139,17 @@ function App() {
 
   // Shadow DOM mode: shows button + modal (modal can also be opened externally via window.GetRoomly.open())
   const hideButton = config.hideButton === true;
+  const showButton = !hideButton && partnerAvailable;
 
   return (
     <QueryClientProvider client={queryClient}>
       <div
         className="getroomly-embed"
-        style={{ backgroundColor: '#ffffff', minHeight: hideButton ? '0' : '100vh' }}
+        style={{ backgroundColor: '#ffffff', minHeight: showButton ? '100vh' : '0' }}
       >
-        {/* Main Embed Button (hidden when controlled externally via window.GetRoomly.open()) */}
-        {!hideButton && <EmbedButton config={config} onClick={() => setIsModalOpen(true)} />}
+        {/* Main Embed Button (hidden when controlled externally via window.GetRoomly.open(),
+            or when the partner has hit their render quota) */}
+        {showButton && <EmbedButton config={config} onClick={() => setIsModalOpen(true)} />}
 
         {/* Original Modal System with Plugin Content */}
         {isModalOpen && (
