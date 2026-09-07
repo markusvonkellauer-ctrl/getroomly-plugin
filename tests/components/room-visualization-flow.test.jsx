@@ -345,8 +345,11 @@ describe('RoomVisualizationFlow', () => {
       act(() => instances[0].onload?.());
 
       expect(generateRoomVisualization).not.toHaveBeenCalled();
+      // React's warning is often split across multiple console.error args
+      // (format string + substitutions) — join them all so a match in a
+      // later arg isn't missed, which would let this test pass incorrectly.
       const unmountedWarning = errorSpy.mock.calls.some(args =>
-        /unmounted component/i.test(String(args[0]))
+        /unmounted component/i.test(args.map(String).join(' '))
       );
       expect(unmountedWarning).toBe(false);
     } finally {
