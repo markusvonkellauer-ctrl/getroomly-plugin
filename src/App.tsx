@@ -5,6 +5,7 @@ import { useEmbedConfig } from '@/hooks/use-embed-config';
 import { EmbedButton } from '@/components/EmbedButton';
 import { RoomVisualizationFlow } from '@/components/RoomVisualizationFlow';
 import { trackInteraction } from '@/lib/analytics';
+import { checkPartnerAvailability } from '@/services/partner-status';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -12,6 +13,25 @@ const queryClient = new QueryClient();
 function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { config, isReady, error } = useEmbedConfig();
+
+  // Optimistic default (true) so the button doesn't flash hidden-then-shown
+  // on the normal case — checkPartnerAvailability itself fails open too, so
+  // a check that errors out never wrongly hides a working button.
+  const [partnerAvailable, setPartnerAvailable] = useState(true);
+  useEffect(() => {
+    if (!config?.apiKey) {
+      return;
+    }
+    let cancelled = false;
+    checkPartnerAvailability(config.apiKey).then(available => {
+      if (!cancelled) {
+        setPartnerAvailable(available);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [config?.apiKey]);
 
   // Keep a ref to the latest config.category so the Mode B listener
   // always reads the current value without needing to re-register.
@@ -105,15 +125,17 @@ function App() {
 
   // Shadow DOM mode: shows button + modal (modal can also be opened externally via window.GetRoomly.open())
   const hideButton = config.hideButton === true;
+  const showButton = !hideButton && partnerAvailable;
 
   return (
     <QueryClientProvider client={queryClient}>
       <div
         className="getroomly-embed"
-        style={{ backgroundColor: '#ffffff', minHeight: hideButton ? '0' : '100vh' }}
+        style={{ backgroundColor: '#ffffff', minHeight: showButton ? '100vh' : '0' }}
       >
-        {/* Main Embed Button (hidden when controlled externally via window.GetRoomly.open()) */}
-        {!hideButton && <EmbedButton config={config} onClick={() => setIsModalOpen(true)} />}
+        {/* Main Embed Button (hidden when controlled externally via window.GetRoomly.open(),
+            or when the partner has hit their render quota) */}
+        {showButton && <EmbedButton config={config} onClick={() => setIsModalOpen(true)} />}
 
         {/* Original Modal System with Plugin Content */}
         {isModalOpen && (
