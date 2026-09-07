@@ -122,6 +122,22 @@ export function RoomVisualizationFlow({
   const messageCyclerRef = useRef<number | null>(null);
   const timeoutTimerRef = useRef<number | null>(null);
 
+  // Bumped on every new file selection (and on New Photo) so an in-flight
+  // FileReader read can tell it's been superseded. FileReader callbacks are
+  // async, so without this a slow read for a since-replaced file could still
+  // land and call setState / handleGenerate for the wrong file.
+  const fileReadTokenRef = useRef(0);
+
+  // Plain write in the cleanup (no read of a prior ref value), so a pending
+  // read's onload/onerror can tell the component is gone and no-op instead
+  // of calling setState after unmount.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Sophisticated loading progress effect (matches original frontend exactly)
   useEffect(() => {
     if (step === 'processing' && isGenerating) {
@@ -198,10 +214,7 @@ export function RoomVisualizationFlow({
 
       // Reset to clean upload state — no error shown in the plugin.
       // The host website handles error display via the event / onError callback.
-      if (uploadedImageRef.current) {
-        URL.revokeObjectURL(uploadedImageRef.current);
-        uploadedImageRef.current = null;
-      }
+      uploadedImageRef.current = null;
       setUploadedImage(null);
       setResultImage(null);
       setGenerationId(null);
@@ -240,21 +253,64 @@ export function RoomVisualizationFlow({
       return;
     }
 
-    if (uploadedImageRef.current) {
-      URL.revokeObjectURL(uploadedImageRef.current);
-    }
+    // Shared by onerror and the non-string-result path below: both are "we
+    // couldn't get a usable image out of the file" and must recover the same
+    // way — clear the file input so the browser fires onChange again if the
+    // user retries the same file (an unchanged input value means no change
+    // event), and surface the failure to the host.
+    const failRead = (errorMsg: string) => {
+      uploadedImageRef.current = null;
+      setUploadedImage(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      window.dispatchEvent(
+        new CustomEvent('getroomly-error', {
+          detail: { error: errorMsg, productId, sessionId },
+        })
+      );
+      onError?.(errorMsg);
+    };
 
-    const url = URL.createObjectURL(file);
-    uploadedImageRef.current = url;
-    setUploadedImage(url);
-    handleGenerate(file);
+    // A data URL (not a blob: URL) so the "original" preview stays valid for
+    // the whole review session — blob: URLs are backed by browser memory and
+    // can be silently reclaimed under memory pressure (e.g. a concurrent
+    // Google Meet screen share), which broke "Show Original" with no error.
+    const token = ++fileReadTokenRef.current;
+    const reader = new FileReader();
+    reader.onload = () => {
+      // Superseded by a newer selection, or the component unmounted, while
+      // this read was in flight — ignore it.
+      if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+        return;
+      }
+      // readAsDataURL always yields a string, but result's declared type is
+      // string | ArrayBuffer | null — check rather than blindly cast, so a
+      // genuinely unexpected value can't slip into state and handleGenerate.
+      if (typeof reader.result !== 'string') {
+        console.error('[Plugin] FileReader returned a non-string result:', reader.result);
+        failRead('Failed to read image file');
+        return;
+      }
+      const dataUrl = reader.result;
+      uploadedImageRef.current = dataUrl;
+      setUploadedImage(dataUrl);
+      handleGenerate(file);
+    };
+    reader.onerror = () => {
+      if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+        return;
+      }
+      console.error('[Plugin] FileReader error:', reader.error);
+      failRead('Failed to read image file');
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleNewPhoto = () => {
-    if (uploadedImageRef.current) {
-      URL.revokeObjectURL(uploadedImageRef.current);
-      uploadedImageRef.current = null;
-    }
+    // Invalidate any in-flight FileReader read so it can't land after this reset.
+    fileReadTokenRef.current++;
+    uploadedImageRef.current = null;
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -270,15 +326,6 @@ export function RoomVisualizationFlow({
   const handleOpenTerms = () => {
     setShowTermsDialog(true);
   };
-
-  // Cleanup on unmount
-  React.useEffect(() => {
-    return () => {
-      if (uploadedImageRef.current) {
-        URL.revokeObjectURL(uploadedImageRef.current);
-      }
-    };
-  }, []);
 
   // Pinch-to-zoom helpers (non-passive listeners required for e.preventDefault())
   const getDistance = useCallback(
