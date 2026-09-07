@@ -251,6 +251,16 @@ export function RoomVisualizationFlow({
     reader.onerror = () => {
       const errorMsg = 'Failed to read image file';
       console.error('[Plugin] FileReader error:', errorMsg);
+
+      // Clear the file input so the browser fires onChange again if the user
+      // retries the same file — without this, an unchanged input value means
+      // no change event, and the retry silently does nothing.
+      uploadedImageRef.current = null;
+      setUploadedImage(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
       window.dispatchEvent(
         new CustomEvent('getroomly-error', {
           detail: { error: errorMsg, productId, sessionId },

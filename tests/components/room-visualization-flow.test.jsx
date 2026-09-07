@@ -224,7 +224,7 @@ describe('RoomVisualizationFlow', () => {
     expect(originalImg.src).not.toMatch(/^blob:/);
   });
 
-  test('reading the uploaded file fails gracefully: stays on upload step and calls onError', async () => {
+  test('reading the uploaded file fails gracefully: stays on upload step, clears the input, and calls onError', async () => {
     const RealFileReader = global.FileReader;
     class FailingFileReader {
       readAsDataURL() {
@@ -234,19 +234,25 @@ describe('RoomVisualizationFlow', () => {
     global.FileReader = FailingFileReader;
     const onError = jest.fn();
 
-    render(<RoomVisualizationFlow {...defaultProps} onError={onError} />);
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} onError={onError} />);
+      const input = document.querySelector('input[type="file"]');
 
-    await act(async () => {
-      uploadFile(document.querySelector('input[type="file"]'), makeFile());
-    });
+      await act(async () => {
+        uploadFile(input, makeFile());
+      });
 
-    await waitFor(() => {
-      expect(onError).toHaveBeenCalledWith('Failed to read image file');
-    });
-    expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
-    expect(generateRoomVisualization).not.toHaveBeenCalled();
-
-    global.FileReader = RealFileReader;
+      await waitFor(() => {
+        expect(onError).toHaveBeenCalledWith('Failed to read image file');
+      });
+      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(generateRoomVisualization).not.toHaveBeenCalled();
+      // Retrying the same file must fire onChange again — an unchanged input
+      // value would silently swallow the retry.
+      expect(input.value).toBe('');
+    } finally {
+      global.FileReader = RealFileReader;
+    }
   });
 
   // ─── New Photo reset ──────────────────────────────────────────────────────
