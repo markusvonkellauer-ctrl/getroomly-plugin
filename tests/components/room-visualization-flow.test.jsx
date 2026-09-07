@@ -35,7 +35,7 @@ const defaultProps = {
 const makeFile = () => new File(['img'], 'room.jpg', { type: 'image/jpeg' });
 
 const uploadFile = (input, file) => {
-  Object.defineProperty(input, 'files', { value: [file], writable: false });
+  Object.defineProperty(input, 'files', { value: [file], writable: false, configurable: true });
   fireEvent.change(input);
 };
 
@@ -252,6 +252,76 @@ describe('RoomVisualizationFlow', () => {
       expect(input.value).toBe('');
     } finally {
       global.FileReader = RealFileReader;
+    }
+  });
+
+  test('a stale FileReader read from a superseded file selection is ignored', async () => {
+    const RealFileReader = global.FileReader;
+    const instances = [];
+    class ManualFileReader {
+      constructor() {
+        instances.push(this);
+      }
+      readAsDataURL(file) {
+        this.result = `data:image/jpeg;base64,${file.name}`;
+      }
+    }
+    global.FileReader = ManualFileReader;
+    generateRoomVisualization.mockResolvedValue({ imageUrl: 'data:image/webp;base64,result' });
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const input = document.querySelector('input[type="file"]');
+      const fileA = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
+      const fileB = new File(['b'], 'b.jpg', { type: 'image/jpeg' });
+
+      // Two selections in a row before either read resolves — the second
+      // supersedes the first (matches a double file-picker/drop in practice).
+      act(() => uploadFile(input, fileA));
+      act(() => uploadFile(input, fileB));
+
+      // The stale read (A) resolves first — must be a no-op.
+      act(() => instances[0].onload?.());
+      expect(generateRoomVisualization).not.toHaveBeenCalled();
+
+      // The current read (B) resolves — this one proceeds.
+      await act(async () => instances[1].onload?.());
+      await waitFor(() => expect(generateRoomVisualization).toHaveBeenCalledTimes(1));
+      expect(generateRoomVisualization.mock.calls[0][0].imageBlob).toBe(fileB);
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
+  test('a pending FileReader read is ignored if it resolves after the component unmounts', async () => {
+    const RealFileReader = global.FileReader;
+    const instances = [];
+    class ManualFileReader {
+      constructor() {
+        instances.push(this);
+      }
+      readAsDataURL() {
+        this.result = 'data:image/jpeg;base64,x';
+      }
+    }
+    global.FileReader = ManualFileReader;
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const { unmount } = render(<RoomVisualizationFlow {...defaultProps} />);
+      act(() => uploadFile(document.querySelector('input[type="file"]'), makeFile()));
+
+      unmount();
+      act(() => instances[0].onload?.());
+
+      expect(generateRoomVisualization).not.toHaveBeenCalled();
+      const unmountedWarning = errorSpy.mock.calls.some(args =>
+        /unmounted component/i.test(String(args[0]))
+      );
+      expect(unmountedWarning).toBe(false);
+    } finally {
+      global.FileReader = RealFileReader;
+      errorSpy.mockRestore();
     }
   });
 

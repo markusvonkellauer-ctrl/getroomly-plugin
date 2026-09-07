@@ -122,6 +122,18 @@ export function RoomVisualizationFlow({
   const messageCyclerRef = useRef<number | null>(null);
   const timeoutTimerRef = useRef<number | null>(null);
 
+  // Bumped on every new file selection (and on unmount) so an in-flight
+  // FileReader read can tell it's been superseded. FileReader callbacks are
+  // async, so without this a slow read for a since-replaced file could still
+  // land and call setState / handleGenerate for the wrong file, or after the
+  // component is gone.
+  const fileReadTokenRef = useRef(0);
+  useEffect(() => {
+    return () => {
+      fileReadTokenRef.current++;
+    };
+  }, []);
+
   // Sophisticated loading progress effect (matches original frontend exactly)
   useEffect(() => {
     if (step === 'processing' && isGenerating) {
@@ -241,14 +253,23 @@ export function RoomVisualizationFlow({
     // the whole review session — blob: URLs are backed by browser memory and
     // can be silently reclaimed under memory pressure (e.g. a concurrent
     // Google Meet screen share), which broke "Show Original" with no error.
+    const token = ++fileReadTokenRef.current;
     const reader = new FileReader();
     reader.onload = () => {
+      // Superseded by a newer selection, or the component unmounted, while
+      // this read was in flight — ignore it.
+      if (fileReadTokenRef.current !== token) {
+        return;
+      }
       const dataUrl = reader.result as string;
       uploadedImageRef.current = dataUrl;
       setUploadedImage(dataUrl);
       handleGenerate(file);
     };
     reader.onerror = () => {
+      if (fileReadTokenRef.current !== token) {
+        return;
+      }
       const errorMsg = 'Failed to read image file';
       console.error('[Plugin] FileReader error:', errorMsg);
 
@@ -272,6 +293,8 @@ export function RoomVisualizationFlow({
   };
 
   const handleNewPhoto = () => {
+    // Invalidate any in-flight FileReader read so it can't land after this reset.
+    fileReadTokenRef.current++;
     uploadedImageRef.current = null;
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
