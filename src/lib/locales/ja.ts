@@ -55,4 +55,5 @@ export const ja: TranslationStrings = {
   termsClose: '閉じる',
   errorTemporarilyUnavailable:
     'この機能は現在ご利用いただけません。しばらくしてから再度お試しください。',
+  loadingProgressLabel: '生成の進捗',
 };

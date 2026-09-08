@@ -55,4 +55,5 @@ export const fr: TranslationStrings = {
   termsClose: 'Fermer',
   errorTemporarilyUnavailable:
     'Cette fonctionnalité est temporairement indisponible. Veuillez réessayer plus tard.',
+  loadingProgressLabel: 'Progression de la génération',
 };

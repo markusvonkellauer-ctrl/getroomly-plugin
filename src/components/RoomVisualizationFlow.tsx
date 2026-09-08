@@ -790,7 +790,7 @@ export function RoomVisualizationFlow({
           pointerEvents: 'none',
         }}
       >
-        <div className="getroomly-spinner-rot">
+        <div className="getroomly-spinner-rot" aria-hidden="true">
           <div className="getroomly-spinner-form" />
         </div>
 
@@ -814,7 +814,8 @@ export function RoomVisualizationFlow({
 
         <div
           role="progressbar"
-          aria-valuenow={Math.round(progress)}
+          aria-label={t.loadingProgressLabel}
+          aria-valuenow={Math.floor(progress)}
           aria-valuemin={0}
           aria-valuemax={100}
           style={{

@@ -55,4 +55,5 @@ export const it: TranslationStrings = {
   termsClose: 'Chiudi',
   errorTemporarilyUnavailable:
     'Questa funzione è temporaneamente non disponibile. Riprova più tardi.',
+  loadingProgressLabel: 'Avanzamento della generazione',
 };

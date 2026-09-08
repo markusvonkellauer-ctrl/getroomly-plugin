@@ -127,8 +127,13 @@ describe('RoomVisualizationFlow', () => {
       expect(document.querySelector('.getroomly-spinner-form')).toBeInTheDocument();
     });
     // Regression check for the old ring spinner's dark backdrop-blur puck —
-    // must not reappear behind the new morphing form.
-    expect(document.body.innerHTML).not.toContain('rgba(0, 0, 0, 0.6)');
+    // must not reappear behind the new morphing form. Scoped to an actual
+    // element's inline style, not a raw HTML substring match, so this can't
+    // false-fail on an unrelated element that happens to share the color.
+    const darkPuck = Array.from(document.querySelectorAll('div')).find(
+      el => el.style.background === 'rgba(0, 0, 0, 0.6)'
+    );
+    expect(darkPuck).toBeUndefined();
   });
 
   test('shows the rotating status message and progress bar over the image, not in the white footer', async () => {

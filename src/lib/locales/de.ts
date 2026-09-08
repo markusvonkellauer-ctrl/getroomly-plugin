@@ -57,4 +57,5 @@ export const de: TranslationStrings = {
   termsClose: 'Schließen',
   errorTemporarilyUnavailable:
     'Diese Funktion ist vorübergehend nicht verfügbar. Bitte versuchen Sie es später erneut.',
+  loadingProgressLabel: 'Generierungsfortschritt',
 };

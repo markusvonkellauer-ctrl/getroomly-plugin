@@ -53,12 +53,13 @@ body {
   }
 }
 
-/* Duplicated in index.css deliberately, same as @keyframes spin above:
-   App.css backs the plain (non-Shadow-DOM) main.tsx mount used for local
-   dev/demo pages, while index.css is inlined into the Shadow DOM for the
-   production widget build (shadow-entry.tsx). Neither mount imports the
-   other's stylesheet, so RoomVisualizationFlow's processing-step styling
-   needs its own copy in each to render correctly on both. */
+/* Duplicated in index.css deliberately, for the same reason @keyframes spin
+   above is duplicated there too (these are new, separate keyframes — not
+   copies of `spin`): App.css backs the plain (non-Shadow-DOM) main.tsx mount
+   used for local dev/demo pages, while index.css is inlined into the Shadow
+   DOM for the production widget build (shadow-entry.tsx). Neither mount
+   imports the other's stylesheet, so RoomVisualizationFlow's processing-step
+   styling needs its own copy in each to render correctly on both. */
 /* Morphing teal loading spinner (processing step) */
 .getroomly-spinner-rot {
   width: 120px;
@@ -117,6 +118,7 @@ body {
   .getroomly-blur-reveal {
     animation: none;
     filter: blur(0px);
+    will-change: auto;
   }
 }
 

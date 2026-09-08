@@ -56,4 +56,5 @@ export const el: TranslationStrings = {
   termsClose: 'Κλείσιμο',
   errorTemporarilyUnavailable:
     'Αυτή η λειτουργία είναι προσωρινά μη διαθέσιμη. Δοκιμάστε ξανά αργότερα.',
+  loadingProgressLabel: 'Πρόοδος δημιουργίας',
 };

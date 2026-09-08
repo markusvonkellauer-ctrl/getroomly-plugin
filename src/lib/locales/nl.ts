@@ -55,4 +55,5 @@ export const nl: TranslationStrings = {
   termsClose: 'Sluiten',
   errorTemporarilyUnavailable:
     'Deze functie is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
+  loadingProgressLabel: 'Genereringsvoortgang',
 };
