@@ -73,7 +73,6 @@ if (!customElements.get('getroomly-plugin')) {
 
 // Expose global API for host page integration
 let pluginInstance: HTMLElement | null = null;
-let isModalOpen = false;
 
 const initPlugin = () => {
   if (pluginInstance) {
@@ -87,27 +86,33 @@ const initPlugin = () => {
   return pluginInstance;
 };
 
-// Single source of truth for isModalOpen. Both events are dispatched from
-// exactly one place — App.tsx's centralized effect watching its own
+// Single source of truth for modal-open state. Both events are dispatched
+// from exactly one place — App.tsx's centralized effect watching its own
 // isModalOpen React state — regardless of what actually changed that state
 // (the default EmbedButton's onClick, an open/close request event, or a
 // UI-driven close via the X button/backdrop). Deliberately NOT listening
 // for the *request* events ('getroomly-open-modal' / 'getroomly-close-
 // modal'): those only mean opening/closing was asked for, not that it
 // happened — App.tsx can refuse an open request for a suspended partner,
-// which would otherwise leave isModalOpen wrongly true for a modal that
-// never actually opened.
-// Guarded by a flag on `window` itself (not a module-local variable) —
-// jest.resetModules()-driven re-requires in tests, or an accidental double
-// inclusion of this bundle on a host page, would otherwise each add their
-// own pair of listeners, accumulating on window indefinitely.
+// which would otherwise leave this wrongly true for a modal that never
+// actually opened.
+//
+// Both the registration guard AND the value itself live on `window`, not a
+// module-local variable: a module-local isModalOpen closed over by these
+// listeners would only ever get updated by whichever module instance
+// registered them first — if the bundle is loaded more than once (a
+// jest.resetModules()-driven re-require in tests, or an accidental double
+// inclusion on a host page), every later instance's own GetRoomly.isOpen()
+// would read a local variable the (never re-registered) listeners don't
+// write to, permanently diverging from the real state.
 if (!window.__getroomlyModalListenersRegistered) {
   window.__getroomlyModalListenersRegistered = true;
+  window.__getroomlyIsModalOpen = false;
   window.addEventListener('getroomly-modal-opened', () => {
-    isModalOpen = true;
+    window.__getroomlyIsModalOpen = true;
   });
   window.addEventListener('getroomly-modal-closed', () => {
-    isModalOpen = false;
+    window.__getroomlyIsModalOpen = false;
   });
 }
 
@@ -141,8 +146,9 @@ if (!window.__getroomlyModalListenersRegistered) {
     if (!initPlugin()) {
       return false;
     }
-    // isModalOpen is updated by the listener above, not set here directly —
-    // keeps a single source of truth regardless of what triggered the event.
+    // window.__getroomlyIsModalOpen is updated by the listener above, not
+    // set here directly — keeps a single source of truth regardless of what
+    // triggered the event.
     const dispatchOpenModal = () => window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
     if (wasAlreadyMounted) {
       dispatchOpenModal();
@@ -165,7 +171,7 @@ if (!window.__getroomlyModalListenersRegistered) {
   close: () => {
     window.dispatchEvent(new CustomEvent('getroomly-close-modal'));
   },
-  isOpen: () => isModalOpen,
+  isOpen: () => window.__getroomlyIsModalOpen ?? false,
   // Lets a host page check availability on demand — e.g. right before
   // rendering its own trigger button — in addition to the
   // 'getroomly-availability-changed' event for reacting to a change.

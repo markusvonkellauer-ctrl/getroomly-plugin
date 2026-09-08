@@ -117,5 +117,10 @@ declare global {
     // against accumulating across repeated module loads (tests) or an
     // accidental double inclusion of the bundle on a host page.
     __getroomlyModalListenersRegistered?: boolean;
+    // Backs GetRoomly.isOpen() on `window` rather than a module-local
+    // variable, so every module instance reads/writes the same value even
+    // when the guard above prevented a later instance from registering its
+    // own (now-redundant) listeners.
+    __getroomlyIsModalOpen?: boolean;
   }
 }

@@ -136,4 +136,24 @@ describe('shadow-entry — modal-opened/closed listener registration', () => {
     expect(matching(secondSpy.mock.calls)).toHaveLength(0);
     secondSpy.mockRestore();
   });
+
+  it('keeps GetRoomly.isOpen() accurate across repeated module loads', () => {
+    // Regression coverage for a Copilot review finding on PR #83: isOpen()
+    // used to read a module-local variable that only the first-registered
+    // listeners ever wrote to — a second module load's own isOpen() would
+    // permanently diverge from the real (shared) state instead of tracking
+    // it via window.__getroomlyIsModalOpen.
+    require('../../src/shadow-entry');
+
+    window.dispatchEvent(new CustomEvent('getroomly-modal-opened'));
+    expect(window.GetRoomly.isOpen()).toBe(true);
+
+    jest.resetModules();
+    require('../../src/shadow-entry');
+
+    expect(window.GetRoomly.isOpen()).toBe(true);
+
+    window.dispatchEvent(new CustomEvent('getroomly-modal-closed'));
+    expect(window.GetRoomly.isOpen()).toBe(false);
+  });
 });
