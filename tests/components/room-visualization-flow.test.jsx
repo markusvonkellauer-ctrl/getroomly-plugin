@@ -134,9 +134,15 @@ describe('RoomVisualizationFlow', () => {
     // processing overlay's own subtree (an actual element's inline style,
     // not a raw HTML substring match), so this can't false-fail on an
     // unrelated element elsewhere in the document that happens to share the
-    // color, and can't miss a puck reintroduced outside the overlay either.
-    const darkPuck = Array.from(overlay.querySelectorAll('div')).find(
-      el => el.style.background === 'rgba(0, 0, 0, 0.6)'
+    // color. Includes the overlay element itself (querySelectorAll only
+    // returns descendants) and checks both the shorthand `background` and
+    // the longhand `backgroundColor`, since either could carry the puck's
+    // color depending on how it's reintroduced.
+    const candidates = [overlay, ...Array.from(overlay.querySelectorAll('div'))];
+    const darkPuck = candidates.find(
+      el =>
+        el.style.background === 'rgba(0, 0, 0, 0.6)' ||
+        el.style.backgroundColor === 'rgba(0, 0, 0, 0.6)'
     );
     expect(darkPuck).toBeUndefined();
   });
