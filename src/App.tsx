@@ -5,6 +5,7 @@ import { useEmbedConfig } from '@/hooks/use-embed-config';
 import { EmbedButton } from '@/components/EmbedButton';
 import { RoomVisualizationFlow } from '@/components/RoomVisualizationFlow';
 import { trackInteraction } from '@/lib/analytics';
+import { setAvailability } from '@/lib/availability-state';
 import { checkPartnerAvailability } from '@/services/partner-status';
 import './App.css';
 
@@ -47,6 +48,23 @@ function App() {
   const partnerAvailable =
     availabilityResult.key === config?.apiKey ? availabilityResult.available : true;
 
+  // Publish to the shared module-level state so window.GetRoomly.open()
+  // (defined outside React, in shadow-entry.tsx) and host pages listening
+  // for 'getroomly-availability-changed' both see the current value —
+  // e.g. a host that built its own trigger button (hideButton: true)
+  // instead of using the default EmbedButton can hide it too.
+  useEffect(() => {
+    setAvailability(partnerAvailable);
+  }, [partnerAvailable]);
+
+  // Keep a ref to the latest partnerAvailable so the open-modal listener
+  // below (registered once on mount) always reads the current value
+  // instead of a stale one — same pattern as categoryRef just below.
+  const partnerAvailableRef = useRef(partnerAvailable);
+  useEffect(() => {
+    partnerAvailableRef.current = partnerAvailable;
+  }, [partnerAvailable]);
+
   // Keep a ref to the latest config.category so the Mode B listener
   // always reads the current value without needing to re-register.
   const categoryRef = useRef<string | undefined>(undefined);
@@ -84,7 +102,18 @@ function App() {
 
   // Listen for external open/close events from host page
   useEffect(() => {
-    const handleOpen = () => setIsModalOpen(true);
+    // Safety net: even if a host page's own custom trigger button (built
+    // via hideButton: true) is still visible or gets clicked in a race, the
+    // modal itself refuses to open for a partner that's suspended for
+    // quota. GetRoomly.open() already checks this too (shadow-entry.tsx),
+    // but that check runs against the module-level cache set by the effect
+    // above — this ref read is the same value, just guarding the actual
+    // state transition as the final word.
+    const handleOpen = () => {
+      if (partnerAvailableRef.current) {
+        setIsModalOpen(true);
+      }
+    };
     const handleClose = () => setIsModalOpen(false);
 
     window.addEventListener('getroomly-open-modal', handleOpen);

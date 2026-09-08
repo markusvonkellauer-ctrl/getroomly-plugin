@@ -7,6 +7,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { AppConfig } from './config/app-config';
+import { getAvailability } from './lib/availability-state';
 
 // Import styles as text to inject into Shadow DOM
 import styleContent from './index.css?inline';
@@ -87,10 +88,22 @@ const initPlugin = () => {
 };
 
 (window as any).GetRoomly = {
-  open: () => {
+  // Returns false and does nothing if the partner is currently suspended
+  // for quota — a safety net for host pages that built their own trigger
+  // button (hideButton: true) instead of the plugin's default one, in case
+  // that button is still visible/clicked (e.g. a host that doesn't listen
+  // for 'getroomly-availability-changed', or a race before it does).
+  // getAvailability() reads a locally-cached value (set by App.tsx once
+  // its status check resolves), so this check adds no network latency.
+  open: (): boolean => {
+    if (!getAvailability()) {
+      window.dispatchEvent(new CustomEvent('getroomly-open-blocked'));
+      return false;
+    }
     initPlugin();
     isModalOpen = true;
     window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    return true;
   },
   close: () => {
     isModalOpen = false;
@@ -98,6 +111,10 @@ const initPlugin = () => {
     window.dispatchEvent(new CustomEvent('getroomly-modal-closed'));
   },
   isOpen: () => isModalOpen,
+  // Lets a host page check availability on demand — e.g. right before
+  // rendering its own trigger button — in addition to the
+  // 'getroomly-availability-changed' event for reacting to a change.
+  isAvailable: getAvailability,
   init: initPlugin,
 };
 

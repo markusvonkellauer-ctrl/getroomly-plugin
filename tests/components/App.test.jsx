@@ -105,3 +105,61 @@ describe('App — trigger button visibility', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('App — getroomly-open-modal safety net', () => {
+  // Covers the case a host page built its own trigger button (hideButton:
+  // true) instead of using the default EmbedButton — window.GetRoomly.open()
+  // dispatches this event, and the modal itself must refuse to open for a
+  // suspended partner regardless of what triggered the event.
+  beforeEach(() => {
+    jest.clearAllMocks();
+    window.GetRoomlyEmbedConfig = { ...baseEmbedConfig, hideButton: true };
+  });
+
+  afterEach(() => {
+    delete window.GetRoomlyEmbedConfig;
+  });
+
+  it('does not open the modal on getroomly-open-modal when the partner is unavailable', async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(false);
+
+    // Waiting for checkPartnerAvailability to have been *called* isn't
+    // enough — that happens synchronously on mount, before its promise
+    // resolves. Wait for the availability-changed event carrying the
+    // resolved `false` specifically, so the ref the open-modal listener
+    // reads has actually been updated before we dispatch it.
+    const availabilityHandler = jest.fn();
+    window.addEventListener('getroomly-availability-changed', availabilityHandler);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(availabilityHandler).toHaveBeenCalledWith(
+        expect.objectContaining({ detail: { available: false } })
+      );
+    });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    window.removeEventListener('getroomly-availability-changed', availabilityHandler);
+  });
+
+  it('opens the modal on getroomly-open-modal when the partner is available', async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(true);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(checkPartnerAvailability).toHaveBeenCalled();
+    });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});
