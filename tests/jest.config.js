@@ -14,6 +14,7 @@ export default {
   moduleNameMapper: {
     '^@/config/app-config$': '<rootDir>/__mocks__/app-config.js',
     '^@/(.*)$': '<rootDir>/../src/$1',
+    '\\.(css|less|scss|sass)\\?inline$': '<rootDir>/__mocks__/fileMock.js',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
     '\\.(jpg|jpeg|png|gif|svg)$': '<rootDir>/__mocks__/fileMock.js',
   },

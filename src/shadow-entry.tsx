@@ -124,6 +124,10 @@ window.addEventListener('getroomly-modal-closed', () => {
       window.dispatchEvent(new CustomEvent('getroomly-open-blocked'));
       return false;
     }
+    // Captured before initPlugin() runs: whether the plugin element (and
+    // therefore the App.tsx instance whose useEffect registers the
+    // 'getroomly-open-modal' listener) already existed.
+    const wasAlreadyMounted = pluginInstance !== null;
     // initPlugin() returns null if #getroomly-plugin-container isn't in the
     // DOM (yet, or at all) — don't claim success or dispatch the open event
     // when nothing was actually mounted to receive it.
@@ -132,7 +136,19 @@ window.addEventListener('getroomly-modal-closed', () => {
     }
     // isModalOpen is updated by the listener above, not set here directly —
     // keeps a single source of truth regardless of what triggered the event.
-    window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    const dispatchOpenModal = () => window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    if (wasAlreadyMounted) {
+      dispatchOpenModal();
+    } else {
+      // First-time mount: createRoot().render() above schedules React's
+      // commit + effects asynchronously — the useEffect in App.tsx that
+      // registers the 'getroomly-open-modal' listener hasn't run yet at
+      // this point. Dispatching synchronously here would fire before any
+      // listener exists to catch it, silently doing nothing on the very
+      // first open() call. Deferring to a macrotask lets React finish
+      // mounting and running effects first.
+      setTimeout(dispatchOpenModal, 0);
+    }
   },
   // Only dispatches the *request* to close ('getroomly-close-modal') —
   // symmetric with open() only requesting, not claiming success. App.tsx's
