@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
+  AIGenerationError,
   generateRoomVisualization,
   submitFeedback,
   validateImageFile,
@@ -210,7 +211,18 @@ export function RoomVisualizationFlow({
       onComplete?.(result.imageUrl);
     } catch (err) {
       console.error('Generation error:', err);
-      const errorMsg = err instanceof Error ? err.message : 'Failed to generate image';
+      // The backend's own description (err.message) is internal-facing —
+      // written for logs/Slack, in English, regardless of the shopper's
+      // market. For error codes with a customer-facing meaning, use the
+      // plugin's own localized string (same dictionary as the rest of this
+      // component's text) instead. Unknown/unmapped codes still fall back
+      // to the backend's description rather than a blank message.
+      const errorMsg =
+        err instanceof AIGenerationError && err.code === 'quotaExceeded'
+          ? t.errorTemporarilyUnavailable
+          : err instanceof Error
+            ? err.message
+            : 'Failed to generate image';
 
       // Reset to clean upload state — no error shown in the plugin.
       // The host website handles error display via the event / onError callback.

@@ -52,4 +52,5 @@ export const zh: TranslationStrings = {
   termsSection4Body:
     '您保留对原始照片的全部所有权。GetRoomly及其合作伙伴保留对产品可视化效果图及其底层人工智能技术的所有权利。',
   termsClose: '关闭',
+  errorTemporarilyUnavailable: '此功能暂时不可用。请稍后再试。',
 };

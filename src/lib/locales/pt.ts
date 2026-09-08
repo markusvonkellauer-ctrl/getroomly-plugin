@@ -55,4 +55,6 @@ export const pt: TranslationStrings = {
   termsSection4Body:
     'Mantém a propriedade total das suas fotografias originais. A GetRoomly e os seus parceiros mantêm todos os direitos sobre as visualizações de produtos e a tecnologia de IA subjacente.',
   termsClose: 'Fechar',
+  errorTemporarilyUnavailable:
+    'Esta funcionalidade está temporariamente indisponível. Tente novamente mais tarde.',
 };

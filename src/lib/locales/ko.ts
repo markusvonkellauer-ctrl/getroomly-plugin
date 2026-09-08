@@ -53,4 +53,6 @@ export const ko: TranslationStrings = {
   termsSection4Body:
     '귀하는 원본 사진에 대한 모든 소유권을 유지합니다. GetRoomly와 그 파트너사는 제품 시각화 자료와 그 기반이 되는 AI 기술에 대한 모든 권리를 보유합니다.',
   termsClose: '닫기',
+  errorTemporarilyUnavailable:
+    '이 기능은 현재 일시적으로 사용할 수 없습니다. 나중에 다시 시도해 주세요.',
 };
