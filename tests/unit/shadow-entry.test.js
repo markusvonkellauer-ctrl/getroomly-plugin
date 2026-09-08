@@ -172,7 +172,9 @@ describe('shadow-entry — window.GetRoomly.open() first-mount race', () => {
 
     // Host removes the plugin element entirely — e.g. re-rendering the
     // container from scratch — detaching it from the DOM.
-    document.querySelector('getroomly-plugin').remove();
+    const mountedElement = document.querySelector('getroomly-plugin');
+    expect(mountedElement).not.toBeNull(); // fail with a clear message if the mount above didn't happen
+    mountedElement.remove();
 
     act(() => {
       window.GetRoomly.open();
