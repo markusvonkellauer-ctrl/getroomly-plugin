@@ -4,9 +4,12 @@
  * don't share a module scope any other way, since shadow-entry.tsx sets up
  * `window.GetRoomly` outside of React.
  *
- * Optimistic default (true), matching App.tsx's own default: a host page
- * calling `window.GetRoomly.isAvailable()` before the plugin has run its
- * first check should see "available" rather than a false negative.
+ * Before this page load's own check has resolved, a host page calling
+ * `window.GetRoomly.isAvailable()` sees a value persisted from an earlier
+ * visit if one exists (see getAvailability() below) — which can be
+ * `false` — falling back to the optimistic default (true) only once
+ * neither an in-memory nor a persisted result is available, matching
+ * App.tsx's own fallback. Never a false negative with nothing to back it.
  */
 const STORAGE_PREFIX = 'getroomly:availability:';
 
