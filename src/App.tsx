@@ -23,10 +23,23 @@ function App() {
   // result from a previous key can be recognised as stale during render —
   // no setState-during-render and no synchronous setState inside the effect
   // (both flagged by lint/review as risky), just a derived comparison below.
-  const [availabilityResult, setAvailabilityResult] = useState({
-    key: undefined as string | undefined,
-    available: true,
-  });
+  //
+  // Seeded from getAvailability() (lazy initializer, not a hardcoded true):
+  // that reads a value persisted from an earlier visit if one exists, so a
+  // returning visitor's very first render can already reflect the real
+  // answer instead of the optimistic default — the button no longer has to
+  // visibly flash before hiding on every single page load for a suspended
+  // partner, just the first time a browser ever sees this apiKey.
+  //
+  // `confirmed` distinguishes that seeded/optimistic starting guess from a
+  // result this page load's own checkPartnerAvailability call has actually
+  // verified — see the publish effect below for why that distinction
+  // matters (it's what stops an unconfirmed guess from being persisted).
+  const [availabilityResult, setAvailabilityResult] = useState(() => ({
+    key: window.GetRoomlyEmbedConfig?.apiKey,
+    available: getAvailability(),
+    confirmed: false,
+  }));
 
   useEffect(() => {
     if (!config?.apiKey) {
@@ -35,7 +48,7 @@ function App() {
     let cancelled = false;
     checkPartnerAvailability(config.apiKey).then(available => {
       if (!cancelled) {
-        setAvailabilityResult({ key: config.apiKey, available });
+        setAvailabilityResult({ key: config.apiKey, available, confirmed: true });
       }
     });
     return () => {
@@ -43,14 +56,26 @@ function App() {
     };
   }, [config?.apiKey]);
 
-  // Optimistic default (true) for a key whose check hasn't resolved yet, or
-  // whose stored result belongs to a since-replaced key (e.g. the host page
-  // updates window.GetRoomlyEmbedConfig.apiKey between opens) — a stale
-  // `false` from a previous key must never carry over to a new one.
-  // checkPartnerAvailability itself fails open too, so a check that errors
-  // out never wrongly hides a working button either.
+  // Falls back to getAvailability() — not a hardcoded optimistic true —
+  // for a key whose result availabilityResult doesn't (yet) reflect: either
+  // the very first render (isReady starts false, so config is still null
+  // and can never match window.GetRoomlyEmbedConfig?.apiKey yet), or the
+  // host page changed apiKey while this component stayed mounted (e.g.
+  // switching products/partners) and the effect above hasn't re-checked
+  // for the new key yet. getAvailability() itself already knows to fall
+  // back to a persisted result (or optimistic true) for a key that hasn't
+  // been confirmed this page load — reusing it here means switching to an
+  // already-known key shows the right answer immediately, the same way
+  // the lazy initializer above does for the very first render, instead of
+  // flashing the optimistic default again on every switch.
+  //
+  // Safe to call during render: getAvailability() is a pure read (see its
+  // own comment) — unlike setAvailabilityValue below, which must only ever
+  // run from an effect.
   const partnerAvailable =
-    availabilityResult.key === config?.apiKey ? availabilityResult.available : true;
+    availabilityResult.key === window.GetRoomlyEmbedConfig?.apiKey
+      ? availabilityResult.available
+      : getAvailability();
 
   // Publish to the shared module-level state so window.GetRoomly.open()
   // (defined outside React, in shadow-entry.tsx) and host pages listening
@@ -67,9 +92,20 @@ function App() {
   // actually safe, effectively closing the staleness window a passive
   // effect would leave. The event dispatch itself (an unambiguous side
   // effect) stays in a regular effect — no need for it to block paint.
+  // Only publishes once THIS page load's own check has actually confirmed a
+  // result for the current key — not on the seeded/optimistic starting
+  // guess. setAvailabilityValue also persists to localStorage (see
+  // availability-state.ts); publishing an unconfirmed guess would write it
+  // there too, "poisoning" the cache for future visits if the user
+  // navigates away before the real check resolves. getAvailability() itself
+  // already falls back to the persisted value independently (for any
+  // caller, not just App.tsx), so skipping the unconfirmed publish here
+  // loses nothing.
   useLayoutEffect(() => {
-    setAvailabilityValue(config?.apiKey, partnerAvailable);
-  }, [config?.apiKey, partnerAvailable]);
+    if (availabilityResult.confirmed) {
+      setAvailabilityValue(availabilityResult.key, availabilityResult.available);
+    }
+  }, [availabilityResult]);
   useEffect(() => {
     notifyAvailabilityChanged(partnerAvailable);
   }, [partnerAvailable]);
