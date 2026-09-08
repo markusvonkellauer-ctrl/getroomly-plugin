@@ -6,6 +6,7 @@
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlow';
+import { translations } from '../../src/lib/i18n';
 
 jest.mock('../../src/services/ai-generation', () => ({
   // AIGenerationError is the real class, not mocked — the component checks
@@ -205,9 +206,11 @@ describe('RoomVisualizationFlow', () => {
     });
 
     await waitFor(() => {
-      expect(onError).toHaveBeenCalledWith(
-        'This feature is temporarily unavailable. Please try again later.'
-      );
+      // Asserted against the translation dictionary itself, not a
+      // hard-coded copy of the English string — this stays correct if the
+      // wording in en.ts ever changes, rather than needing a manual,
+      // easy-to-forget update here to match.
+      expect(onError).toHaveBeenCalledWith(translations.en.errorTemporarilyUnavailable);
     });
   });
 
