@@ -72,7 +72,7 @@ let cachedResult: { key: string | undefined; available: boolean } = {
  * to a different partner/product) must never have GetRoomly.open() read a
  * stale `false` computed for the previous key — see getAvailability() below.
  *
- * Also persists to localStorage (see readPersistedAvailability above) so a
+ * Also persists to localStorage (see writePersistedAvailability above) so a
  * returning visitor's next page load can start from this result instead of
  * the optimistic default.
  */
@@ -112,17 +112,20 @@ export function notifyAvailabilityChanged(available: boolean): void {
  * once neither is available does it fall back to optimistic (true),
  * matching App.tsx's own fallback and checkPartnerAvailability itself
  * failing open.
+ *
+ * That fallback result is memoized into cachedResult too (not just
+ * returned), so repeated calls for the same key before App.tsx's check
+ * resolves — e.g. isAvailable() polling, or multiple open() attempts —
+ * take the fast in-memory path instead of re-reading localStorage every
+ * time. Safe to do: a later confirmed setAvailabilityValue() call simply
+ * overwrites it regardless of what's memoized here.
  */
 export function getAvailability(): boolean {
   const currentKey = window.GetRoomlyEmbedConfig?.apiKey;
   if (cachedResult.key === currentKey) {
     return cachedResult.available;
   }
-  if (currentKey) {
-    const persisted = readPersistedAvailability(currentKey);
-    if (persisted !== undefined) {
-      return persisted;
-    }
-  }
-  return true;
+  const available = (currentKey && readPersistedAvailability(currentKey)) ?? true;
+  cachedResult = { key: currentKey, available };
+  return available;
 }

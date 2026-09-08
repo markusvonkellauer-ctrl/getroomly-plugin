@@ -51,8 +51,9 @@ describe('App — trigger button visibility', () => {
     // that this file's static `import App` keeps alive across every test —
     // this file never calls jest.resetModules(). Without resetting it here
     // too, a leftover value from an earlier test's own mount (App.tsx
-    // publishes via setAvailabilityValue on every commit) would outrank the
-    // localStorage seed a test sets up, since in-memory takes priority.
+    // publishes via setAvailabilityValue once its check confirms a result)
+    // would outrank the localStorage seed a test sets up, since in-memory
+    // takes priority.
     // key: undefined never matches a real apiKey, so this forces
     // getAvailability() to fall through to localStorage/optimistic default,
     // exactly like a fresh page load.
@@ -212,8 +213,9 @@ describe('App — getroomly-open-modal safety net', () => {
     // that this file's static `import App` keeps alive across every test —
     // this file never calls jest.resetModules(). Without resetting it here
     // too, a leftover value from an earlier test's own mount (App.tsx
-    // publishes via setAvailabilityValue on every commit) would outrank the
-    // localStorage seed a test sets up, since in-memory takes priority.
+    // publishes via setAvailabilityValue once its check confirms a result)
+    // would outrank the localStorage seed a test sets up, since in-memory
+    // takes priority.
     // key: undefined never matches a real apiKey, so this forces
     // getAvailability() to fall through to localStorage/optimistic default,
     // exactly like a fresh page load.
