@@ -10,7 +10,7 @@ jest.mock('../../src/services/partner-status', () => ({
 }));
 
 import { checkPartnerAvailability } from '../../src/services/partner-status';
-import { setAvailabilityValue } from '../../src/lib/availability-state';
+import { __resetAvailabilityStateForTests } from '../../src/lib/availability-state';
 
 const baseEmbedConfig = {
   apiKey: 'grm_pub_test',
@@ -47,17 +47,14 @@ describe('App — trigger button visibility', () => {
     // clearing it, an earlier test resolving to `false` for the same apiKey
     // would leak into a later test expecting the optimistic default.
     localStorage.clear();
-    // availability-state.ts's in-memory cachedResult is module-level state
-    // that this file's static `import App` keeps alive across every test —
-    // this file never calls jest.resetModules(). Without resetting it here
-    // too, a leftover value from an earlier test's own mount (App.tsx
-    // publishes via setAvailabilityValue once its check confirms a result)
-    // would outrank the localStorage seed a test sets up, since in-memory
-    // takes priority.
-    // key: undefined never matches a real apiKey, so this forces
-    // getAvailability() to fall through to localStorage/optimistic default,
-    // exactly like a fresh page load.
-    setAvailabilityValue(undefined, true);
+    // availability-state.ts's in-memory availabilityByKey map is
+    // module-level state that this file's static `import App` keeps alive
+    // across every test — this file never calls jest.resetModules().
+    // Without resetting it here too, a leftover confirmed value from an
+    // earlier test's own mount (App.tsx publishes via setAvailabilityValue
+    // once its check confirms a result) would outrank the localStorage
+    // seed a test sets up, since in-memory takes priority.
+    __resetAvailabilityStateForTests();
     window.GetRoomlyEmbedConfig = { ...baseEmbedConfig };
   });
 
@@ -209,17 +206,14 @@ describe('App — getroomly-open-modal safety net', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
-    // availability-state.ts's in-memory cachedResult is module-level state
-    // that this file's static `import App` keeps alive across every test —
-    // this file never calls jest.resetModules(). Without resetting it here
-    // too, a leftover value from an earlier test's own mount (App.tsx
-    // publishes via setAvailabilityValue once its check confirms a result)
-    // would outrank the localStorage seed a test sets up, since in-memory
-    // takes priority.
-    // key: undefined never matches a real apiKey, so this forces
-    // getAvailability() to fall through to localStorage/optimistic default,
-    // exactly like a fresh page load.
-    setAvailabilityValue(undefined, true);
+    // availability-state.ts's in-memory availabilityByKey map is
+    // module-level state that this file's static `import App` keeps alive
+    // across every test — this file never calls jest.resetModules().
+    // Without resetting it here too, a leftover confirmed value from an
+    // earlier test's own mount (App.tsx publishes via setAvailabilityValue
+    // once its check confirms a result) would outrank the localStorage
+    // seed a test sets up, since in-memory takes priority.
+    __resetAvailabilityStateForTests();
     window.GetRoomlyEmbedConfig = { ...baseEmbedConfig, hideButton: true };
   });
 

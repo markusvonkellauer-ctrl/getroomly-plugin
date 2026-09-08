@@ -45,10 +45,16 @@ function writePersistedAvailability(key: string, available: boolean): void {
   }
 }
 
-let cachedResult: { key: string | undefined; available: boolean } = {
-  key: undefined,
-  available: true,
-};
+// Per-key, not a single overwritable slot: a host page that cycles between
+// multiple apiKeys during one page load (e.g. browsing between products
+// backed by different partners) must not lose an already-confirmed result
+// for a key just because a different key was looked up in between. A
+// single-slot cache would forget key A's confirmed `false` the moment key
+// B is looked up, and — if localStorage persistence for A had failed for
+// any reason (private browsing, storage disabled) — GetRoomly.open() could
+// then incorrectly report a suspended partner as available again the next
+// time the host switches back to A.
+const availabilityByKey = new Map<string, boolean>();
 
 /**
  * Updates the cached value read by getAvailability() / GetRoomly.open().
@@ -67,18 +73,13 @@ let cachedResult: { key: string | undefined; available: boolean } = {
  * array (e.g. `[partnerAvailable]` in App.tsx) that limits how often it's
  * actually invoked.
  *
- * Keyed by apiKey, mirroring App.tsx's own `availabilityResult` cache: a
- * host page that swaps window.GetRoomlyEmbedConfig.apiKey (e.g. switching
- * to a different partner/product) must never have GetRoomly.open() read a
- * stale `false` computed for the previous key — see getAvailability() below.
- *
  * Also persists to localStorage (see writePersistedAvailability above) so a
  * returning visitor's next page load can start from this result instead of
  * the optimistic default.
  */
 export function setAvailabilityValue(key: string | undefined, available: boolean): void {
-  cachedResult = { key, available };
   if (key) {
+    availabilityByKey.set(key, available);
     writePersistedAvailability(key, available);
   }
 }
@@ -113,19 +114,35 @@ export function notifyAvailabilityChanged(available: boolean): void {
  * matching App.tsx's own fallback and checkPartnerAvailability itself
  * failing open.
  *
- * That fallback result is memoized into cachedResult too (not just
- * returned), so repeated calls for the same key before App.tsx's check
- * resolves — e.g. isAvailable() polling, or multiple open() attempts —
- * take the fast in-memory path instead of re-reading localStorage every
- * time. Safe to do: a later confirmed setAvailabilityValue() call simply
- * overwrites it regardless of what's memoized here.
+ * That fallback result is memoized for the key too (not just returned), so
+ * repeated calls for the same key before App.tsx's check resolves — e.g.
+ * isAvailable() polling, or multiple open() attempts — take the fast
+ * in-memory path instead of re-reading localStorage every time. Safe to
+ * do: a later confirmed setAvailabilityValue() call for that key simply
+ * overwrites its entry regardless of what's memoized here.
  */
 export function getAvailability(): boolean {
   const currentKey = window.GetRoomlyEmbedConfig?.apiKey;
-  if (cachedResult.key === currentKey) {
-    return cachedResult.available;
+  if (!currentKey) {
+    return true;
   }
-  const available = (currentKey && readPersistedAvailability(currentKey)) ?? true;
-  cachedResult = { key: currentKey, available };
+  const known = availabilityByKey.get(currentKey);
+  if (known !== undefined) {
+    return known;
+  }
+  const available = readPersistedAvailability(currentKey) ?? true;
+  availabilityByKey.set(currentKey, available);
   return available;
+}
+
+/**
+ * Test-only: clears every in-memory confirmed/memoized result (not
+ * localStorage). Exists because availabilityByKey is module-level state
+ * that persists for as long as this module stays loaded — a test file
+ * that imports App (or this module) once via a static top-level `import`,
+ * rather than calling jest.resetModules() per test, would otherwise leak
+ * one test's confirmed result into the next test using the same apiKey.
+ */
+export function __resetAvailabilityStateForTests(): void {
+  availabilityByKey.clear();
 }

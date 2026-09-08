@@ -199,5 +199,56 @@ describe('availability-state', () => {
         Storage.prototype.setItem = original;
       }
     });
+
+    it('does not lose a confirmed result for a key when a different key is looked up in between', () => {
+      // Regression coverage for a Copilot review finding on PR #84: a
+      // single-slot in-memory cache would forget key A's confirmed result
+      // the moment key B was looked up, even within the same page load —
+      // switching back to A would then incorrectly fall through to the
+      // optimistic default (or a stale/missing persisted value) instead of
+      // remembering what was already confirmed this page load.
+      jest.resetModules();
+      window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_a';
+      const { setAvailabilityValue, getAvailability } = require('../../src/lib/availability-state');
+
+      setAvailabilityValue('grm_pub_a', false);
+      expect(getAvailability()).toBe(false);
+
+      window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_b';
+      expect(getAvailability()).toBe(true);
+
+      window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_a';
+      expect(getAvailability()).toBe(false);
+    });
+
+    it('remembers a confirmed result for a key even if persisting it to localStorage failed, once a different key is looked up in between', () => {
+      // The specific danger Copilot flagged: without a per-key cache,
+      // losing key A's in-memory result when key B is looked up — combined
+      // with A's persistence having failed — would let GetRoomly.open()
+      // incorrectly report a suspended partner as available again.
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = () => {
+        throw new Error('storage full');
+      };
+
+      try {
+        jest.resetModules();
+        window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_a';
+        const {
+          setAvailabilityValue,
+          getAvailability,
+        } = require('../../src/lib/availability-state');
+
+        setAvailabilityValue('grm_pub_a', false);
+
+        window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_b';
+        getAvailability();
+
+        window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_a';
+        expect(getAvailability()).toBe(false);
+      } finally {
+        Storage.prototype.setItem = original;
+      }
+    });
   });
 });
