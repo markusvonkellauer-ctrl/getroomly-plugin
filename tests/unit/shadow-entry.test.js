@@ -39,6 +39,7 @@ describe('shadow-entry — window.GetRoomly.open() first-mount race', () => {
     // container is injected dynamically, after script load/DOMContentLoaded
     // already ran, so shadow-entry's own auto-init found nothing to mount.
     document.body.innerHTML = '';
+    delete window.__getroomlyModalListenersRegistered;
     openHandler = jest.fn();
     window.addEventListener('getroomly-open-modal', openHandler);
   });
@@ -97,5 +98,42 @@ describe('shadow-entry — window.GetRoomly.open() first-mount race', () => {
     // No deferral needed the second time — dispatched within the same act().
     expect(openHandler).toHaveBeenCalledTimes(2);
     expect(mockRender).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('shadow-entry — modal-opened/closed listener registration', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    delete window.__getroomlyModalListenersRegistered;
+  });
+
+  it('registers the modal-opened/closed listeners only once across repeated module loads', () => {
+    // Regression coverage for a Copilot review finding on PR #83:
+    // jest.resetModules()-driven re-requires in tests, or an accidental
+    // double inclusion of this bundle on a host page, would otherwise each
+    // add their own pair of listeners, accumulating on window indefinitely.
+    //
+    // Two separate spies, not one spanning both requires: jest.resetModules()
+    // itself clears an already-created spy's recorded calls as a side
+    // effect in this Jest version, independent of anything shadow-entry.tsx
+    // does — a spy created fresh after each resetModules() call sidesteps
+    // that entirely.
+    const matching = calls =>
+      calls.filter(
+        ([eventName]) =>
+          eventName === 'getroomly-modal-opened' || eventName === 'getroomly-modal-closed'
+      );
+
+    const firstSpy = jest.spyOn(window, 'addEventListener');
+    require('../../src/shadow-entry');
+    expect(matching(firstSpy.mock.calls)).toHaveLength(2);
+    firstSpy.mockRestore();
+
+    jest.resetModules();
+
+    const secondSpy = jest.spyOn(window, 'addEventListener');
+    require('../../src/shadow-entry');
+    expect(matching(secondSpy.mock.calls)).toHaveLength(0);
+    secondSpy.mockRestore();
   });
 });

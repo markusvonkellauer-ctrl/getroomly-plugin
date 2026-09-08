@@ -228,6 +228,32 @@ describe('App — getroomly-open-modal safety net', () => {
     }
   });
 
+  it('does not dispatch getroomly-modal-opened when config is invalid, even though getroomly-open-modal fires', () => {
+    // Regression coverage for a Copilot review finding on PR #83: the
+    // 'getroomly-open-modal' listener used to flip isModalOpen regardless of
+    // whether the modal could actually render — reporting "opened" via the
+    // centralized confirmation effect while the component was still showing
+    // its error state instead. window.GetRoomlyEmbedConfig here is missing
+    // every required field but apiKey, so useEmbedConfig never reaches
+    // isReady, and configReadyRef must keep handleOpen from firing at all.
+    window.GetRoomlyEmbedConfig = { apiKey: 'grm_pub_test' };
+    const openedHandler = jest.fn();
+    window.addEventListener('getroomly-modal-opened', openedHandler);
+
+    try {
+      render(<App />);
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+      });
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(openedHandler).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('getroomly-modal-opened', openedHandler);
+    }
+  });
+
   // Regression coverage: shadow-entry.tsx's close() used to dispatch
   // 'getroomly-modal-closed' itself, in addition to App.tsx's centralized
   // isModalOpen effect also dispatching it once React actually closed —

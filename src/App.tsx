@@ -81,6 +81,16 @@ function App() {
     categoryRef.current = config?.category;
   }, [config]);
 
+  // Mirrors the same readiness/validity check the early-return JSX below
+  // uses to decide whether the modal can render at all. Read by handleOpen
+  // (below) via a ref rather than a dependency array, so the mount-once
+  // 'getroomly-open-modal' listener always sees the current value without
+  // needing to re-register on every config change.
+  const configReadyRef = useRef(false);
+  useEffect(() => {
+    configReadyRef.current = isReady && !error && !!config;
+  }, [isReady, error, config]);
+
   // Mode B: delegated click listener for partner buttons with data-getroomly-sku.
   // Runs once on mount; uses categoryRef to avoid stale closure.
   useEffect(() => {
@@ -146,6 +156,15 @@ function App() {
     // above keeps it current — synchronously, right after commit — before
     // this handler could ever run.
     const handleOpen = () => {
+      // Refuse to flip isModalOpen (and thus the centralized confirmation
+      // effect's 'getroomly-modal-opened' dispatch above) while the modal
+      // can't actually render yet — otherwise a host calling open() before
+      // config has finished loading, or with an invalid config, would
+      // report the modal as opened while the component is still showing
+      // its loading/error state instead.
+      if (!configReadyRef.current) {
+        return;
+      }
       if (getAvailability()) {
         setIsModalOpen(true);
       }

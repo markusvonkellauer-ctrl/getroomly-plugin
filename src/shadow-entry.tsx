@@ -97,12 +97,19 @@ const initPlugin = () => {
 // happened — App.tsx can refuse an open request for a suspended partner,
 // which would otherwise leave isModalOpen wrongly true for a modal that
 // never actually opened.
-window.addEventListener('getroomly-modal-opened', () => {
-  isModalOpen = true;
-});
-window.addEventListener('getroomly-modal-closed', () => {
-  isModalOpen = false;
-});
+// Guarded by a flag on `window` itself (not a module-local variable) —
+// jest.resetModules()-driven re-requires in tests, or an accidental double
+// inclusion of this bundle on a host page, would otherwise each add their
+// own pair of listeners, accumulating on window indefinitely.
+if (!window.__getroomlyModalListenersRegistered) {
+  window.__getroomlyModalListenersRegistered = true;
+  window.addEventListener('getroomly-modal-opened', () => {
+    isModalOpen = true;
+  });
+  window.addEventListener('getroomly-modal-closed', () => {
+    isModalOpen = false;
+  });
+}
 
 (window as any).GetRoomly = {
   // Returns false and does nothing if the partner is currently suspended

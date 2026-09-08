@@ -113,5 +113,9 @@ export interface EmbedConfig {
 declare global {
   interface Window {
     GetRoomlyEmbedConfig?: EmbedConfig;
+    // Guards shadow-entry.tsx's modal-opened/closed listener registration
+    // against accumulating across repeated module loads (tests) or an
+    // accidental double inclusion of the bundle on a host page.
+    __getroomlyModalListenersRegistered?: boolean;
   }
 }
