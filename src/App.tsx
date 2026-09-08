@@ -30,9 +30,15 @@ function App() {
   // answer instead of the optimistic default — the button no longer has to
   // visibly flash before hiding on every single page load for a suspended
   // partner, just the first time a browser ever sees this apiKey.
+  //
+  // `confirmed` distinguishes that seeded/optimistic starting guess from a
+  // result this page load's own checkPartnerAvailability call has actually
+  // verified — see the publish effect below for why that distinction
+  // matters (it's what stops an unconfirmed guess from being persisted).
   const [availabilityResult, setAvailabilityResult] = useState(() => ({
     key: window.GetRoomlyEmbedConfig?.apiKey,
     available: getAvailability(),
+    confirmed: false,
   }));
 
   useEffect(() => {
@@ -42,7 +48,7 @@ function App() {
     let cancelled = false;
     checkPartnerAvailability(config.apiKey).then(available => {
       if (!cancelled) {
-        setAvailabilityResult({ key: config.apiKey, available });
+        setAvailabilityResult({ key: config.apiKey, available, confirmed: true });
       }
     });
     return () => {
@@ -83,9 +89,20 @@ function App() {
   // actually safe, effectively closing the staleness window a passive
   // effect would leave. The event dispatch itself (an unambiguous side
   // effect) stays in a regular effect — no need for it to block paint.
+  // Only publishes once THIS page load's own check has actually confirmed a
+  // result for the current key — not on the seeded/optimistic starting
+  // guess. setAvailabilityValue also persists to localStorage (see
+  // availability-state.ts); publishing an unconfirmed guess would write it
+  // there too, "poisoning" the cache for future visits if the user
+  // navigates away before the real check resolves. getAvailability() itself
+  // already falls back to the persisted value independently (for any
+  // caller, not just App.tsx), so skipping the unconfirmed publish here
+  // loses nothing.
   useLayoutEffect(() => {
-    setAvailabilityValue(config?.apiKey, partnerAvailable);
-  }, [config?.apiKey, partnerAvailable]);
+    if (availabilityResult.confirmed) {
+      setAvailabilityValue(availabilityResult.key, availabilityResult.available);
+    }
+  }, [availabilityResult]);
   useEffect(() => {
     notifyAvailabilityChanged(partnerAvailable);
   }, [partnerAvailable]);

@@ -89,6 +89,33 @@ describe('App — trigger button visibility', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('does not persist the optimistic/seeded value to localStorage before the check has confirmed a result', async () => {
+    // Regression coverage for a Copilot review finding on PR #84: publishing
+    // (and therefore persisting, via setAvailabilityValue) on every commit —
+    // including the seeded/optimistic starting guess, not just a confirmed
+    // result — could permanently "poison" localStorage with an unconfirmed
+    // value if the user navigates away before the real check resolves.
+    let resolveCheck;
+    checkPartnerAvailability.mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveCheck = resolve;
+      })
+    );
+
+    render(<App />);
+
+    // Still pending — nothing confirmed yet, nothing should be persisted.
+    expect(localStorage.getItem('getroomly:availability:grm_pub_test')).toBeNull();
+
+    await act(async () => {
+      resolveCheck(false);
+      await Promise.resolve();
+    });
+
+    // Now confirmed — the real result gets persisted.
+    expect(localStorage.getItem('getroomly:availability:grm_pub_test')).toBe('false');
+  });
+
   it('shows the trigger button once the partner is confirmed available', async () => {
     checkPartnerAvailability.mockResolvedValueOnce(true);
 
