@@ -8,7 +8,10 @@
  * calling `window.GetRoomly.isAvailable()` before the plugin has run its
  * first check should see "available" rather than a false negative.
  */
-let currentAvailability = true;
+let cachedResult: { key: string | undefined; available: boolean } = {
+  key: undefined,
+  available: true,
+};
 
 /**
  * Updates the cached value read by getAvailability() / GetRoomly.open().
@@ -26,9 +29,14 @@ let currentAvailability = true;
  * unconditionally on every call — it's the caller's effect dependency
  * array (e.g. `[partnerAvailable]` in App.tsx) that limits how often it's
  * actually invoked.
+ *
+ * Keyed by apiKey, mirroring App.tsx's own `availabilityResult` cache: a
+ * host page that swaps window.GetRoomlyEmbedConfig.apiKey (e.g. switching
+ * to a different partner/product) must never have GetRoomly.open() read a
+ * stale `false` computed for the previous key — see getAvailability() below.
  */
-export function setAvailabilityValue(available: boolean): void {
-  currentAvailability = available;
+export function setAvailabilityValue(key: string | undefined, available: boolean): void {
+  cachedResult = { key, available };
 }
 
 /**
@@ -44,6 +52,19 @@ export function notifyAvailabilityChanged(available: boolean): void {
   );
 }
 
+/**
+ * A cached result only applies to the apiKey it was computed for. Without
+ * this check, GetRoomly.open() could stay permanently blocked after a host
+ * page switches to a different (perfectly available) partner: the cache
+ * would still hold the old partner's `false`, and open() would refuse to
+ * even dispatch 'getroomly-open-modal' — the only thing that would let
+ * App.tsx notice the new apiKey and re-check it. Optimistic default (true)
+ * for a key that hasn't been checked yet, matching App.tsx's own fallback
+ * and checkPartnerAvailability itself failing open.
+ */
 export function getAvailability(): boolean {
-  return currentAvailability;
+  if (cachedResult.key !== window.GetRoomlyEmbedConfig?.apiKey) {
+    return true;
+  }
+  return cachedResult.available;
 }

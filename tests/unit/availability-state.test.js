@@ -3,6 +3,13 @@
  */
 
 describe('availability-state', () => {
+  afterEach(() => {
+    // Some tests below set apiKey on the shared window.GetRoomlyEmbedConfig
+    // (pre-populated by tests/setup.js without one) — restore it so later
+    // tests default back to an undefined key.
+    delete window.GetRoomlyEmbedConfig?.apiKey;
+  });
+
   it('defaults to available (true) before any check has run', () => {
     // Fresh module instance so this doesn't depend on running before any
     // other test in this file that mutates the shared singleton state.
@@ -11,14 +18,34 @@ describe('availability-state', () => {
     expect(getAvailability()).toBe(true);
   });
 
-  it('getAvailability reflects the value passed to setAvailabilityValue', () => {
+  it('getAvailability reflects the value passed to setAvailabilityValue for the current apiKey', () => {
     jest.resetModules();
+    window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_a';
     const { setAvailabilityValue, getAvailability } = require('../../src/lib/availability-state');
 
-    setAvailabilityValue(false);
+    setAvailabilityValue('grm_pub_a', false);
     expect(getAvailability()).toBe(false);
 
-    setAvailabilityValue(true);
+    setAvailabilityValue('grm_pub_a', true);
+    expect(getAvailability()).toBe(true);
+  });
+
+  it('fails open (true) when the cached result belongs to a different apiKey than the current config', () => {
+    // Regression coverage for a Copilot review finding on PR #83:
+    // GetRoomly.open() could stay permanently blocked after a host page
+    // switched to a different (available) partner, because the cache still
+    // held the previous partner's `false` and open() never dispatched the
+    // event that would let App.tsx notice the new key and re-check it.
+    jest.resetModules();
+    window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_a';
+    const { setAvailabilityValue, getAvailability } = require('../../src/lib/availability-state');
+
+    setAvailabilityValue('grm_pub_a', false);
+    expect(getAvailability()).toBe(false);
+
+    // Host page swaps to a different partner before it's been checked yet.
+    window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_b';
+
     expect(getAvailability()).toBe(true);
   });
 
@@ -28,7 +55,7 @@ describe('availability-state', () => {
     const handler = jest.fn();
     window.addEventListener('getroomly-availability-changed', handler);
 
-    setAvailabilityValue(false);
+    setAvailabilityValue(undefined, false);
 
     expect(handler).not.toHaveBeenCalled();
     window.removeEventListener('getroomly-availability-changed', handler);

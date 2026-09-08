@@ -68,8 +68,8 @@ function App() {
   // effect would leave. The event dispatch itself (an unambiguous side
   // effect) stays in a regular effect — no need for it to block paint.
   useLayoutEffect(() => {
-    setAvailabilityValue(partnerAvailable);
-  }, [partnerAvailable]);
+    setAvailabilityValue(config?.apiKey, partnerAvailable);
+  }, [config?.apiKey, partnerAvailable]);
   useEffect(() => {
     notifyAvailabilityChanged(partnerAvailable);
   }, [partnerAvailable]);
