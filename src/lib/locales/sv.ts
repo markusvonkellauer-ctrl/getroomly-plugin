@@ -54,4 +54,5 @@ export const sv: TranslationStrings = {
   termsClose: 'Stäng',
   errorTemporarilyUnavailable:
     'Den här funktionen är tillfälligt otillgänglig. Försök igen senare.',
+  loadingProgressLabel: 'Genereringsförlopp',
 };

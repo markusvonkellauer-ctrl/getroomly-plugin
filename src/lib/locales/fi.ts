@@ -55,4 +55,5 @@ export const fi: TranslationStrings = {
   termsClose: 'Sulje',
   errorTemporarilyUnavailable:
     'Tämä toiminto ei ole tilapäisesti käytettävissä. Yritä myöhemmin uudelleen.',
+  loadingProgressLabel: 'Luonnin eteneminen',
 };

@@ -79,6 +79,12 @@ export interface TranslationStrings {
    * seeing this, not something to explain to them.
    */
   errorTemporarilyUnavailable: string;
+  /**
+   * aria-label for the processing-step progress bar — the visible percentage
+   * is decorative-adjacent text, not a programmatic label, so the
+   * role="progressbar" element needs its own accessible name.
+   */
+  loadingProgressLabel: string;
 }
 
 export type SupportedLanguage =

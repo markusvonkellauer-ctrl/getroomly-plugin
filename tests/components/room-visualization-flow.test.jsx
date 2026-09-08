@@ -45,6 +45,18 @@ const uploadFile = (input, file) => {
   fireEvent.change(input);
 };
 
+// Parses the numeric r/g/b/a channels out of a computed color string instead
+// of comparing strings directly — getComputedStyle can normalize to
+// different formats (e.g. legacy 'rgba(0, 0, 0, 0.6)' vs modern
+// 'rgb(0 0 0 / 0.6)'), which a strict string match would be brittle against.
+const isColor = (colorString, [r, g, b, a]) => {
+  const match = colorString.match(/rgba?\(([^)]+)\)/);
+  if (!match) return false;
+  const channels = match[1].split(/[\s,/]+/).map(Number);
+  const [cr, cg, cb, ca = 1] = channels;
+  return cr === r && cg === g && cb === b && Math.abs(ca - a) < 0.001;
+};
+
 describe('RoomVisualizationFlow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -110,6 +122,93 @@ describe('RoomVisualizationFlow', () => {
     await waitFor(() => expect(generateRoomVisualization).toHaveBeenCalledTimes(1));
     const callArg = generateRoomVisualization.mock.calls[0][0];
     expect(callArg).not.toHaveProperty('coordinates');
+  });
+
+  // ─── Processing step — loading UI overlay ──────────────────────────────────
+
+  test('renders the morphing spinner form with no dark circle behind it', async () => {
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    act(() => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    let overlay;
+    await waitFor(() => {
+      const spinner = document.querySelector('.getroomly-spinner-rot');
+      expect(spinner).not.toBeNull();
+      expect(document.querySelector('.getroomly-spinner-form')).toBeInTheDocument();
+      overlay = spinner.parentElement;
+    });
+    // Regression check for the old ring spinner's dark backdrop-blur puck —
+    // must not reappear behind the new morphing form. Scoped to the
+    // processing overlay's own subtree, not a raw HTML substring match, so
+    // this can't false-fail on an unrelated element elsewhere in the
+    // document that happens to share the color. Uses getComputedStyle
+    // (not el.style) and scans every element, not just <div>s, so it also
+    // catches the puck if it's reintroduced via a CSS class or on a
+    // differently-tagged element instead of an inline style. Includes the
+    // overlay element itself, since querySelectorAll only returns
+    // descendants.
+    const candidates = [overlay, ...Array.from(overlay.querySelectorAll('*'))];
+    const darkPuck = candidates.find(el =>
+      isColor(window.getComputedStyle(el).backgroundColor, [0, 0, 0, 0.6])
+    );
+    expect(darkPuck).toBeUndefined();
+  });
+
+  test('shows the rotating status message and progress bar over the image, not in the white footer', async () => {
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    act(() => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    let statusText;
+    let spinner;
+    await waitFor(() => {
+      statusText = screen.getByText(translations.en.loadingMessages[0]);
+      spinner = document.querySelector('.getroomly-spinner-rot');
+      expect(spinner).not.toBeNull();
+    });
+    // Status text and spinner share the same overlay-stack parent — sitting
+    // over the image, not inside the white footer below it.
+    expect(statusText.parentElement).toBe(spinner.parentElement);
+  });
+
+  test('the processing footer shows only the percentage, not a duplicate status message', async () => {
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    act(() => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(translations.en.loadingMessages[0])).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(translations.en.loadingMessages[0])).toHaveLength(1);
+    // Regex, not a hard-coded '0%' — progress advances on a real 100ms
+    // interval, so a slow CI worker could tick past 0 before this runs.
+    expect(screen.getByText(/^\d+%$/)).toBeInTheDocument();
+  });
+
+  test('applies the progressive blur-reveal class and edge-bleed scale to the processing image', async () => {
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    act(() => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      const img = screen.getByAltText('Room being processed');
+      expect(img).toHaveClass('getroomly-blur-reveal');
+      expect(img).toHaveStyle({ transform: 'scale(1.04)' });
+    });
   });
 
   // ─── Processing → Result ──────────────────────────────────────────────────
