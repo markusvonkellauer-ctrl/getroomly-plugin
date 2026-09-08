@@ -3,10 +3,11 @@
  */
 
 describe('availability-state', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   afterEach(() => {
-    // Some tests below set apiKey on the shared window.GetRoomlyEmbedConfig
-    // (pre-populated by tests/setup.js without one) — restore it so later
-    // tests default back to an undefined key.
     delete window.GetRoomlyEmbedConfig?.apiKey;
   });
 
@@ -103,5 +104,100 @@ describe('availability-state', () => {
 
     expect(handler).toHaveBeenCalledTimes(2);
     window.removeEventListener('getroomly-availability-changed', handler);
+  });
+
+  describe('persisted (localStorage) availability', () => {
+    it('setAvailabilityValue persists the result to localStorage under the apiKey', () => {
+      jest.resetModules();
+      const { setAvailabilityValue } = require('../../src/lib/availability-state');
+
+      setAvailabilityValue('grm_pub_a', false);
+
+      expect(localStorage.getItem('getroomly:availability:grm_pub_a')).toBe('false');
+    });
+
+    it('does not persist anything when the apiKey is undefined', () => {
+      jest.resetModules();
+      const { setAvailabilityValue } = require('../../src/lib/availability-state');
+
+      setAvailabilityValue(undefined, false);
+
+      expect(localStorage.length).toBe(0);
+    });
+
+    it("falls back to a value persisted from an earlier visit when this page load hasn't computed one yet", () => {
+      // Regression coverage: without this fallback, a returning visitor's
+      // very first render always started from the optimistic "available"
+      // default and visibly flashed the trigger button before hiding it,
+      // every single page load, for a partner that's actually suspended.
+      localStorage.setItem('getroomly:availability:grm_pub_a', 'false');
+      jest.resetModules();
+      window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_a';
+      const { getAvailability } = require('../../src/lib/availability-state');
+
+      // No setAvailabilityValue call this "page load" — simulates a fresh
+      // module instance before App.tsx's own check has resolved.
+      expect(getAvailability()).toBe(false);
+    });
+
+    it('an in-memory result from this page load takes priority over a stale persisted value', () => {
+      localStorage.setItem('getroomly:availability:grm_pub_a', 'false');
+      jest.resetModules();
+      window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_a';
+      const { setAvailabilityValue, getAvailability } = require('../../src/lib/availability-state');
+
+      setAvailabilityValue('grm_pub_a', true);
+
+      expect(getAvailability()).toBe(true);
+    });
+
+    it('falls back to the optimistic default when nothing is persisted for the current apiKey', () => {
+      jest.resetModules();
+      window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_never_seen';
+      const { getAvailability } = require('../../src/lib/availability-state');
+
+      expect(getAvailability()).toBe(true);
+    });
+
+    it('does not throw and falls back to in-memory/optimistic behavior when localStorage.getItem throws', () => {
+      const original = Storage.prototype.getItem;
+      Storage.prototype.getItem = () => {
+        throw new Error('storage disabled');
+      };
+
+      try {
+        jest.resetModules();
+        window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_a';
+        const { getAvailability } = require('../../src/lib/availability-state');
+
+        expect(() => getAvailability()).not.toThrow();
+        expect(getAvailability()).toBe(true);
+      } finally {
+        Storage.prototype.getItem = original;
+      }
+    });
+
+    it('does not throw when localStorage.setItem throws', () => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = () => {
+        throw new Error('storage full');
+      };
+
+      try {
+        jest.resetModules();
+        const {
+          setAvailabilityValue,
+          getAvailability,
+        } = require('../../src/lib/availability-state');
+
+        expect(() => setAvailabilityValue('grm_pub_a', false)).not.toThrow();
+        // The in-memory value must still be usable even though persisting
+        // it failed.
+        window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_a';
+        expect(getAvailability()).toBe(false);
+      } finally {
+        Storage.prototype.setItem = original;
+      }
+    });
   });
 });

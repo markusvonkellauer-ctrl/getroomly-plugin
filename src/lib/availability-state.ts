@@ -8,6 +8,43 @@
  * calling `window.GetRoomly.isAvailable()` before the plugin has run its
  * first check should see "available" rather than a false negative.
  */
+const STORAGE_PREFIX = 'getroomly:availability:';
+
+/**
+ * Smooths the trigger button's visible flash on repeat visits: without
+ * this, every single page load starts from the optimistic "available"
+ * default and only corrects itself once the network check resolves —
+ * visibly flashing the button before hiding it, every time, for a
+ * suspended partner. Persisting the last known result lets a returning
+ * visitor's very first render already start from the right answer.
+ *
+ * Read/write failures (private browsing, storage disabled/full) are
+ * swallowed — persistence is a nice-to-have that only smooths repeat
+ * visits, never something correctness should depend on.
+ */
+function readPersistedAvailability(key: string): boolean | undefined {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_PREFIX + key);
+    if (raw === 'true') {
+      return true;
+    }
+    if (raw === 'false') {
+      return false;
+    }
+  } catch {
+    // Treat exactly like "nothing cached yet".
+  }
+  return undefined;
+}
+
+function writePersistedAvailability(key: string, available: boolean): void {
+  try {
+    window.localStorage.setItem(STORAGE_PREFIX + key, String(available));
+  } catch {
+    // Ignore — the in-memory value is unaffected either way.
+  }
+}
+
 let cachedResult: { key: string | undefined; available: boolean } = {
   key: undefined,
   available: true,
@@ -34,9 +71,16 @@ let cachedResult: { key: string | undefined; available: boolean } = {
  * host page that swaps window.GetRoomlyEmbedConfig.apiKey (e.g. switching
  * to a different partner/product) must never have GetRoomly.open() read a
  * stale `false` computed for the previous key — see getAvailability() below.
+ *
+ * Also persists to localStorage (see readPersistedAvailability above) so a
+ * returning visitor's next page load can start from this result instead of
+ * the optimistic default.
  */
 export function setAvailabilityValue(key: string | undefined, available: boolean): void {
   cachedResult = { key, available };
+  if (key) {
+    writePersistedAvailability(key, available);
+  }
 }
 
 /**
@@ -58,13 +102,27 @@ export function notifyAvailabilityChanged(available: boolean): void {
  * page switches to a different (perfectly available) partner: the cache
  * would still hold the old partner's `false`, and open() would refuse to
  * even dispatch 'getroomly-open-modal' — the only thing that would let
- * App.tsx notice the new apiKey and re-check it. Optimistic default (true)
- * for a key that hasn't been checked yet, matching App.tsx's own fallback
- * and checkPartnerAvailability itself failing open.
+ * App.tsx notice the new apiKey and re-check it.
+ *
+ * When this page load hasn't itself computed a result for the current key
+ * yet (e.g. the very first call, before App.tsx's check has resolved),
+ * falls back to a value persisted from an earlier visit rather than
+ * jumping straight to the optimistic default — this is what lets a
+ * returning visitor's first render already show the right answer. Only
+ * once neither is available does it fall back to optimistic (true),
+ * matching App.tsx's own fallback and checkPartnerAvailability itself
+ * failing open.
  */
 export function getAvailability(): boolean {
-  if (cachedResult.key !== window.GetRoomlyEmbedConfig?.apiKey) {
-    return true;
+  const currentKey = window.GetRoomlyEmbedConfig?.apiKey;
+  if (cachedResult.key === currentKey) {
+    return cachedResult.available;
   }
-  return cachedResult.available;
+  if (currentKey) {
+    const persisted = readPersistedAvailability(currentKey);
+    if (persisted !== undefined) {
+      return persisted;
+    }
+  }
+  return true;
 }

@@ -23,10 +23,17 @@ function App() {
   // result from a previous key can be recognised as stale during render —
   // no setState-during-render and no synchronous setState inside the effect
   // (both flagged by lint/review as risky), just a derived comparison below.
-  const [availabilityResult, setAvailabilityResult] = useState({
-    key: undefined as string | undefined,
-    available: true,
-  });
+  //
+  // Seeded from getAvailability() (lazy initializer, not a hardcoded true):
+  // that reads a value persisted from an earlier visit if one exists, so a
+  // returning visitor's very first render can already reflect the real
+  // answer instead of the optimistic default — the button no longer has to
+  // visibly flash before hiding on every single page load for a suspended
+  // partner, just the first time a browser ever sees this apiKey.
+  const [availabilityResult, setAvailabilityResult] = useState(() => ({
+    key: window.GetRoomlyEmbedConfig?.apiKey,
+    available: getAvailability(),
+  }));
 
   useEffect(() => {
     if (!config?.apiKey) {
@@ -49,8 +56,17 @@ function App() {
   // `false` from a previous key must never carry over to a new one.
   // checkPartnerAvailability itself fails open too, so a check that errors
   // out never wrongly hides a working button either.
+  //
+  // Compared against window.GetRoomlyEmbedConfig?.apiKey directly, not
+  // config?.apiKey: config is still null on the very first render (isReady
+  // starts false), which would otherwise always take this else-branch on
+  // mount and throw away the value getAvailability() just seeded above.
+  // The two agree once config resolves — useEmbedConfig reads apiKey
+  // straight through with no transformation.
   const partnerAvailable =
-    availabilityResult.key === config?.apiKey ? availabilityResult.available : true;
+    availabilityResult.key === window.GetRoomlyEmbedConfig?.apiKey
+      ? availabilityResult.available
+      : true;
 
   // Publish to the shared module-level state so window.GetRoomly.open()
   // (defined outside React, in shadow-entry.tsx) and host pages listening

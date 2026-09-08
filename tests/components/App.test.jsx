@@ -10,6 +10,7 @@ jest.mock('../../src/services/partner-status', () => ({
 }));
 
 import { checkPartnerAvailability } from '../../src/services/partner-status';
+import { setAvailabilityValue } from '../../src/lib/availability-state';
 
 const baseEmbedConfig = {
   apiKey: 'grm_pub_test',
@@ -41,6 +42,21 @@ async function waitForAvailability() {
 describe('App — trigger button visibility', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // App.tsx now seeds its initial availability state from getAvailability()
+    // (see availability-state.ts), which persists to localStorage — without
+    // clearing it, an earlier test resolving to `false` for the same apiKey
+    // would leak into a later test expecting the optimistic default.
+    localStorage.clear();
+    // availability-state.ts's in-memory cachedResult is module-level state
+    // that this file's static `import App` keeps alive across every test —
+    // this file never calls jest.resetModules(). Without resetting it here
+    // too, a leftover value from an earlier test's own mount (App.tsx
+    // publishes via setAvailabilityValue on every commit) would outrank the
+    // localStorage seed a test sets up, since in-memory takes priority.
+    // key: undefined never matches a real apiKey, so this forces
+    // getAvailability() to fall through to localStorage/optimistic default,
+    // exactly like a fresh page load.
+    setAvailabilityValue(undefined, true);
     window.GetRoomlyEmbedConfig = { ...baseEmbedConfig };
   });
 
@@ -57,6 +73,20 @@ describe('App — trigger button visibility', () => {
     render(<App />);
 
     expect(screen.getByRole('button', { name: /visualize in your room/i })).toBeInTheDocument();
+  });
+
+  it('hides the trigger button immediately, before the check resolves, when a suspended result was persisted from an earlier visit', () => {
+    // The whole point of the localStorage cache in availability-state.ts:
+    // a returning visitor's very first render should already reflect the
+    // real answer instead of flashing the optimistic default every time.
+    localStorage.setItem('getroomly:availability:grm_pub_test', 'false');
+    checkPartnerAvailability.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<App />);
+
+    expect(
+      screen.queryByRole('button', { name: /visualize in your room/i })
+    ).not.toBeInTheDocument();
   });
 
   it('shows the trigger button once the partner is confirmed available', async () => {
@@ -150,6 +180,17 @@ describe('App — getroomly-open-modal safety net', () => {
   // suspended partner regardless of what triggered the event.
   beforeEach(() => {
     jest.clearAllMocks();
+    localStorage.clear();
+    // availability-state.ts's in-memory cachedResult is module-level state
+    // that this file's static `import App` keeps alive across every test —
+    // this file never calls jest.resetModules(). Without resetting it here
+    // too, a leftover value from an earlier test's own mount (App.tsx
+    // publishes via setAvailabilityValue on every commit) would outrank the
+    // localStorage seed a test sets up, since in-memory takes priority.
+    // key: undefined never matches a real apiKey, so this forces
+    // getAvailability() to fall through to localStorage/optimistic default,
+    // exactly like a fresh page load.
+    setAvailabilityValue(undefined, true);
     window.GetRoomlyEmbedConfig = { ...baseEmbedConfig, hideButton: true };
   });
 
