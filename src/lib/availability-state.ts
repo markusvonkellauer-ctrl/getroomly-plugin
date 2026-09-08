@@ -21,6 +21,14 @@ const STORAGE_PREFIX = 'getroomly:availability:';
  * Read/write failures (private browsing, storage disabled/full) are
  * swallowed — persistence is a nice-to-have that only smooths repeat
  * visits, never something correctness should depend on.
+ *
+ * Unlike availabilityByKey below, entries here accumulate across page
+ * loads with no eviction — deliberately not addressed: a given embed
+ * normally uses one stable partner apiKey for its whole lifetime, so
+ * distinct-key churn (and therefore entry count) isn't expected to grow
+ * meaningfully. Bounding this properly would need a secondary
+ * recency-tracking structure (localStorage has no built-in access order),
+ * which isn't proportionate to a risk this unlikely to materialize.
  */
 function readPersistedAvailability(key: string): boolean | undefined {
   try {
@@ -54,7 +62,27 @@ function writePersistedAvailability(key: string, available: boolean): void {
 // any reason (private browsing, storage disabled) — GetRoomly.open() could
 // then incorrectly report a suspended partner as available again the next
 // time the host switches back to A.
+//
+// Bounded to guard against unbounded growth if a host page churns through
+// many distinct apiKeys in one session (unlikely in practice — a given
+// embed normally uses one stable partner key — but cheap to guard
+// regardless). Map preserves insertion order, so evicting the first key
+// once over the cap is a simple, correct LRU without a separate
+// timestamp/bookkeeping structure — remember() below re-inserts an
+// existing key to move it to the "most recently used" end first.
+const MAX_TRACKED_KEYS = 20;
 const availabilityByKey = new Map<string, boolean>();
+
+function remember(key: string, available: boolean): void {
+  availabilityByKey.delete(key);
+  availabilityByKey.set(key, available);
+  if (availabilityByKey.size > MAX_TRACKED_KEYS) {
+    const oldestKey = availabilityByKey.keys().next().value;
+    if (oldestKey !== undefined) {
+      availabilityByKey.delete(oldestKey);
+    }
+  }
+}
 
 /**
  * Updates the cached value read by getAvailability() / GetRoomly.open().
@@ -79,7 +107,7 @@ const availabilityByKey = new Map<string, boolean>();
  */
 export function setAvailabilityValue(key: string | undefined, available: boolean): void {
   if (key) {
-    availabilityByKey.set(key, available);
+    remember(key, available);
     writePersistedAvailability(key, available);
   }
 }
@@ -131,7 +159,7 @@ export function getAvailability(): boolean {
     return known;
   }
   const available = readPersistedAvailability(currentKey) ?? true;
-  availabilityByKey.set(currentKey, available);
+  remember(currentKey, available);
   return available;
 }
 

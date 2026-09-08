@@ -250,5 +250,41 @@ describe('availability-state', () => {
         Storage.prototype.setItem = original;
       }
     });
+
+    it('evicts the least-recently-used key from the in-memory cache once more than 20 distinct keys have been confirmed', () => {
+      // Regression coverage for a Copilot review finding on PR #84:
+      // availabilityByKey was an unbounded Map that only ever grew.
+      // localStorage writes are forced to fail here so the in-memory cache
+      // is the only thing backing getAvailability() — otherwise
+      // localStorage's own (deliberately unbounded, see the comment above
+      // readPersistedAvailability) persistence would mask whether eviction
+      // actually happened.
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = () => {
+        throw new Error('storage full');
+      };
+
+      try {
+        jest.resetModules();
+        const {
+          setAvailabilityValue,
+          getAvailability,
+        } = require('../../src/lib/availability-state');
+
+        for (let i = 0; i < 21; i++) {
+          setAvailabilityValue(`grm_pub_${i}`, false);
+        }
+
+        // Oldest key evicted — falls back to the optimistic default.
+        window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_0';
+        expect(getAvailability()).toBe(true);
+
+        // Most recent key is still remembered.
+        window.GetRoomlyEmbedConfig.apiKey = 'grm_pub_20';
+        expect(getAvailability()).toBe(false);
+      } finally {
+        Storage.prototype.setItem = original;
+      }
+    });
   });
 });
