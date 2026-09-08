@@ -20,9 +20,11 @@ let currentAvailability = true;
  * GetRoomly.open() could read a stale value for a tick.
  *
  * Split from notifyAvailabilityChanged() below on purpose: that one *is* a
- * side effect (dispatchEvent) and belongs in an effect, deduped to fire
- * only on actual settled changes — not on every render pass, including
- * StrictMode's double-render in dev.
+ * side effect (dispatchEvent) and belongs in an effect instead. This
+ * function itself dispatches unconditionally on every call — it's the
+ * caller's effect dependency array (e.g. `[partnerAvailable]` in App.tsx)
+ * that limits it to firing once per actual settled change, not on every
+ * render pass including StrictMode's double-render in dev.
  */
 export function setAvailabilityValue(available: boolean): void {
   currentAvailability = available;

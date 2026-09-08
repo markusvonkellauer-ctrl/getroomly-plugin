@@ -131,20 +131,23 @@ describe('App — getroomly-open-modal safety net', () => {
     const availabilityHandler = jest.fn();
     window.addEventListener('getroomly-availability-changed', availabilityHandler);
 
-    render(<App />);
+    try {
+      render(<App />);
 
-    await waitFor(() => {
-      expect(availabilityHandler).toHaveBeenCalledWith(
-        expect.objectContaining({ detail: { available: false } })
-      );
-    });
+      await waitFor(() => {
+        expect(availabilityHandler).toHaveBeenCalledWith(
+          expect.objectContaining({ detail: { available: false } })
+        );
+      });
 
-    act(() => {
-      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
-    });
+      act(() => {
+        window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+      });
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    window.removeEventListener('getroomly-availability-changed', availabilityHandler);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    } finally {
+      window.removeEventListener('getroomly-availability-changed', availabilityHandler);
+    }
   });
 
   it('opens the modal on getroomly-open-modal when the partner is available', async () => {

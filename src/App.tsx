@@ -111,8 +111,9 @@ function App() {
     // modal itself refuses to open for a partner that's suspended for
     // quota. GetRoomly.open() already checks this too (shadow-entry.tsx) —
     // reading getAvailability() directly here (rather than a separately-
-    // synced ref) means both checks always agree, since setAvailability()
-    // updates it before dispatching any event.
+    // synced ref) means both checks always agree, since setAvailabilityValue()
+    // (called during render, above) keeps it current before this handler
+    // could ever run.
     const handleOpen = () => {
       if (getAvailability()) {
         setIsModalOpen(true);
