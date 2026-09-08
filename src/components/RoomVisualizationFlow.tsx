@@ -795,6 +795,9 @@ export function RoomVisualizationFlow({
         </div>
 
         <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
           style={{
             marginTop: '34px',
             fontSize: '12px',
@@ -810,6 +813,10 @@ export function RoomVisualizationFlow({
         </div>
 
         <div
+          role="progressbar"
+          aria-valuenow={Math.round(progress)}
+          aria-valuemin={0}
+          aria-valuemax={100}
           style={{
             marginTop: '14px',
             width: 'min(340px, 60%)',

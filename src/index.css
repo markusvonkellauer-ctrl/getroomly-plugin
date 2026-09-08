@@ -471,8 +471,13 @@ code {
   }
 }
 
-/* Progressive blur-to-sharp reveal for the processing-step photo */
+/* Progressive blur-to-sharp reveal for the processing-step photo.
+   Explicit base filter (not just the keyframes' 0% state) so the very first
+   paint is already blurred — some browsers can otherwise flash the sharp
+   image for a frame before the animation engine attaches. */
 .getroomly-blur-reveal {
+  filter: blur(14px);
+  will-change: filter;
   animation: getroomly-blur-reveal 14s ease-out forwards;
 }
 @keyframes getroomly-blur-reveal {

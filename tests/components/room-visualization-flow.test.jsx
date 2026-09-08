@@ -139,12 +139,13 @@ describe('RoomVisualizationFlow', () => {
       uploadFile(document.querySelector('input[type="file"]'), makeFile());
     });
 
+    let statusText;
+    let spinner;
     await waitFor(() => {
-      expect(screen.getByText(translations.en.loadingMessages[0])).toBeInTheDocument();
+      statusText = screen.getByText(translations.en.loadingMessages[0]);
+      spinner = document.querySelector('.getroomly-spinner-rot');
+      expect(spinner).not.toBeNull();
     });
-
-    const statusText = screen.getByText(translations.en.loadingMessages[0]);
-    const spinner = document.querySelector('.getroomly-spinner-rot');
     // Status text and spinner share the same overlay-stack parent — sitting
     // over the image, not inside the white footer below it.
     expect(statusText.parentElement).toBe(spinner.parentElement);
@@ -163,7 +164,9 @@ describe('RoomVisualizationFlow', () => {
     });
 
     expect(screen.getAllByText(translations.en.loadingMessages[0])).toHaveLength(1);
-    expect(screen.getByText('0%')).toBeInTheDocument();
+    // Regex, not a hard-coded '0%' — progress advances on a real 100ms
+    // interval, so a slow CI worker could tick past 0 before this runs.
+    expect(screen.getByText(/^\d+%$/)).toBeInTheDocument();
   });
 
   test('applies the progressive blur-reveal class and edge-bleed scale to the processing image', async () => {
