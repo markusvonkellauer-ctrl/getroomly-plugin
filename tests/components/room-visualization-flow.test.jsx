@@ -112,6 +112,75 @@ describe('RoomVisualizationFlow', () => {
     expect(callArg).not.toHaveProperty('coordinates');
   });
 
+  // ─── Processing step — loading UI overlay ──────────────────────────────────
+
+  test('renders the morphing spinner form with no dark circle behind it', async () => {
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    act(() => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(document.querySelector('.getroomly-spinner-rot')).toBeInTheDocument();
+      expect(document.querySelector('.getroomly-spinner-form')).toBeInTheDocument();
+    });
+    // Regression check for the old ring spinner's dark backdrop-blur puck —
+    // must not reappear behind the new morphing form.
+    expect(document.body.innerHTML).not.toContain('rgba(0, 0, 0, 0.6)');
+  });
+
+  test('shows the rotating status message and progress bar over the image, not in the white footer', async () => {
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    act(() => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(translations.en.loadingMessages[0])).toBeInTheDocument();
+    });
+
+    const statusText = screen.getByText(translations.en.loadingMessages[0]);
+    const spinner = document.querySelector('.getroomly-spinner-rot');
+    // Status text and spinner share the same overlay-stack parent — sitting
+    // over the image, not inside the white footer below it.
+    expect(statusText.parentElement).toBe(spinner.parentElement);
+  });
+
+  test('the processing footer shows only the percentage, not a duplicate status message', async () => {
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    act(() => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(translations.en.loadingMessages[0])).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(translations.en.loadingMessages[0])).toHaveLength(1);
+    expect(screen.getByText('0%')).toBeInTheDocument();
+  });
+
+  test('applies the progressive blur-reveal class and edge-bleed scale to the processing image', async () => {
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    act(() => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      const img = screen.getByAltText('Room being processed');
+      expect(img).toHaveClass('getroomly-blur-reveal');
+      expect(img).toHaveStyle({ transform: 'scale(1.04)' });
+    });
+  });
+
   // ─── Processing → Result ──────────────────────────────────────────────────
 
   test('transitions to result step after successful generation', async () => {

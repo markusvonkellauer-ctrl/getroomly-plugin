@@ -759,51 +759,75 @@ export function RoomVisualizationFlow({
         overflow: 'hidden',
       }}
     >
+      {/* Photo stays untouched — no dimming, no scrim. transform:scale(1.04)
+          bleeds the blur-reveal's edge pixels outside the visible frame
+          (the parent's overflow:hidden clips them) instead of shrinking the
+          blur radius, which would weaken the reveal effect. */}
       <img
         src={uploadedImage || ''}
         alt="Room being processed"
+        className="getroomly-blur-reveal"
         style={{
           width: '100%',
           height: '100%',
           objectFit: 'cover',
           display: 'block',
-          opacity: progress >= 85 ? 0.9 : 0.4,
-          filter: progress >= 85 ? 'blur(0px) grayscale(0%)' : 'blur(4px) grayscale(60%)',
-          transition: 'all 1000ms ease',
+          transform: 'scale(1.04)',
         }}
       />
 
-      {/* Central Spinner */}
+      {/* Loading stack — a sibling of the image, not a descendant, so it
+          never inherits the image's blur filter. */}
       <div
         style={{
           position: 'absolute',
           inset: '0',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'transparent',
           zIndex: 30,
           pointerEvents: 'none',
         }}
       >
+        <div className="getroomly-spinner-rot">
+          <div className="getroomly-spinner-form" />
+        </div>
+
         <div
           style={{
-            background: 'rgba(0, 0, 0, 0.6)',
-            backdropFilter: 'blur(12px)',
-            borderRadius: '50%',
-            padding: '24px',
-            boxShadow: '0 0 40px color-mix(in srgb, var(--getroomly-primary) 40%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--getroomly-primary) 40%, transparent)',
+            marginTop: '34px',
+            fontSize: '12px',
+            fontWeight: 600,
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            color: '#ffffff',
+            textShadow: '0 1px 3px rgba(0, 0, 0, 0.55)',
+            textAlign: 'center',
+          }}
+        >
+          {t.loadingMessages[messageIndex]}
+        </div>
+
+        <div
+          style={{
+            marginTop: '14px',
+            width: 'min(340px, 60%)',
+            position: 'relative',
+            height: '4px',
+            background: 'rgba(255, 255, 255, 0.28)',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.35)',
           }}
         >
           <div
             style={{
-              width: '48px',
-              height: '48px',
-              border: '2.5px solid color-mix(in srgb, var(--getroomly-primary) 30%, transparent)',
-              borderTop: '2.5px solid var(--getroomly-primary)',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              height: '100%',
+              background: '#00c9a7',
+              width: `${progress}%`,
+              transition: 'width 100ms linear',
             }}
           />
         </div>
@@ -1275,6 +1299,11 @@ export function RoomVisualizationFlow({
   );
 
   // Processing Footer Component (Step 2)
+  // Status text + progress bar now live over the image (see
+  // renderProcessingStep) — this keeps only the percentage figure, in its
+  // existing position/style, per explicit instruction not to move it yet.
+  // The footer is intentionally left otherwise empty during load; what (if
+  // anything) fills that space is an open design question for later.
   const renderProcessingFooter = () => (
     <div
       style={{
@@ -1286,71 +1315,19 @@ export function RoomVisualizationFlow({
         margin: '0 auto',
       }}
     >
-      {/* Cycling Loading Message */}
       <div
         style={{
-          height: '16px',
           display: 'flex',
-          alignItems: 'center',
           justifyContent: 'center',
-          width: '100%',
-          color: 'var(--getroomly-primary)',
-          fontSize: '10px',
+          marginTop: '4px',
+          color: 'color-mix(in srgb, var(--getroomly-primary) 70%, transparent)',
           fontWeight: '700',
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          textAlign: 'center',
+          fontSize: '10px',
+          letterSpacing: '0.1em',
+          fontFamily: 'ui-monospace, Consolas, monospace',
         }}
       >
-        {t.loadingMessages[messageIndex]}
-      </div>
-
-      {/* Progress Bar */}
-      <div
-        style={{
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px',
-        }}
-      >
-        <div
-          style={{
-            position: 'relative',
-            width: '100%',
-            height: '4px',
-            background: 'color-mix(in srgb, var(--getroomly-primary) 20%, transparent)',
-            borderRadius: '2px',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              height: '100%',
-              background: 'var(--getroomly-primary)',
-              boxShadow: '0 0 8px color-mix(in srgb, var(--getroomly-primary) 80%, transparent)',
-              width: `${progress}%`,
-              transition: 'width 100ms linear',
-            }}
-          />
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            marginTop: '4px',
-            color: 'color-mix(in srgb, var(--getroomly-primary) 70%, transparent)',
-            fontWeight: '700',
-            fontSize: '10px',
-            letterSpacing: '0.1em',
-            fontFamily: 'ui-monospace, Consolas, monospace',
-          }}
-        >
-          {Math.floor(progress)}%
-        </div>
+        {Math.floor(progress)}%
       </div>
     </div>
   );
