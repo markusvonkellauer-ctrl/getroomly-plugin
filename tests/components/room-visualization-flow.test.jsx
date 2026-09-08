@@ -131,18 +131,17 @@ describe('RoomVisualizationFlow', () => {
     });
     // Regression check for the old ring spinner's dark backdrop-blur puck —
     // must not reappear behind the new morphing form. Scoped to the
-    // processing overlay's own subtree (an actual element's inline style,
-    // not a raw HTML substring match), so this can't false-fail on an
-    // unrelated element elsewhere in the document that happens to share the
-    // color. Includes the overlay element itself (querySelectorAll only
-    // returns descendants) and checks both the shorthand `background` and
-    // the longhand `backgroundColor`, since either could carry the puck's
-    // color depending on how it's reintroduced.
-    const candidates = [overlay, ...Array.from(overlay.querySelectorAll('div'))];
+    // processing overlay's own subtree, not a raw HTML substring match, so
+    // this can't false-fail on an unrelated element elsewhere in the
+    // document that happens to share the color. Uses getComputedStyle
+    // (not el.style) and scans every element, not just <div>s, so it also
+    // catches the puck if it's reintroduced via a CSS class or on a
+    // differently-tagged element instead of an inline style. Includes the
+    // overlay element itself, since querySelectorAll only returns
+    // descendants.
+    const candidates = [overlay, ...Array.from(overlay.querySelectorAll('*'))];
     const darkPuck = candidates.find(
-      el =>
-        el.style.background === 'rgba(0, 0, 0, 0.6)' ||
-        el.style.backgroundColor === 'rgba(0, 0, 0, 0.6)'
+      el => window.getComputedStyle(el).backgroundColor === 'rgba(0, 0, 0, 0.6)'
     );
     expect(darkPuck).toBeUndefined();
   });

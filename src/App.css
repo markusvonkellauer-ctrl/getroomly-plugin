@@ -55,11 +55,13 @@ body {
 
 /* Duplicated in index.css deliberately, for the same reason @keyframes spin
    above is duplicated there too (these are new, separate keyframes — not
-   copies of `spin`): App.css backs the plain (non-Shadow-DOM) main.tsx mount
-   used for local dev/demo pages, while index.css is inlined into the Shadow
-   DOM for the production widget build (shadow-entry.tsx). Neither mount
-   imports the other's stylesheet, so RoomVisualizationFlow's processing-step
-   styling needs its own copy in each to render correctly on both. */
+   copies of `spin`): index.css is inlined into the Shadow DOM for the
+   production widget build (shadow-entry.tsx), which never loads App.css, so
+   it needs its own copy of these rules to render RoomVisualizationFlow's
+   processing step correctly. App.css backs App.tsx's styling for the
+   non-Shadow dev/demo mount (main.tsx) — that mount happens to also import
+   index.css directly, so both copies do load there, but App.css still
+   carries its own so App.tsx's styling isn't dependent on that pairing. */
 /* Morphing teal loading spinner (processing step) */
 .getroomly-spinner-rot {
   width: 120px;
