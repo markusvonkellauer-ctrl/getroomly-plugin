@@ -5,7 +5,7 @@ import { useEmbedConfig } from '@/hooks/use-embed-config';
 import { EmbedButton } from '@/components/EmbedButton';
 import { RoomVisualizationFlow } from '@/components/RoomVisualizationFlow';
 import { trackInteraction } from '@/lib/analytics';
-import { setAvailability } from '@/lib/availability-state';
+import { getAvailability, setAvailability } from '@/lib/availability-state';
 import { checkPartnerAvailability } from '@/services/partner-status';
 import './App.css';
 
@@ -53,16 +53,15 @@ function App() {
   // for 'getroomly-availability-changed' both see the current value —
   // e.g. a host that built its own trigger button (hideButton: true)
   // instead of using the default EmbedButton can hide it too.
+  //
+  // setAvailability() updates the module's cached value BEFORE dispatching
+  // the event, so getAvailability() is always fresh by the time any
+  // listener runs — including the open-modal listener below, which reads
+  // it directly rather than keeping its own separately-synced ref. Two
+  // copies updated via two separate effects previously left a real (if
+  // narrow) window where they could disagree within the same commit.
   useEffect(() => {
     setAvailability(partnerAvailable);
-  }, [partnerAvailable]);
-
-  // Keep a ref to the latest partnerAvailable so the open-modal listener
-  // below (registered once on mount) always reads the current value
-  // instead of a stale one — same pattern as categoryRef just below.
-  const partnerAvailableRef = useRef(partnerAvailable);
-  useEffect(() => {
-    partnerAvailableRef.current = partnerAvailable;
   }, [partnerAvailable]);
 
   // Keep a ref to the latest config.category so the Mode B listener
@@ -105,12 +104,12 @@ function App() {
     // Safety net: even if a host page's own custom trigger button (built
     // via hideButton: true) is still visible or gets clicked in a race, the
     // modal itself refuses to open for a partner that's suspended for
-    // quota. GetRoomly.open() already checks this too (shadow-entry.tsx),
-    // but that check runs against the module-level cache set by the effect
-    // above — this ref read is the same value, just guarding the actual
-    // state transition as the final word.
+    // quota. GetRoomly.open() already checks this too (shadow-entry.tsx) —
+    // reading getAvailability() directly here (rather than a separately-
+    // synced ref) means both checks always agree, since setAvailability()
+    // updates it before dispatching any event.
     const handleOpen = () => {
-      if (partnerAvailableRef.current) {
+      if (getAvailability()) {
         setIsModalOpen(true);
       }
     };
