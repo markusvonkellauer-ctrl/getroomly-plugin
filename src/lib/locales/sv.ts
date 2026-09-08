@@ -52,4 +52,6 @@ export const sv: TranslationStrings = {
   termsSection4Body:
     'Du behåller all äganderätt till dina originalfoton. GetRoomly och dess partners behåller alla rättigheter till produktvisualiseringarna och den underliggande AI-tekniken.',
   termsClose: 'Stäng',
+  errorTemporarilyUnavailable:
+    'Den här funktionen är tillfälligt otillgänglig. Försök igen senare.',
 };

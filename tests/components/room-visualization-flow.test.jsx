@@ -6,8 +6,14 @@
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlow';
+import { translations } from '../../src/lib/i18n';
 
 jest.mock('../../src/services/ai-generation', () => ({
+  // AIGenerationError is the real class, not mocked — the component checks
+  // `err instanceof AIGenerationError` in its catch block, which throws
+  // ("Right-hand side of 'instanceof' is not an object") if this export
+  // were left undefined by only listing the three functions below.
+  ...jest.requireActual('../../src/services/ai-generation'),
   generateRoomVisualization: jest.fn(),
   submitFeedback: jest.fn(),
   validateImageFile: jest.fn(() => ({ isValid: true, error: null })),
@@ -179,6 +185,32 @@ describe('RoomVisualizationFlow', () => {
 
     await waitFor(() => {
       expect(onError).toHaveBeenCalledWith('upstream busy');
+    });
+  });
+
+  test('calls onError with a localized, customer-friendly message for a quota-exceeded failure', async () => {
+    // The backend's own description for this error code is internal-facing
+    // (English, references "quota") — the plugin substitutes its own
+    // localized, generic string instead, since "quota" has no meaning to
+    // the shopper who ends up seeing this message on the host's site.
+    const { AIGenerationError } = jest.requireActual('../../src/services/ai-generation');
+    generateRoomVisualization.mockRejectedValueOnce(
+      new AIGenerationError('Monthly render quota exceeded', 'quotaExceeded', 429)
+    );
+    const onError = jest.fn();
+
+    render(<RoomVisualizationFlow {...defaultProps} onError={onError} />);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      // Asserted against the translation dictionary itself, not a
+      // hard-coded copy of the English string — this stays correct if the
+      // wording in en.ts ever changes, rather than needing a manual,
+      // easy-to-forget update here to match.
+      expect(onError).toHaveBeenCalledWith(translations.en.errorTemporarilyUnavailable);
     });
   });
 

@@ -53,4 +53,6 @@ export const nl: TranslationStrings = {
   termsSection4Body:
     "U behoudt alle eigendomsrechten op uw originele foto's. GetRoomly en haar partners behouden alle rechten op de productvisualisaties en de onderliggende AI-technologie.",
   termsClose: 'Sluiten',
+  errorTemporarilyUnavailable:
+    'Deze functie is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
 };
