@@ -175,6 +175,17 @@ export function getAvailability(): boolean {
  * that imports App (or this module) once via a static top-level `import`,
  * rather than calling jest.resetModules() per test, would otherwise leak
  * one test's confirmed result into the next test using the same apiKey.
+ *
+ * jest.resetModules() + re-requiring App per test (avoiding the need for
+ * this export at all) was tried and reverted: it also resets React,
+ * react-dom, and @testing-library/react to fresh module instances, and a
+ * freshly-required App.tsx then calls hooks against a *different* React
+ * copy than the one @testing-library/react's render() is using — React
+ * requires a single instance to resolve its internal hook dispatcher,
+ * so every hook call in App.tsx failed with "Invalid hook call" the
+ * moment resetModules() was introduced. Isolating only this module
+ * without dragging React along would need re-requiring App.tsx as well
+ * (it's what pulls availability-state.ts in), which is the same problem.
  */
 export function __resetAvailabilityStateForTests(): void {
   availabilityByKey.clear();
