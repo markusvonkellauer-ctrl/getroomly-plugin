@@ -478,7 +478,14 @@ code {
 .getroomly-blur-reveal {
   filter: blur(14px);
   will-change: filter;
-  animation: getroomly-blur-reveal 14s ease-out forwards;
+  /* Second, 1ms animation timed to start exactly when the reveal ends —
+     clears will-change once the compositor promotion it caused is no
+     longer buying anything, instead of leaving the image layer-promoted
+     (extra GPU/memory cost, particularly on mobile) for the rest of its
+     lifetime. */
+  animation:
+    getroomly-blur-reveal 14s ease-out forwards,
+    getroomly-blur-reveal-settle 1ms 14s forwards;
 }
 @keyframes getroomly-blur-reveal {
   from {
@@ -486,6 +493,11 @@ code {
   }
   to {
     filter: blur(0px);
+  }
+}
+@keyframes getroomly-blur-reveal-settle {
+  to {
+    will-change: auto;
   }
 }
 

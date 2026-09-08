@@ -122,15 +122,20 @@ describe('RoomVisualizationFlow', () => {
       uploadFile(document.querySelector('input[type="file"]'), makeFile());
     });
 
+    let overlay;
     await waitFor(() => {
-      expect(document.querySelector('.getroomly-spinner-rot')).toBeInTheDocument();
+      const spinner = document.querySelector('.getroomly-spinner-rot');
+      expect(spinner).not.toBeNull();
       expect(document.querySelector('.getroomly-spinner-form')).toBeInTheDocument();
+      overlay = spinner.parentElement;
     });
     // Regression check for the old ring spinner's dark backdrop-blur puck —
-    // must not reappear behind the new morphing form. Scoped to an actual
-    // element's inline style, not a raw HTML substring match, so this can't
-    // false-fail on an unrelated element that happens to share the color.
-    const darkPuck = Array.from(document.querySelectorAll('div')).find(
+    // must not reappear behind the new morphing form. Scoped to the
+    // processing overlay's own subtree (an actual element's inline style,
+    // not a raw HTML substring match), so this can't false-fail on an
+    // unrelated element elsewhere in the document that happens to share the
+    // color, and can't miss a puck reintroduced outside the overlay either.
+    const darkPuck = Array.from(overlay.querySelectorAll('div')).find(
       el => el.style.background === 'rgba(0, 0, 0, 0.6)'
     );
     expect(darkPuck).toBeUndefined();

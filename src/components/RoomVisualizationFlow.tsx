@@ -834,7 +834,10 @@ export function RoomVisualizationFlow({
               left: 0,
               height: '100%',
               background: '#00c9a7',
-              width: `${progress}%`,
+              // Math.floor, matching aria-valuenow and the footer percentage
+              // below — the raw fractional value would let the visual fill
+              // and the announced/displayed progress momentarily disagree.
+              width: `${Math.floor(progress)}%`,
               transition: 'width 100ms linear',
             }}
           />
