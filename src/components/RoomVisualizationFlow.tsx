@@ -794,10 +794,11 @@ export function RoomVisualizationFlow({
           <div className="getroomly-spinner-form" />
         </div>
 
+        {/* Purely decorative flavor text, not a live region: it cycles every
+            3s and can run well past that during the creep phase, so
+            announcing every change would be chatty. The progressbar below
+            carries the actual accessible progress state. */}
         <div
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
           style={{
             marginTop: '34px',
             fontSize: '12px',

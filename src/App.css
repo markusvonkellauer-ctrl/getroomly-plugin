@@ -96,17 +96,14 @@ body {
    Explicit base filter (not just the keyframes' 0% state) so the very first
    paint is already blurred — some browsers can otherwise flash the sharp
    image for a frame before the animation engine attaches. */
+/* No will-change here: it's a discrete (non-animatable) property, so
+   clearing it from a keyframe isn't reliably honored across browsers and
+   can leave the image permanently layer-promoted. A one-time 14s animation
+   on a single image doesn't need the compositor hint badly enough to be
+   worth chasing a JS-based clear for it. */
 .getroomly-blur-reveal {
   filter: blur(14px);
-  will-change: filter;
-  /* Second, 1ms animation timed to start exactly when the reveal ends —
-     clears will-change once the compositor promotion it caused is no
-     longer buying anything, instead of leaving the image layer-promoted
-     (extra GPU/memory cost, particularly on mobile) for the rest of its
-     lifetime. */
-  animation:
-    getroomly-blur-reveal 14s ease-out forwards,
-    getroomly-blur-reveal-settle 1ms 14s forwards;
+  animation: getroomly-blur-reveal 14s ease-out forwards;
 }
 @keyframes getroomly-blur-reveal {
   from {
@@ -114,11 +111,6 @@ body {
   }
   to {
     filter: blur(0px);
-  }
-}
-@keyframes getroomly-blur-reveal-settle {
-  to {
-    will-change: auto;
   }
 }
 
@@ -130,7 +122,6 @@ body {
   .getroomly-blur-reveal {
     animation: none;
     filter: blur(0px);
-    will-change: auto;
   }
 }
 
