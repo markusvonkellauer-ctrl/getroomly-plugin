@@ -71,6 +71,14 @@ export interface TranslationStrings {
   termsSection4Title: string;
   termsSection4Body: string;
   termsClose: string;
+  /**
+   * Shown when the backend refuses a generation because the partner has hit
+   * their render quota (AIGenerationError.code === 'quotaExceeded') — see
+   * RoomVisualizationFlow.tsx's catch block. Deliberately generic: "quota"
+   * is an internal partner/billing concept with no meaning to the shopper
+   * seeing this, not something to explain to them.
+   */
+  errorTemporarilyUnavailable: string;
 }
 
 export type SupportedLanguage =

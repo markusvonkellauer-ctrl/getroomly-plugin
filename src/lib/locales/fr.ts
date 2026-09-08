@@ -53,4 +53,6 @@ export const fr: TranslationStrings = {
   termsSection4Body:
     "Vous conservez l'entière propriété de vos photos originales. GetRoomly et ses partenaires conservent tous les droits sur les visualisations de produits et la technologie d'IA sous-jacente.",
   termsClose: 'Fermer',
+  errorTemporarilyUnavailable:
+    'Cette fonctionnalité est temporairement indisponible. Veuillez réessayer plus tard.',
 };

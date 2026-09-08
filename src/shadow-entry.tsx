@@ -7,6 +7,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { AppConfig } from './config/app-config';
+import { getAvailability } from './lib/availability-state';
 
 // Import styles as text to inject into Shadow DOM
 import styleContent from './index.css?inline';
@@ -72,7 +73,11 @@ if (!customElements.get('getroomly-plugin')) {
 
 // Expose global API for host page integration
 let pluginInstance: HTMLElement | null = null;
-let isModalOpen = false;
+// Tracks a first-mount open() call's deferred dispatch (see open() below) so
+// close() can cancel it — otherwise open() immediately followed by close()
+// before the deferred macrotask fires would still reopen the modal moments
+// after the host asked to close it.
+let pendingOpenTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 const initPlugin = () => {
   if (pluginInstance) {
@@ -86,18 +91,119 @@ const initPlugin = () => {
   return pluginInstance;
 };
 
+// Single source of truth for modal-open state. Both events are dispatched
+// from exactly one place — App.tsx's centralized effect watching its own
+// isModalOpen React state — regardless of what actually changed that state
+// (the default EmbedButton's onClick, an open/close request event, or a
+// UI-driven close via the X button/backdrop). Deliberately NOT listening
+// for the *request* events ('getroomly-open-modal' / 'getroomly-close-
+// modal'): those only mean opening/closing was asked for, not that it
+// happened — App.tsx can refuse an open request for a suspended partner,
+// which would otherwise leave this wrongly true for a modal that never
+// actually opened.
+//
+// Both the registration guard AND the value itself live on `window`, not a
+// module-local variable: a module-local isModalOpen closed over by these
+// listeners would only ever get updated by whichever module instance
+// registered them first — if the bundle is loaded more than once (a
+// jest.resetModules()-driven re-require in tests, or an accidental double
+// inclusion on a host page), every later instance's own GetRoomly.isOpen()
+// would read a local variable the (never re-registered) listeners don't
+// write to, permanently diverging from the real state.
+if (!window.__getroomlyModalListenersRegistered) {
+  window.__getroomlyModalListenersRegistered = true;
+  window.__getroomlyIsModalOpen = false;
+  window.addEventListener('getroomly-modal-opened', () => {
+    window.__getroomlyIsModalOpen = true;
+  });
+  window.addEventListener('getroomly-modal-closed', () => {
+    window.__getroomlyIsModalOpen = false;
+  });
+}
+
 (window as any).GetRoomly = {
-  open: () => {
-    initPlugin();
-    isModalOpen = true;
-    window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+  // Returns false and does nothing if the partner is currently suspended
+  // for quota — a safety net for host pages that built their own trigger
+  // button (hideButton: true) instead of the plugin's default one, in case
+  // that button is still visible/clicked (e.g. a host that doesn't listen
+  // for 'getroomly-availability-changed', or a race before it does).
+  // getAvailability() reads a locally-cached value (set by App.tsx once
+  // its status check resolves), so this check adds no network latency.
+  // Returns `false` when open() couldn't do anything (blocked by quota, or
+  // the plugin couldn't mount) — otherwise `undefined`, matching what this
+  // returned before open() had any return value at all. Deliberately never
+  // returns `true`: no old host code could have relied on any particular
+  // truthy value from a call that always returned undefined, so this stays
+  // purely additive — `false` is new information, not a changed contract
+  // for the success path.
+  open: (): boolean | undefined => {
+    if (!getAvailability()) {
+      window.dispatchEvent(new CustomEvent('getroomly-open-blocked'));
+      return false;
+    }
+    // Cancel any still-pending deferred dispatch from an earlier open()
+    // call before deciding whether to (re)defer this one — otherwise a
+    // second open() arriving before the first's deferred macrotask fires
+    // (wasAlreadyMounted now true, dispatching synchronously below) would
+    // leave that stale timer to fire an extra, unexpected
+    // 'getroomly-open-modal' event later, bypassing close()'s cancellation
+    // too since only the most recent timer ID is ever tracked.
+    if (pendingOpenTimeoutId !== null) {
+      clearTimeout(pendingOpenTimeoutId);
+      pendingOpenTimeoutId = null;
+    }
+    // Captured before initPlugin() runs: whether the plugin element (and
+    // therefore the App.tsx instance whose useEffect registers the
+    // 'getroomly-open-modal' listener) already existed.
+    const wasAlreadyMounted = pluginInstance !== null;
+    // initPlugin() returns null if #getroomly-plugin-container isn't in the
+    // DOM (yet, or at all) — don't claim success or dispatch the open event
+    // when nothing was actually mounted to receive it.
+    if (!initPlugin()) {
+      return false;
+    }
+    // window.__getroomlyIsModalOpen is updated by the listener above, not
+    // set here directly — keeps a single source of truth regardless of what
+    // triggered the event.
+    const dispatchOpenModal = () => {
+      pendingOpenTimeoutId = null;
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    };
+    if (wasAlreadyMounted) {
+      dispatchOpenModal();
+    } else {
+      // First-time mount: createRoot().render() above schedules React's
+      // commit + effects asynchronously — the useEffect in App.tsx that
+      // registers the 'getroomly-open-modal' listener hasn't run yet at
+      // this point. Dispatching synchronously here would fire before any
+      // listener exists to catch it, silently doing nothing on the very
+      // first open() call. Deferring to a macrotask lets React finish
+      // mounting and running effects first. Tracked in pendingOpenTimeoutId
+      // so close() (below) can cancel it if called before it fires.
+      pendingOpenTimeoutId = setTimeout(dispatchOpenModal, 0);
+    }
   },
+  // Only dispatches the *request* to close ('getroomly-close-modal') —
+  // symmetric with open() only requesting, not claiming success. App.tsx's
+  // centralized isModalOpen effect dispatches 'getroomly-modal-closed' once
+  // React has actually processed it; dispatching it here too would
+  // double-fire it (and do so before React has actually closed anything).
   close: () => {
-    isModalOpen = false;
+    // Cancels a still-pending first-mount open() dispatch (see open()
+    // above) — without this, open() immediately followed by close() before
+    // that deferred macrotask fires would still reopen the modal moments
+    // after the host asked to close it.
+    if (pendingOpenTimeoutId !== null) {
+      clearTimeout(pendingOpenTimeoutId);
+      pendingOpenTimeoutId = null;
+    }
     window.dispatchEvent(new CustomEvent('getroomly-close-modal'));
-    window.dispatchEvent(new CustomEvent('getroomly-modal-closed'));
   },
-  isOpen: () => isModalOpen,
+  isOpen: () => window.__getroomlyIsModalOpen ?? false,
+  // Lets a host page check availability on demand — e.g. right before
+  // rendering its own trigger button — in addition to the
+  // 'getroomly-availability-changed' event for reacting to a change.
+  isAvailable: getAvailability,
   init: initPlugin,
 };
 
