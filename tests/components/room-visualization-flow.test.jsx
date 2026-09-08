@@ -45,6 +45,18 @@ const uploadFile = (input, file) => {
   fireEvent.change(input);
 };
 
+// Parses the numeric r/g/b/a channels out of a computed color string instead
+// of comparing strings directly — getComputedStyle can normalize to
+// different formats (e.g. legacy 'rgba(0, 0, 0, 0.6)' vs modern
+// 'rgb(0 0 0 / 0.6)'), which a strict string match would be brittle against.
+const isColor = (colorString, [r, g, b, a]) => {
+  const match = colorString.match(/rgba?\(([^)]+)\)/);
+  if (!match) return false;
+  const channels = match[1].split(/[\s,/]+/).map(Number);
+  const [cr, cg, cb, ca = 1] = channels;
+  return cr === r && cg === g && cb === b && Math.abs(ca - a) < 0.001;
+};
+
 describe('RoomVisualizationFlow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -140,8 +152,8 @@ describe('RoomVisualizationFlow', () => {
     // overlay element itself, since querySelectorAll only returns
     // descendants.
     const candidates = [overlay, ...Array.from(overlay.querySelectorAll('*'))];
-    const darkPuck = candidates.find(
-      el => window.getComputedStyle(el).backgroundColor === 'rgba(0, 0, 0, 0.6)'
+    const darkPuck = candidates.find(el =>
+      isColor(window.getComputedStyle(el).backgroundColor, [0, 0, 0, 0.6])
     );
     expect(darkPuck).toBeUndefined();
   });
