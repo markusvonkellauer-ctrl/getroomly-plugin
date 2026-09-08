@@ -141,6 +141,17 @@ if (!window.__getroomlyModalListenersRegistered) {
       window.dispatchEvent(new CustomEvent('getroomly-open-blocked'));
       return false;
     }
+    // Cancel any still-pending deferred dispatch from an earlier open()
+    // call before deciding whether to (re)defer this one — otherwise a
+    // second open() arriving before the first's deferred macrotask fires
+    // (wasAlreadyMounted now true, dispatching synchronously below) would
+    // leave that stale timer to fire an extra, unexpected
+    // 'getroomly-open-modal' event later, bypassing close()'s cancellation
+    // too since only the most recent timer ID is ever tracked.
+    if (pendingOpenTimeoutId !== null) {
+      clearTimeout(pendingOpenTimeoutId);
+      pendingOpenTimeoutId = null;
+    }
     // Captured before initPlugin() runs: whether the plugin element (and
     // therefore the App.tsx instance whose useEffect registers the
     // 'getroomly-open-modal' listener) already existed.

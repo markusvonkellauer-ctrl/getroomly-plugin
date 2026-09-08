@@ -123,6 +123,32 @@ describe('shadow-entry — window.GetRoomly.open() first-mount race', () => {
 
     expect(openHandler).not.toHaveBeenCalled();
   });
+
+  it('does not leave a duplicate deferred dispatch pending when open() is called again before it fires', () => {
+    // Regression coverage for a Copilot review finding on PR #83: the
+    // second open() call (already mounted, dispatches synchronously) used
+    // to leave the first call's deferred timer untouched, firing an extra
+    // 'getroomly-open-modal' event later — and bypassing close()'s
+    // cancellation too, since only the most recent timer ID was tracked.
+    require('../../src/shadow-entry');
+    document.body.innerHTML = '<div id="getroomly-plugin-container"></div>';
+
+    act(() => {
+      window.GetRoomly.open();
+    });
+    expect(openHandler).not.toHaveBeenCalled();
+
+    act(() => {
+      window.GetRoomly.open();
+    });
+    expect(openHandler).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      jest.runAllTimers();
+    });
+
+    expect(openHandler).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('shadow-entry — modal-opened/closed listener registration', () => {
