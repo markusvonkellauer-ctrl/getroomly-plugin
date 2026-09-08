@@ -20,6 +20,24 @@ const baseEmbedConfig = {
   measurements: { width: 200, depth: 300, height: 1 },
 };
 
+/**
+ * Waits for the specific promise checkPartnerAvailability's last call
+ * returned to settle, then flushes React's resulting state update/effects
+ * via act(). Deterministic for any resolved value — including `true`,
+ * which a naive "wait for the availability-changed event" approach can't
+ * detect reliably: `true` is also the optimistic default set at mount, so
+ * a check that resolves to `true` again produces no actual value change
+ * and the event never re-fires. Not just "called" either — that's true
+ * synchronously on mount, before the mocked promise has resolved at all.
+ */
+async function waitForAvailability() {
+  await waitFor(() => expect(checkPartnerAvailability).toHaveBeenCalled());
+  const { results } = checkPartnerAvailability.mock;
+  await act(async () => {
+    await results[results.length - 1].value;
+  });
+}
+
 describe('App — trigger button visibility', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -91,6 +109,25 @@ describe('App — trigger button visibility', () => {
     expect(screen.getByRole('button', { name: /visualize in your room/i })).toBeInTheDocument();
   });
 
+  it('dispatches getroomly-modal-opened when opened via the default EmbedButton (not just via events)', async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(true);
+    const openedHandler = jest.fn();
+    window.addEventListener('getroomly-modal-opened', openedHandler);
+
+    try {
+      render(<App />);
+      await waitForAvailability();
+
+      act(() => {
+        screen.getByRole('button', { name: /visualize in your room/i }).click();
+      });
+
+      expect(openedHandler).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener('getroomly-modal-opened', openedHandler);
+    }
+  });
+
   it('still respects config.hideButton regardless of availability', async () => {
     checkPartnerAvailability.mockResolvedValueOnce(true);
     window.GetRoomlyEmbedConfig = { ...baseEmbedConfig, hideButton: true };
@@ -123,41 +160,21 @@ describe('App — getroomly-open-modal safety net', () => {
   it('does not open the modal on getroomly-open-modal when the partner is unavailable', async () => {
     checkPartnerAvailability.mockResolvedValueOnce(false);
 
-    // Waiting for checkPartnerAvailability to have been *called* isn't
-    // enough — that happens synchronously on mount, before its promise
-    // resolves. Wait for the availability-changed event carrying the
-    // resolved `false` specifically, so the ref the open-modal listener
-    // reads has actually been updated before we dispatch it.
-    const availabilityHandler = jest.fn();
-    window.addEventListener('getroomly-availability-changed', availabilityHandler);
+    render(<App />);
+    await waitForAvailability();
 
-    try {
-      render(<App />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
 
-      await waitFor(() => {
-        expect(availabilityHandler).toHaveBeenCalledWith(
-          expect.objectContaining({ detail: { available: false } })
-        );
-      });
-
-      act(() => {
-        window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
-      });
-
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    } finally {
-      window.removeEventListener('getroomly-availability-changed', availabilityHandler);
-    }
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('opens the modal on getroomly-open-modal when the partner is available', async () => {
     checkPartnerAvailability.mockResolvedValueOnce(true);
 
     render(<App />);
-
-    await waitFor(() => {
-      expect(checkPartnerAvailability).toHaveBeenCalled();
-    });
+    await waitForAvailability();
 
     act(() => {
       window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
@@ -180,7 +197,7 @@ describe('App — getroomly-open-modal safety net', () => {
 
     try {
       render(<App />);
-      await waitFor(() => expect(checkPartnerAvailability).toHaveBeenCalled());
+      await waitForAvailability();
 
       act(() => {
         window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
@@ -195,17 +212,11 @@ describe('App — getroomly-open-modal safety net', () => {
   it('does not dispatch getroomly-modal-opened when the open request is refused (unavailable)', async () => {
     checkPartnerAvailability.mockResolvedValueOnce(false);
     const openedHandler = jest.fn();
-    const availabilityHandler = jest.fn();
     window.addEventListener('getroomly-modal-opened', openedHandler);
-    window.addEventListener('getroomly-availability-changed', availabilityHandler);
 
     try {
       render(<App />);
-      await waitFor(() => {
-        expect(availabilityHandler).toHaveBeenCalledWith(
-          expect.objectContaining({ detail: { available: false } })
-        );
-      });
+      await waitForAvailability();
 
       act(() => {
         window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
@@ -214,7 +225,35 @@ describe('App — getroomly-open-modal safety net', () => {
       expect(openedHandler).not.toHaveBeenCalled();
     } finally {
       window.removeEventListener('getroomly-modal-opened', openedHandler);
-      window.removeEventListener('getroomly-availability-changed', availabilityHandler);
+    }
+  });
+
+  // Regression coverage: shadow-entry.tsx's close() used to dispatch
+  // 'getroomly-modal-closed' itself, in addition to App.tsx's centralized
+  // isModalOpen effect also dispatching it once React actually closed —
+  // double-firing the confirmation for every close() call.
+  it('dispatches getroomly-modal-closed exactly once when closed via getroomly-close-modal', async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(true);
+    const closedHandler = jest.fn();
+    window.addEventListener('getroomly-modal-closed', closedHandler);
+
+    try {
+      render(<App />);
+      await waitForAvailability();
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+      });
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('getroomly-close-modal'));
+      });
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(closedHandler).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener('getroomly-modal-closed', closedHandler);
     }
   });
 });

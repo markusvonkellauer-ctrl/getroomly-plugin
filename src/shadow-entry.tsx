@@ -87,19 +87,16 @@ const initPlugin = () => {
   return pluginInstance;
 };
 
-// Single source of truth for isModalOpen: these two events are the actual
-// signal of the modal's real open/closed state, dispatched from every path
-// that can change it — GetRoomly.open()/close(), a host dispatching an
-// event directly (bypassing open()/close()), and the React UI's own close
-// (X button / backdrop click, via App.tsx's handleModalClose). Previously
-// isModalOpen was only set inline inside open()/close(), so isOpen() went
-// stale for either of those other paths.
-//
-// Listens for 'getroomly-modal-opened' (dispatched by App.tsx once it has
-// actually opened, i.e. the partner was available), NOT 'getroomly-open-
-// modal' (only a *request* to open — App.tsx can and does refuse it for a
-// suspended partner, which would otherwise leave isModalOpen wrongly true
-// for a modal that never actually opened).
+// Single source of truth for isModalOpen. Both events are dispatched from
+// exactly one place — App.tsx's centralized effect watching its own
+// isModalOpen React state — regardless of what actually changed that state
+// (the default EmbedButton's onClick, an open/close request event, or a
+// UI-driven close via the X button/backdrop). Deliberately NOT listening
+// for the *request* events ('getroomly-open-modal' / 'getroomly-close-
+// modal'): those only mean opening/closing was asked for, not that it
+// happened — App.tsx can refuse an open request for a suspended partner,
+// which would otherwise leave isModalOpen wrongly true for a modal that
+// never actually opened.
 window.addEventListener('getroomly-modal-opened', () => {
   isModalOpen = true;
 });
@@ -137,9 +134,13 @@ window.addEventListener('getroomly-modal-closed', () => {
     // keeps a single source of truth regardless of what triggered the event.
     window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
   },
+  // Only dispatches the *request* to close ('getroomly-close-modal') —
+  // symmetric with open() only requesting, not claiming success. App.tsx's
+  // centralized isModalOpen effect dispatches 'getroomly-modal-closed' once
+  // React has actually processed it; dispatching it here too would
+  // double-fire it (and do so before React has actually closed anything).
   close: () => {
     window.dispatchEvent(new CustomEvent('getroomly-close-modal'));
-    window.dispatchEvent(new CustomEvent('getroomly-modal-closed'));
   },
   isOpen: () => isModalOpen,
   // Lets a host page check availability on demand — e.g. right before

@@ -109,6 +109,32 @@ function App() {
     };
   }, [isModalOpen]);
 
+  // Confirms the modal's actual open/closed state to shadow-entry.tsx
+  // (window.GetRoomly.isOpen()), regardless of which of the several paths
+  // caused isModalOpen to change: the default EmbedButton's onClick, the
+  // 'getroomly-open-modal'/'getroomly-close-modal' request events below, or
+  // a UI-driven close (X button / backdrop, via handleModalClose further
+  // down). Centralizing this in one effect keyed off the actual state value
+  // — rather than dispatching inline from each of those call sites — means
+  // every path is covered automatically and the event can never double-fire
+  // for one transition (each of those call sites used to dispatch it
+  // manually, which both missed the EmbedButton path entirely and would
+  // have double-fired once the close path was added to match).
+  //
+  // isFirstRender guards against firing a spurious "closed" confirmation
+  // for the initial isModalOpen === false on mount, before anything has
+  // ever actually opened.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent(isModalOpen ? 'getroomly-modal-opened' : 'getroomly-modal-closed')
+    );
+  }, [isModalOpen]);
+
   // Listen for external open/close events from host page
   useEffect(() => {
     // Safety net: even if a host page's own custom trigger button (built
@@ -122,12 +148,6 @@ function App() {
     const handleOpen = () => {
       if (getAvailability()) {
         setIsModalOpen(true);
-        // Confirms the modal actually opened, distinct from
-        // 'getroomly-open-modal' which only means opening was *requested* —
-        // shadow-entry.tsx's isModalOpen flag listens for this one instead,
-        // so it doesn't go stale by assuming every request succeeded (it
-        // doesn't, when unavailable).
-        window.dispatchEvent(new CustomEvent('getroomly-modal-opened'));
       }
     };
     const handleClose = () => setIsModalOpen(false);
@@ -178,8 +198,10 @@ function App() {
     setIsModalOpen(false);
     // Call callback if provided
     config.callbacks?.onModalClose?.();
-    // Dispatch event so host can sync state (used by ShadowDOMWrapper)
-    window.dispatchEvent(new CustomEvent('getroomly-modal-closed'));
+    // 'getroomly-modal-closed' is dispatched by the centralized isModalOpen
+    // effect above, not here — keeps it a single-writer event regardless of
+    // which close path (this one, or the 'getroomly-close-modal' listener)
+    // caused isModalOpen to become false.
   };
 
   // Shadow DOM mode: shows button + modal (modal can also be opened externally via window.GetRoomly.open())
