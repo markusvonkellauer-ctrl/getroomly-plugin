@@ -149,6 +149,48 @@ describe('shadow-entry — window.GetRoomly.open() first-mount race', () => {
 
     expect(openHandler).toHaveBeenCalledTimes(1);
   });
+
+  it('remounts and re-defers when the cached plugin instance has been disconnected from the DOM', () => {
+    // Regression coverage for a Copilot review finding on PR #86: a host
+    // page that removes/replaces #getroomly-plugin-container (e.g. a SPA
+    // re-render) leaves pluginInstance pointing at a detached element.
+    // Treating that as "already mounted" would dispatch synchronously with
+    // no listener left to receive it (the detached element's React root
+    // already unmounted via disconnectedCallback) — open() would report
+    // success while silently doing nothing.
+    require('../../src/shadow-entry');
+    document.body.innerHTML = '<div id="getroomly-plugin-container"></div>';
+
+    act(() => {
+      window.GetRoomly.open();
+    });
+    act(() => {
+      jest.runAllTimers();
+    });
+    expect(openHandler).toHaveBeenCalledTimes(1);
+    expect(mockRender).toHaveBeenCalledTimes(1);
+
+    // Host removes the plugin element entirely — e.g. re-rendering the
+    // container from scratch — detaching it from the DOM.
+    const mountedElement = document.querySelector('getroomly-plugin');
+    expect(mountedElement).not.toBeNull(); // fail with a clear message if the mount above didn't happen
+    mountedElement.remove();
+
+    act(() => {
+      window.GetRoomly.open();
+    });
+
+    // A fresh instance was mounted (second render call)...
+    expect(mockRender).toHaveBeenCalledTimes(2);
+    // ...and, being a fresh mount, deferred rather than dispatched
+    // synchronously — same as the very first open() call ever.
+    expect(openHandler).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      jest.runAllTimers();
+    });
+    expect(openHandler).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('shadow-entry — modal-opened/closed listener registration', () => {
