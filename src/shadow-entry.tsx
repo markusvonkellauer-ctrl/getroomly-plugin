@@ -73,6 +73,11 @@ if (!customElements.get('getroomly-plugin')) {
 
 // Expose global API for host page integration
 let pluginInstance: HTMLElement | null = null;
+// Tracks a first-mount open() call's deferred dispatch (see open() below) so
+// close() can cancel it — otherwise open() immediately followed by close()
+// before the deferred macrotask fires would still reopen the modal moments
+// after the host asked to close it.
+let pendingOpenTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 const initPlugin = () => {
   if (pluginInstance) {
@@ -149,7 +154,10 @@ if (!window.__getroomlyModalListenersRegistered) {
     // window.__getroomlyIsModalOpen is updated by the listener above, not
     // set here directly — keeps a single source of truth regardless of what
     // triggered the event.
-    const dispatchOpenModal = () => window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    const dispatchOpenModal = () => {
+      pendingOpenTimeoutId = null;
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    };
     if (wasAlreadyMounted) {
       dispatchOpenModal();
     } else {
@@ -159,8 +167,9 @@ if (!window.__getroomlyModalListenersRegistered) {
       // this point. Dispatching synchronously here would fire before any
       // listener exists to catch it, silently doing nothing on the very
       // first open() call. Deferring to a macrotask lets React finish
-      // mounting and running effects first.
-      setTimeout(dispatchOpenModal, 0);
+      // mounting and running effects first. Tracked in pendingOpenTimeoutId
+      // so close() (below) can cancel it if called before it fires.
+      pendingOpenTimeoutId = setTimeout(dispatchOpenModal, 0);
     }
   },
   // Only dispatches the *request* to close ('getroomly-close-modal') —
@@ -169,6 +178,14 @@ if (!window.__getroomlyModalListenersRegistered) {
   // React has actually processed it; dispatching it here too would
   // double-fire it (and do so before React has actually closed anything).
   close: () => {
+    // Cancels a still-pending first-mount open() dispatch (see open()
+    // above) — without this, open() immediately followed by close() before
+    // that deferred macrotask fires would still reopen the modal moments
+    // after the host asked to close it.
+    if (pendingOpenTimeoutId !== null) {
+      clearTimeout(pendingOpenTimeoutId);
+      pendingOpenTimeoutId = null;
+    }
     window.dispatchEvent(new CustomEvent('getroomly-close-modal'));
   },
   isOpen: () => window.__getroomlyIsModalOpen ?? false,

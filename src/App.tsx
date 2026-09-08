@@ -86,8 +86,14 @@ function App() {
   // (below) via a ref rather than a dependency array, so the mount-once
   // 'getroomly-open-modal' listener always sees the current value without
   // needing to re-register on every config change.
+  //
+  // useLayoutEffect, not useEffect: a passive effect leaves a window right
+  // after commit — where isReady/error/config are already updated but this
+  // ref hasn't caught up yet — during which a synchronous 'getroomly-open-
+  // modal' dispatch would be incorrectly refused even though the modal can
+  // by then actually render. Same reasoning as setAvailabilityValue above.
   const configReadyRef = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     configReadyRef.current = isReady && !error && !!config;
   }, [isReady, error, config]);
 

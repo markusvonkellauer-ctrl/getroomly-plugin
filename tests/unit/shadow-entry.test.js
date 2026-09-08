@@ -99,6 +99,30 @@ describe('shadow-entry — window.GetRoomly.open() first-mount race', () => {
     expect(openHandler).toHaveBeenCalledTimes(2);
     expect(mockRender).toHaveBeenCalledTimes(1);
   });
+
+  it('cancels the deferred first-mount open dispatch when close() is called before it fires', () => {
+    // Regression coverage for a Copilot review finding on PR #83: without
+    // tracking and cancelling the pending macrotask, open() immediately
+    // followed by close() (before the deferred dispatch fires) would still
+    // reopen the modal moments after the host asked to close it.
+    require('../../src/shadow-entry');
+    document.body.innerHTML = '<div id="getroomly-plugin-container"></div>';
+
+    act(() => {
+      window.GetRoomly.open();
+    });
+    expect(openHandler).not.toHaveBeenCalled();
+
+    act(() => {
+      window.GetRoomly.close();
+    });
+
+    act(() => {
+      jest.runAllTimers();
+    });
+
+    expect(openHandler).not.toHaveBeenCalled();
+  });
 });
 
 describe('shadow-entry — modal-opened/closed listener registration', () => {
