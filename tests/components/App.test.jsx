@@ -164,6 +164,36 @@ describe('App — trigger button visibility', () => {
     expect(screen.getByRole('button', { name: /visualize in your room/i })).toBeInTheDocument();
   });
 
+  it('shows the correct (not optimistic) state immediately when switching to a key already confirmed unavailable in an earlier visit', async () => {
+    // Regression coverage for a Copilot review finding on PR #84: switching
+    // apiKey while mounted used to fall back to the optimistic default
+    // until the fresh check for the new key resolved, even if a persisted
+    // result for that key already existed — reintroducing exactly the
+    // flash the localStorage cache exists to avoid, just for the
+    // apiKey-change path instead of the initial-mount path.
+    checkPartnerAvailability.mockResolvedValueOnce(true);
+
+    render(<App />);
+    await waitForAvailability();
+    expect(screen.getByRole('button', { name: /visualize in your room/i })).toBeInTheDocument();
+
+    // A different partner, already confirmed unavailable in an earlier
+    // page load — persisted, but not yet (re-)checked this page load.
+    localStorage.setItem('getroomly:availability:grm_pub_other', 'false');
+    checkPartnerAvailability.mockReturnValueOnce(new Promise(() => {}));
+    window.GetRoomlyEmbedConfig = { ...baseEmbedConfig, apiKey: 'grm_pub_other' };
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+
+    // Hidden immediately — not optimistically shown while the fresh check
+    // for this key is still pending.
+    expect(
+      screen.queryByRole('button', { name: /visualize in your room/i })
+    ).not.toBeInTheDocument();
+  });
+
   it('dispatches getroomly-modal-opened when opened via the default EmbedButton (not just via events)', async () => {
     checkPartnerAvailability.mockResolvedValueOnce(true);
     const openedHandler = jest.fn();

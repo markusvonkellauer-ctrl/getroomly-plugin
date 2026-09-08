@@ -66,10 +66,14 @@ function writePersistedAvailability(key: string, available: boolean): void {
 // Bounded to guard against unbounded growth if a host page churns through
 // many distinct apiKeys in one session (unlikely in practice — a given
 // embed normally uses one stable partner key — but cheap to guard
-// regardless). Map preserves insertion order, so evicting the first key
-// once over the cap is a simple, correct LRU without a separate
-// timestamp/bookkeeping structure — remember() below re-inserts an
-// existing key to move it to the "most recently used" end first.
+// regardless). Only ever written by confirmed results (see
+// setAvailabilityValue) — getAvailability() itself never writes here (see
+// its own comment below), so recency is purely "last confirmed", not
+// diluted by read frequency — a real LRU rather than an approximation.
+// Map preserves insertion order, so evicting the first key once over the
+// cap is correct without a separate timestamp/bookkeeping structure —
+// remember() re-inserts an existing key to move it to the "most recently
+// used" end first.
 const MAX_TRACKED_KEYS = 20;
 const availabilityByKey = new Map<string, boolean>();
 
@@ -142,12 +146,15 @@ export function notifyAvailabilityChanged(available: boolean): void {
  * matching App.tsx's own fallback and checkPartnerAvailability itself
  * failing open.
  *
- * That fallback result is memoized for the key too (not just returned), so
- * repeated calls for the same key before App.tsx's check resolves — e.g.
- * isAvailable() polling, or multiple open() attempts — take the fast
- * in-memory path instead of re-reading localStorage every time. Safe to
- * do: a later confirmed setAvailabilityValue() call for that key simply
- * overwrites its entry regardless of what's memoized here.
+ * Deliberately a pure read — no memoization of the persisted/optimistic
+ * fallback here (only setAvailabilityValue's confirmed results go through
+ * remember()). That keeps this function free of any mutation, which is
+ * what lets App.tsx call it directly during render (see partnerAvailable
+ * below) instead of needing an effect to publish into React state first —
+ * calling a function with a side effect during render would risk running
+ * that effect for a render React ends up discarding, under React 18
+ * concurrent rendering. localStorage.getItem is cheap enough that reading
+ * it on every call, instead of caching the result, isn't a real concern.
  */
 export function getAvailability(): boolean {
   const currentKey = window.GetRoomlyEmbedConfig?.apiKey;
@@ -158,9 +165,7 @@ export function getAvailability(): boolean {
   if (known !== undefined) {
     return known;
   }
-  const available = readPersistedAvailability(currentKey) ?? true;
-  remember(currentKey, available);
-  return available;
+  return readPersistedAvailability(currentKey) ?? true;
 }
 
 /**

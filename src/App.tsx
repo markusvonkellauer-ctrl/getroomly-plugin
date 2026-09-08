@@ -56,23 +56,26 @@ function App() {
     };
   }, [config?.apiKey]);
 
-  // Optimistic default (true) for a key whose check hasn't resolved yet, or
-  // whose stored result belongs to a since-replaced key (e.g. the host page
-  // updates window.GetRoomlyEmbedConfig.apiKey between opens) — a stale
-  // `false` from a previous key must never carry over to a new one.
-  // checkPartnerAvailability itself fails open too, so a check that errors
-  // out never wrongly hides a working button either.
+  // Falls back to getAvailability() — not a hardcoded optimistic true —
+  // for a key whose result availabilityResult doesn't (yet) reflect: either
+  // the very first render (isReady starts false, so config is still null
+  // and can never match window.GetRoomlyEmbedConfig?.apiKey yet), or the
+  // host page changed apiKey while this component stayed mounted (e.g.
+  // switching products/partners) and the effect above hasn't re-checked
+  // for the new key yet. getAvailability() itself already knows to fall
+  // back to a persisted result (or optimistic true) for a key that hasn't
+  // been confirmed this page load — reusing it here means switching to an
+  // already-known key shows the right answer immediately, the same way
+  // the lazy initializer above does for the very first render, instead of
+  // flashing the optimistic default again on every switch.
   //
-  // Compared against window.GetRoomlyEmbedConfig?.apiKey directly, not
-  // config?.apiKey: config is still null on the very first render (isReady
-  // starts false), which would otherwise always take this else-branch on
-  // mount and throw away the value getAvailability() just seeded above.
-  // The two agree once config resolves — useEmbedConfig reads apiKey
-  // straight through with no transformation.
+  // Safe to call during render: getAvailability() is a pure read (see its
+  // own comment) — unlike setAvailabilityValue below, which must only ever
+  // run from an effect.
   const partnerAvailable =
     availabilityResult.key === window.GetRoomlyEmbedConfig?.apiKey
       ? availabilityResult.available
-      : true;
+      : getAvailability();
 
   // Publish to the shared module-level state so window.GetRoomly.open()
   // (defined outside React, in shadow-entry.tsx) and host pages listening
