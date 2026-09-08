@@ -1,10 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppConfig } from '@/config/app-config';
 import { useEmbedConfig } from '@/hooks/use-embed-config';
 import { EmbedButton } from '@/components/EmbedButton';
 import { RoomVisualizationFlow } from '@/components/RoomVisualizationFlow';
 import { trackInteraction } from '@/lib/analytics';
+import {
+  getAvailability,
+  notifyAvailabilityChanged,
+  setAvailabilityValue,
+} from '@/lib/availability-state';
 import { checkPartnerAvailability } from '@/services/partner-status';
 import './App.css';
 
@@ -47,12 +52,50 @@ function App() {
   const partnerAvailable =
     availabilityResult.key === config?.apiKey ? availabilityResult.available : true;
 
+  // Publish to the shared module-level state so window.GetRoomly.open()
+  // (defined outside React, in shadow-entry.tsx) and host pages listening
+  // for 'getroomly-availability-changed' both see the current value —
+  // e.g. a host that built its own trigger button (hideButton: true)
+  // instead of using the default EmbedButton can hide it too.
+  //
+  // The cached VALUE is updated in a useLayoutEffect, not during render —
+  // mutating external state during render is unsafe under React 18
+  // concurrent rendering, since a render that gets interrupted/discarded
+  // could still have run that mutation. useLayoutEffect only ever runs for
+  // renders that actually commit, and fires synchronously right after
+  // commit (before paint) — as close to render-time freshness as is
+  // actually safe, effectively closing the staleness window a passive
+  // effect would leave. The event dispatch itself (an unambiguous side
+  // effect) stays in a regular effect — no need for it to block paint.
+  useLayoutEffect(() => {
+    setAvailabilityValue(config?.apiKey, partnerAvailable);
+  }, [config?.apiKey, partnerAvailable]);
+  useEffect(() => {
+    notifyAvailabilityChanged(partnerAvailable);
+  }, [partnerAvailable]);
+
   // Keep a ref to the latest config.category so the Mode B listener
   // always reads the current value without needing to re-register.
   const categoryRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     categoryRef.current = config?.category;
   }, [config]);
+
+  // Mirrors the same readiness/validity check the early-return JSX below
+  // uses to decide whether the modal can render at all. Read by handleOpen
+  // (below) via a ref rather than a dependency array, so the mount-once
+  // 'getroomly-open-modal' listener always sees the current value without
+  // needing to re-register on every config change.
+  //
+  // useLayoutEffect, not useEffect: a passive effect leaves a window right
+  // after commit — where isReady/error/config are already updated but this
+  // ref hasn't caught up yet — during which a synchronous 'getroomly-open-
+  // modal' dispatch would be incorrectly refused even though the modal can
+  // by then actually render. Same reasoning as setAvailabilityValue above.
+  const configReadyRef = useRef(false);
+  useLayoutEffect(() => {
+    configReadyRef.current = isReady && !error && !!config;
+  }, [isReady, error, config]);
 
   // Mode B: delegated click listener for partner buttons with data-getroomly-sku.
   // Runs once on mount; uses categoryRef to avoid stale closure.
@@ -82,9 +125,56 @@ function App() {
     };
   }, [isModalOpen]);
 
+  // Confirms the modal's actual open/closed state to shadow-entry.tsx
+  // (window.GetRoomly.isOpen()), regardless of which of the several paths
+  // caused isModalOpen to change: the default EmbedButton's onClick, the
+  // 'getroomly-open-modal'/'getroomly-close-modal' request events below, or
+  // a UI-driven close (X button / backdrop, via handleModalClose further
+  // down). Centralizing this in one effect keyed off the actual state value
+  // — rather than dispatching inline from each of those call sites — means
+  // every path is covered automatically and the event can never double-fire
+  // for one transition (each of those call sites used to dispatch it
+  // manually, which both missed the EmbedButton path entirely and would
+  // have double-fired once the close path was added to match).
+  //
+  // isFirstRender guards against firing a spurious "closed" confirmation
+  // for the initial isModalOpen === false on mount, before anything has
+  // ever actually opened.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent(isModalOpen ? 'getroomly-modal-opened' : 'getroomly-modal-closed')
+    );
+  }, [isModalOpen]);
+
   // Listen for external open/close events from host page
   useEffect(() => {
-    const handleOpen = () => setIsModalOpen(true);
+    // Safety net: even if a host page's own custom trigger button (built
+    // via hideButton: true) is still visible or gets clicked in a race, the
+    // modal itself refuses to open for a partner that's suspended for
+    // quota. GetRoomly.open() already checks this too (shadow-entry.tsx) —
+    // reading getAvailability() directly here (rather than a separately-
+    // synced ref) means both checks always agree, since the useLayoutEffect
+    // above keeps it current — synchronously, right after commit — before
+    // this handler could ever run.
+    const handleOpen = () => {
+      // Refuse to flip isModalOpen (and thus the centralized confirmation
+      // effect's 'getroomly-modal-opened' dispatch above) while the modal
+      // can't actually render yet — otherwise a host calling open() before
+      // config has finished loading, or with an invalid config, would
+      // report the modal as opened while the component is still showing
+      // its loading/error state instead.
+      if (!configReadyRef.current) {
+        return;
+      }
+      if (getAvailability()) {
+        setIsModalOpen(true);
+      }
+    };
     const handleClose = () => setIsModalOpen(false);
 
     window.addEventListener('getroomly-open-modal', handleOpen);
@@ -133,8 +223,10 @@ function App() {
     setIsModalOpen(false);
     // Call callback if provided
     config.callbacks?.onModalClose?.();
-    // Dispatch event so host can sync state (used by ShadowDOMWrapper)
-    window.dispatchEvent(new CustomEvent('getroomly-modal-closed'));
+    // 'getroomly-modal-closed' is dispatched by the centralized isModalOpen
+    // effect above, not here — keeps it a single-writer event regardless of
+    // which close path (this one, or the 'getroomly-close-modal' listener)
+    // caused isModalOpen to become false.
   };
 
   // Shadow DOM mode: shows button + modal (modal can also be opened externally via window.GetRoomly.open())
