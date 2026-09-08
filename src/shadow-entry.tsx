@@ -87,6 +87,21 @@ const initPlugin = () => {
   return pluginInstance;
 };
 
+// Single source of truth for isModalOpen: these two events are the actual
+// signal of the modal's real open/closed state, dispatched from every path
+// that can change it — GetRoomly.open()/close(), a host dispatching
+// 'getroomly-open-modal' directly (bypassing open()), and the React UI's
+// own close (X button / backdrop click, via App.tsx's handleModalClose,
+// which dispatches 'getroomly-modal-closed'). Previously isModalOpen was
+// only set inline inside open()/close(), so isOpen() went stale for either
+// of those other two paths.
+window.addEventListener('getroomly-open-modal', () => {
+  isModalOpen = true;
+});
+window.addEventListener('getroomly-modal-closed', () => {
+  isModalOpen = false;
+});
+
 (window as any).GetRoomly = {
   // Returns false and does nothing if the partner is currently suspended
   // for quota — a safety net for host pages that built their own trigger
@@ -113,11 +128,11 @@ const initPlugin = () => {
     if (!initPlugin()) {
       return false;
     }
-    isModalOpen = true;
+    // isModalOpen is updated by the listener above, not set here directly —
+    // keeps a single source of truth regardless of what triggered the event.
     window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
   },
   close: () => {
-    isModalOpen = false;
     window.dispatchEvent(new CustomEvent('getroomly-close-modal'));
     window.dispatchEvent(new CustomEvent('getroomly-modal-closed'));
   },

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppConfig } from '@/config/app-config';
 import { useEmbedConfig } from '@/hooks/use-embed-config';
@@ -58,13 +58,18 @@ function App() {
   // e.g. a host that built its own trigger button (hideButton: true)
   // instead of using the default EmbedButton can hide it too.
   //
-  // The cached VALUE is updated unconditionally on every render (a plain
-  // variable write, not a side effect — safe during render) so
-  // getAvailability() can never lag behind this render's partnerAvailable,
-  // not even for one commit. Only the actual side effect — notifying
-  // listeners via dispatchEvent — waits for an effect, deduped to fire
-  // once per settled change rather than on every render pass.
-  setAvailabilityValue(partnerAvailable);
+  // The cached VALUE is updated in a useLayoutEffect, not during render —
+  // mutating external state during render is unsafe under React 18
+  // concurrent rendering, since a render that gets interrupted/discarded
+  // could still have run that mutation. useLayoutEffect only ever runs for
+  // renders that actually commit, and fires synchronously right after
+  // commit (before paint) — as close to render-time freshness as is
+  // actually safe, effectively closing the staleness window a passive
+  // effect would leave. The event dispatch itself (an unambiguous side
+  // effect) stays in a regular effect — no need for it to block paint.
+  useLayoutEffect(() => {
+    setAvailabilityValue(partnerAvailable);
+  }, [partnerAvailable]);
   useEffect(() => {
     notifyAvailabilityChanged(partnerAvailable);
   }, [partnerAvailable]);
@@ -111,9 +116,9 @@ function App() {
     // modal itself refuses to open for a partner that's suspended for
     // quota. GetRoomly.open() already checks this too (shadow-entry.tsx) —
     // reading getAvailability() directly here (rather than a separately-
-    // synced ref) means both checks always agree, since setAvailabilityValue()
-    // (called during render, above) keeps it current before this handler
-    // could ever run.
+    // synced ref) means both checks always agree, since the useLayoutEffect
+    // above keeps it current — synchronously, right after commit — before
+    // this handler could ever run.
     const handleOpen = () => {
       if (getAvailability()) {
         setIsModalOpen(true);

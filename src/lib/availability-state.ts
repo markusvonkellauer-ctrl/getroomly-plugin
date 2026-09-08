@@ -11,20 +11,21 @@
 let currentAvailability = true;
 
 /**
- * Updates the cached value read by getAvailability() / GetRoomly.open() —
- * a plain variable write, not a side effect, so it's safe to call
- * unconditionally during React's render phase (App.tsx does exactly that).
- * Doing so keeps this in sync with the current render's derived
- * `partnerAvailable` immediately, rather than one render-and-commit cycle
- * later via an effect — closing a real (if narrow) window where
- * GetRoomly.open() could read a stale value for a tick.
+ * Updates the cached value read by getAvailability() / GetRoomly.open().
+ * Call from a useLayoutEffect, not during render — a plain variable write
+ * is still an external mutation, and a render that gets interrupted or
+ * discarded under React 18 concurrent rendering could otherwise still have
+ * run it. useLayoutEffect only fires for renders that actually commit, and
+ * runs synchronously right after commit (before paint), which keeps the
+ * staleness window as small as it can safely be — effectively closing the
+ * gap where GetRoomly.open() could read a value from a previous render.
  *
  * Split from notifyAvailabilityChanged() below on purpose: that one *is* a
- * side effect (dispatchEvent) and belongs in an effect instead. This
- * function itself dispatches unconditionally on every call — it's the
- * caller's effect dependency array (e.g. `[partnerAvailable]` in App.tsx)
- * that limits it to firing once per actual settled change, not on every
- * render pass including StrictMode's double-render in dev.
+ * side effect (dispatchEvent) that doesn't need to block paint, and
+ * belongs in a regular effect instead. This function itself runs
+ * unconditionally on every call — it's the caller's effect dependency
+ * array (e.g. `[partnerAvailable]` in App.tsx) that limits how often it's
+ * actually invoked.
  */
 export function setAvailabilityValue(available: boolean): void {
   currentAvailability = available;
