@@ -5,7 +5,11 @@ import { useEmbedConfig } from '@/hooks/use-embed-config';
 import { EmbedButton } from '@/components/EmbedButton';
 import { RoomVisualizationFlow } from '@/components/RoomVisualizationFlow';
 import { trackInteraction } from '@/lib/analytics';
-import { getAvailability, setAvailability } from '@/lib/availability-state';
+import {
+  getAvailability,
+  notifyAvailabilityChanged,
+  setAvailabilityValue,
+} from '@/lib/availability-state';
 import { checkPartnerAvailability } from '@/services/partner-status';
 import './App.css';
 
@@ -54,14 +58,15 @@ function App() {
   // e.g. a host that built its own trigger button (hideButton: true)
   // instead of using the default EmbedButton can hide it too.
   //
-  // setAvailability() updates the module's cached value BEFORE dispatching
-  // the event, so getAvailability() is always fresh by the time any
-  // listener runs — including the open-modal listener below, which reads
-  // it directly rather than keeping its own separately-synced ref. Two
-  // copies updated via two separate effects previously left a real (if
-  // narrow) window where they could disagree within the same commit.
+  // The cached VALUE is updated unconditionally on every render (a plain
+  // variable write, not a side effect — safe during render) so
+  // getAvailability() can never lag behind this render's partnerAvailable,
+  // not even for one commit. Only the actual side effect — notifying
+  // listeners via dispatchEvent — waits for an effect, deduped to fire
+  // once per settled change rather than on every render pass.
+  setAvailabilityValue(partnerAvailable);
   useEffect(() => {
-    setAvailability(partnerAvailable);
+    notifyAvailabilityChanged(partnerAvailable);
   }, [partnerAvailable]);
 
   // Keep a ref to the latest config.category so the Mode B listener

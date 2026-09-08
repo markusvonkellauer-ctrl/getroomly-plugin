@@ -95,15 +95,26 @@ const initPlugin = () => {
   // for 'getroomly-availability-changed', or a race before it does).
   // getAvailability() reads a locally-cached value (set by App.tsx once
   // its status check resolves), so this check adds no network latency.
-  open: (): boolean => {
+  // Returns `false` when open() couldn't do anything (blocked by quota, or
+  // the plugin couldn't mount) — otherwise `undefined`, matching what this
+  // returned before open() had any return value at all. Deliberately never
+  // returns `true`: no old host code could have relied on any particular
+  // truthy value from a call that always returned undefined, so this stays
+  // purely additive — `false` is new information, not a changed contract
+  // for the success path.
+  open: (): boolean | undefined => {
     if (!getAvailability()) {
       window.dispatchEvent(new CustomEvent('getroomly-open-blocked'));
       return false;
     }
-    initPlugin();
+    // initPlugin() returns null if #getroomly-plugin-container isn't in the
+    // DOM (yet, or at all) — don't claim success or dispatch the open event
+    // when nothing was actually mounted to receive it.
+    if (!initPlugin()) {
+      return false;
+    }
     isModalOpen = true;
     window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
-    return true;
   },
   close: () => {
     isModalOpen = false;

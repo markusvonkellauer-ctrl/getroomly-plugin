@@ -11,14 +11,31 @@
 let currentAvailability = true;
 
 /**
- * Called by App.tsx whenever partnerAvailable changes. Updates the cached
- * value read by isAvailable()/GetRoomly.open(), and dispatches an event so
- * host pages can react without polling — e.g. hiding their own custom
- * trigger button (built instead of the plugin's default EmbedButton, via
- * `hideButton: true`) once a partner is confirmed suspended for quota.
+ * Updates the cached value read by getAvailability() / GetRoomly.open() —
+ * a plain variable write, not a side effect, so it's safe to call
+ * unconditionally during React's render phase (App.tsx does exactly that).
+ * Doing so keeps this in sync with the current render's derived
+ * `partnerAvailable` immediately, rather than one render-and-commit cycle
+ * later via an effect — closing a real (if narrow) window where
+ * GetRoomly.open() could read a stale value for a tick.
+ *
+ * Split from notifyAvailabilityChanged() below on purpose: that one *is* a
+ * side effect (dispatchEvent) and belongs in an effect, deduped to fire
+ * only on actual settled changes — not on every render pass, including
+ * StrictMode's double-render in dev.
  */
-export function setAvailability(available: boolean): void {
+export function setAvailabilityValue(available: boolean): void {
   currentAvailability = available;
+}
+
+/**
+ * Dispatches 'getroomly-availability-changed' so host pages can react
+ * without polling — e.g. hiding their own custom trigger button (built
+ * instead of the plugin's default EmbedButton, via `hideButton: true`)
+ * once a partner is confirmed suspended for quota. Call from an effect,
+ * not during render (unlike setAvailabilityValue above).
+ */
+export function notifyAvailabilityChanged(available: boolean): void {
   window.dispatchEvent(
     new CustomEvent('getroomly-availability-changed', { detail: { available } })
   );
