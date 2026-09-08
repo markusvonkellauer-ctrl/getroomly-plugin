@@ -80,6 +80,16 @@ let pluginInstance: HTMLElement | null = null;
 let pendingOpenTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 const initPlugin = () => {
+  if (pluginInstance && !pluginInstance.isConnected) {
+    // Host removed/replaced the container since this was created (e.g. a
+    // SPA re-render) — the cached element is no longer attached to the DOM,
+    // and its React root has already been unmounted via
+    // disconnectedCallback. Reusing it would silently do nothing: open()
+    // would still report success and dispatch 'getroomly-open-modal', but
+    // no listener exists anymore to receive it. Drop the stale reference so
+    // a fresh instance gets created below instead.
+    pluginInstance = null;
+  }
   if (pluginInstance) {
     return pluginInstance;
   }
@@ -154,8 +164,14 @@ if (!window.__getroomlyModalListenersRegistered) {
     }
     // Captured before initPlugin() runs: whether the plugin element (and
     // therefore the App.tsx instance whose useEffect registers the
-    // 'getroomly-open-modal' listener) already existed.
-    const wasAlreadyMounted = pluginInstance !== null;
+    // 'getroomly-open-modal' listener) already existed AND is still
+    // attached to the DOM. Checking isConnected too, not just non-null,
+    // matters here specifically: initPlugin() below treats a disconnected
+    // cached instance as stale and mounts a fresh one — if this check
+    // didn't agree, a reconnect after the host removed/replaced the
+    // container would wrongly skip the deferral a fresh mount needs (see
+    // initPlugin()'s own comment), dispatching before any listener exists.
+    const wasAlreadyMounted = pluginInstance !== null && pluginInstance.isConnected;
     // initPlugin() returns null if #getroomly-plugin-container isn't in the
     // DOM (yet, or at all) — don't claim success or dispatch the open event
     // when nothing was actually mounted to receive it.
