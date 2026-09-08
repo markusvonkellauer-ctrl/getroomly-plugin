@@ -165,4 +165,56 @@ describe('App — getroomly-open-modal safety net', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
+
+  // Regression coverage: shadow-entry.tsx's isModalOpen flag listens for
+  // 'getroomly-modal-opened' rather than 'getroomly-open-modal', precisely
+  // because the latter is only a *request* that App.tsx can refuse — an
+  // earlier version of this fix dispatched (effectively) the request-level
+  // event unconditionally and left isModalOpen wrongly true for a modal
+  // that never actually opened.
+
+  it('dispatches getroomly-modal-opened only when the modal actually opens', async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(true);
+    const openedHandler = jest.fn();
+    window.addEventListener('getroomly-modal-opened', openedHandler);
+
+    try {
+      render(<App />);
+      await waitFor(() => expect(checkPartnerAvailability).toHaveBeenCalled());
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+      });
+
+      expect(openedHandler).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener('getroomly-modal-opened', openedHandler);
+    }
+  });
+
+  it('does not dispatch getroomly-modal-opened when the open request is refused (unavailable)', async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(false);
+    const openedHandler = jest.fn();
+    const availabilityHandler = jest.fn();
+    window.addEventListener('getroomly-modal-opened', openedHandler);
+    window.addEventListener('getroomly-availability-changed', availabilityHandler);
+
+    try {
+      render(<App />);
+      await waitFor(() => {
+        expect(availabilityHandler).toHaveBeenCalledWith(
+          expect.objectContaining({ detail: { available: false } })
+        );
+      });
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+      });
+
+      expect(openedHandler).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('getroomly-modal-opened', openedHandler);
+      window.removeEventListener('getroomly-availability-changed', availabilityHandler);
+    }
+  });
 });

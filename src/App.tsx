@@ -122,6 +122,12 @@ function App() {
     const handleOpen = () => {
       if (getAvailability()) {
         setIsModalOpen(true);
+        // Confirms the modal actually opened, distinct from
+        // 'getroomly-open-modal' which only means opening was *requested* —
+        // shadow-entry.tsx's isModalOpen flag listens for this one instead,
+        // so it doesn't go stale by assuming every request succeeded (it
+        // doesn't, when unavailable).
+        window.dispatchEvent(new CustomEvent('getroomly-modal-opened'));
       }
     };
     const handleClose = () => setIsModalOpen(false);

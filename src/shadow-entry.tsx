@@ -89,13 +89,18 @@ const initPlugin = () => {
 
 // Single source of truth for isModalOpen: these two events are the actual
 // signal of the modal's real open/closed state, dispatched from every path
-// that can change it — GetRoomly.open()/close(), a host dispatching
-// 'getroomly-open-modal' directly (bypassing open()), and the React UI's
-// own close (X button / backdrop click, via App.tsx's handleModalClose,
-// which dispatches 'getroomly-modal-closed'). Previously isModalOpen was
-// only set inline inside open()/close(), so isOpen() went stale for either
-// of those other two paths.
-window.addEventListener('getroomly-open-modal', () => {
+// that can change it — GetRoomly.open()/close(), a host dispatching an
+// event directly (bypassing open()/close()), and the React UI's own close
+// (X button / backdrop click, via App.tsx's handleModalClose). Previously
+// isModalOpen was only set inline inside open()/close(), so isOpen() went
+// stale for either of those other paths.
+//
+// Listens for 'getroomly-modal-opened' (dispatched by App.tsx once it has
+// actually opened, i.e. the partner was available), NOT 'getroomly-open-
+// modal' (only a *request* to open — App.tsx can and does refuse it for a
+// suspended partner, which would otherwise leave isModalOpen wrongly true
+// for a modal that never actually opened).
+window.addEventListener('getroomly-modal-opened', () => {
   isModalOpen = true;
 });
 window.addEventListener('getroomly-modal-closed', () => {
