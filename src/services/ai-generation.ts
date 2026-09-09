@@ -356,11 +356,25 @@ export async function submitFeedback(
   }
 }
 
-/** Validates uploaded image file. */
-export function validateImageFile(file: File): { isValid: boolean; error?: string } {
-  if (file.size > AppConfig.images.maxFileSize) {
+/**
+ * Validates just the size portion of validateImageFile — split out so a
+ * HEIC file can be size-checked before spending time downloading/decoding
+ * its ~3MB converter, without duplicating this message (and risking it
+ * drifting from validateImageFile's own).
+ */
+export function validateFileSize(size: number): { isValid: boolean; error?: string } {
+  if (size > AppConfig.images.maxFileSize) {
     const maxSizeMB = AppConfig.images.maxFileSize / (1024 * 1024);
     return { isValid: false, error: `File size too large. Maximum size is ${maxSizeMB}MB.` };
+  }
+  return { isValid: true };
+}
+
+/** Validates uploaded image file. */
+export function validateImageFile(file: File): { isValid: boolean; error?: string } {
+  const sizeValidation = validateFileSize(file.size);
+  if (!sizeValidation.isValid) {
+    return sizeValidation;
   }
 
   if (

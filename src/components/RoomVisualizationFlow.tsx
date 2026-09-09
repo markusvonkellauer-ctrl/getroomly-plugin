@@ -3,9 +3,9 @@ import {
   AIGenerationError,
   generateRoomVisualization,
   submitFeedback,
+  validateFileSize,
   validateImageFile,
 } from '@/services/ai-generation';
-import { AppConfig } from '@/config/app-config';
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
@@ -314,9 +314,9 @@ export function RoomVisualizationFlow({
     }
 
     if (isHeic) {
-      if (file.size > AppConfig.images.maxFileSize) {
-        const maxSizeMB = AppConfig.images.maxFileSize / (1024 * 1024);
-        failRead(`File size too large. Maximum size is ${maxSizeMB}MB.`);
+      const sizeValidation = validateFileSize(file.size);
+      if (!sizeValidation.isValid) {
+        failRead(sizeValidation.error || 'File too large');
         return;
       }
       // Conversion can take a few seconds — show the existing processing UI

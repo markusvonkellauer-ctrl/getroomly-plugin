@@ -16,7 +16,20 @@ Distributed as a separate, unmodified, lazily-loaded file
 (dist/chunks/heic-to-*.js) — never bundled or statically linked into
 plugin.js itself.
 
-Full license text below, as published by heic-to's own package:
+The LGPL-3.0 text below is reproduced verbatim from heic-to's own
+published LICENSE file, in full — it is not truncated. LGPL-3.0 is
+short by design: it incorporates version 3 of the GNU General Public
+License (GPLv3) by reference (see its opening paragraph below) rather
+than repeating that separate, longer document. The complete GPLv3 text
+it incorporates is published at:
+
+  https://www.gnu.org/licenses/gpl-3.0.txt
+
+and is also included in heic-to's own upstream repository and in the
+libheif project it wraps (https://github.com/strukturag/libheif).
+
+Full LGPL-3.0 license text below, as published by heic-to's own
+package:
 
 --------------------------------------------------------------------------
 
