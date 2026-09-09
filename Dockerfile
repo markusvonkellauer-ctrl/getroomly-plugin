@@ -67,6 +67,15 @@ server {
     try_files $uri =404;
   }
 
+  # LGPL-3.0 attribution for heic-to (see src/lib/heic.ts) — served publicly
+  # alongside plugin.js so it's genuinely distributed with the software, not
+  # just sitting in a private repo.
+  location = /THIRD-PARTY-NOTICES.txt {
+    add_header Cache-Control "no-cache, must-revalidate" always;
+    add_header Access-Control-Allow-Origin "*" always;
+    try_files $uri =404;
+  }
+
   location ~ \.(svg|png|ico)$ {
     add_header Cache-Control "public, max-age=86400" always;
     add_header Access-Control-Allow-Origin "*" always;

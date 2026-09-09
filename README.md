@@ -10,6 +10,7 @@ This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend
 |---|---|---|
 | Plugin bundle | `https://plugin.getroomly.ai/plugin.js` | `https://dev-plugin.getroomly.ai/plugin.js` |
 | Stylesheet (optional) | `https://plugin.getroomly.ai/style.css` | `https://dev-plugin.getroomly.ai/style.css` |
+| Third-party licenses | `https://plugin.getroomly.ai/THIRD-PARTY-NOTICES.txt` | `https://dev-plugin.getroomly.ai/THIRD-PARTY-NOTICES.txt` |
 | Backend API | `https://api.getroomly.ai` | `https://dev-api.getroomly.ai` |
 | Demo page | `https://demo.getroomly.ai` | `https://dev.getroomly.ai` |
 | Built from | `main` | `development` |
