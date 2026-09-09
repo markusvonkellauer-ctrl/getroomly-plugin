@@ -468,12 +468,13 @@ describe('RoomVisualizationFlow', () => {
 
   test('progress stays at 0% during HEIC conversion, instead of climbing then jumping back when generation starts', async () => {
     // Regression coverage for a Copilot review finding on PR #92: setting
-    // isGenerating (not just step) to 'processing' before conversion starts
-    // the progress-bar timer effect immediately, letting progress visibly
-    // climb during the multi-second conversion — only for handleGenerate to
-    // reset it back to 0 once real generation actually begins, a jarring
-    // backward jump. isGenerating now stays false until handleGenerate
-    // itself sets it, so progress never moves during conversion at all.
+    // isGenerating to true (alongside step to 'processing') before
+    // conversion starts the progress-bar timer effect immediately, letting
+    // progress visibly climb during the multi-second conversion — only for
+    // handleGenerate to reset it back to 0 once real generation actually
+    // begins, a jarring backward jump. isGenerating now stays false until
+    // handleGenerate itself sets it, so progress never moves during
+    // conversion at all.
     const RealFileReader = global.FileReader;
     global.FileReader = HeicSignatureFileReader;
     mockHeicTo.mockReturnValueOnce(new Promise(() => {}));
