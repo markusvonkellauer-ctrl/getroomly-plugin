@@ -291,7 +291,29 @@ export function RoomVisualizationFlow({
     // later. Converting first means the rest of this function never has to
     // know the original file wasn't already a browser-native format.
     let imageFile = file;
-    if (await isHeicFile(file)) {
+    let isHeic: boolean;
+    try {
+      isHeic = await isHeicFile(file);
+    } catch (err) {
+      // isHeicFile rejects if the underlying FileReader errors — without
+      // this catch, that would throw out of handleFileSelect as an
+      // unhandled rejection, since nothing awaits this event handler's
+      // returned promise.
+      if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+        return;
+      }
+      console.error('[Plugin] HEIC signature check failed:', err);
+      failRead('Failed to read image file');
+      return;
+    }
+    // Superseded by a newer selection, or the component unmounted, while the
+    // sniff above was in flight — bail out before touching any state, same
+    // as every other async step in this function.
+    if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+      return;
+    }
+
+    if (isHeic) {
       if (file.size > AppConfig.images.maxFileSize) {
         const maxSizeMB = AppConfig.images.maxFileSize / (1024 * 1024);
         failRead(`File size too large. Maximum size is ${maxSizeMB}MB.`);

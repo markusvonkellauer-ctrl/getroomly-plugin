@@ -438,6 +438,100 @@ describe('RoomVisualizationFlow', () => {
     expect(mockHeic2any).not.toHaveBeenCalled();
   });
 
+  test('a stale HEIC sniff (superseded by a newer selection before it resolves) does not affect the newer selection', async () => {
+    // Regression coverage for a Copilot review finding on PR #90: the async
+    // HEIC sniff had no token/isMounted guard before touching state, so a
+    // slower-resolving sniff for a since-replaced file could still flip the
+    // step back to 'processing' (or report an error) for the wrong file.
+    const RealFileReader = global.FileReader;
+    const instances = [];
+    class ManualSniffFileReader {
+      constructor() {
+        instances.push(this);
+      }
+      readAsArrayBuffer() {
+        // Left pending — driven manually below, same as the ManualFileReader
+        // pattern used elsewhere in this file for the main read.
+      }
+      readAsDataURL() {
+        this.result = 'data:image/jpeg;base64,mockedBase64';
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    global.FileReader = ManualSniffFileReader;
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const input = document.querySelector('input[type="file"]');
+      const fileA = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
+      const fileB = new File(['b'], 'b.jpg', { type: 'image/jpeg' });
+
+      act(() => uploadFile(input, fileA));
+      act(() => uploadFile(input, fileB));
+
+      // fileB's sniff resolves first, as "not HEIC" — its flow proceeds
+      // normally.
+      await act(async () => {
+        instances[1].result = new Uint8Array(12).buffer; // all zeros, not ftyp
+        instances[1].onload?.();
+      });
+      await waitFor(() => expect(generateRoomVisualization).toHaveBeenCalledTimes(1));
+      expect(generateRoomVisualization.mock.calls[0][0].imageBlob.name).toBe('b.jpg');
+
+      // The stale fileA sniff resolves afterwards, as HEIC — must be a
+      // no-op: it must not trigger a second, competing generate call.
+      await act(async () => {
+        const heicBytes = [
+          0,
+          0,
+          0,
+          24,
+          ...'ftyp'.split('').map(c => c.charCodeAt(0)),
+          ...'heic'.split('').map(c => c.charCodeAt(0)),
+        ];
+        instances[0].result = new Uint8Array(heicBytes).buffer;
+        instances[0].onload?.();
+      });
+      expect(generateRoomVisualization).toHaveBeenCalledTimes(1);
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
+  test('a HEIC signature check failure is caught and reported as a read failure, not an unhandled rejection', async () => {
+    // Regression coverage for a Copilot review finding on PR #90:
+    // isHeicFile rejects if its FileReader errors, which — uncaught — would
+    // throw out of handleFileSelect as an unhandled promise rejection,
+    // since nothing awaits this event handler's returned promise.
+    const RealFileReader = global.FileReader;
+    class ErroringSniffFileReader {
+      readAsArrayBuffer() {
+        queueMicrotask(() => this.onerror?.(new Event('error')));
+      }
+    }
+    global.FileReader = ErroringSniffFileReader;
+    const onError = jest.fn();
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} onError={onError} />);
+      const input = document.querySelector('input[type="file"]');
+
+      await act(async () => {
+        uploadFile(input, makeFile());
+      });
+
+      await waitFor(() => {
+        expect(onError).toHaveBeenCalledWith('Failed to read image file');
+      });
+      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(generateRoomVisualization).not.toHaveBeenCalled();
+      expect(input.value).toBe('');
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
   // ─── Original image survives as a data: URL (not blob:) ──────────────────
   // Regression test: blob: URLs are backed by browser memory and can be
   // silently reclaimed under memory pressure (observed with a concurrent
