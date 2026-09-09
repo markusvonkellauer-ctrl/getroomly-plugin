@@ -913,10 +913,10 @@ export function RoomVisualizationFlow({
               // stutter: move, pause, move again. The raw value updates
               // every tick, so the transition below has a fresh target every
               // 100ms and the fill reads as continuous motion. aria-valuenow
-              // and the displayed percentage text stay rounded (Math.floor)
-              // for a clean whole-number readout — a smooth bar next to a
-              // rounded number is the same pattern native progress/download
-              // indicators use, not a real accessibility mismatch.
+              // (above) matches this same raw value now too, with
+              // aria-valuetext providing the rounded spoken number — only
+              // the displayed percentage text stays Math.floor'd, for a
+              // clean whole-number readout.
               width: `${progress}%`,
               transition: 'width 100ms linear',
             }}
