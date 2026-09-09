@@ -432,6 +432,40 @@ describe('RoomVisualizationFlow', () => {
     }
   });
 
+  test('does not render a broken <img src=""> while a HEIC conversion is still in flight', async () => {
+    // Regression coverage for a Copilot review finding on PR #92: the
+    // processing step is entered (to show the loading UI) before
+    // uploadedImage is populated for a HEIC upload — it's only set once the
+    // post-conversion readAsDataURL completes. An unconditional
+    // src={uploadedImage || ''} rendered a broken-image icon over the dark
+    // background for the entire conversion.
+    const RealFileReader = global.FileReader;
+    global.FileReader = HeicSignatureFileReader;
+    // Never resolves — keeps the component mid-conversion so the DOM can be
+    // inspected during that window.
+    // mockReturnValueOnce, not mockReturnValue — jest.clearAllMocks() in
+    // beforeEach doesn't reset mock implementations, so a persistent
+    // default here would leak this never-resolving promise into later
+    // tests if file order changes or more HEIC tests are added.
+    mockHeicTo.mockReturnValueOnce(new Promise(() => {}));
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const heicFile = new File(['heic bytes'], 'photo.jpeg', { type: 'image/jpeg' });
+
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), heicFile);
+      });
+
+      await waitFor(() => {
+        expect(document.querySelector('.getroomly-spinner-rot')).toBeInTheDocument();
+      });
+      expect(screen.queryByAltText('Room being processed')).not.toBeInTheDocument();
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
   test('shows a friendly localized error and returns to upload when HEIC conversion fails', async () => {
     const RealFileReader = global.FileReader;
     global.FileReader = HeicSignatureFileReader;

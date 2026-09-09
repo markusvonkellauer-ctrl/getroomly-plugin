@@ -15,6 +15,19 @@
 
 import { isHeicFile, convertHeicToJpeg } from '../../src/lib/heic';
 
+// Top-level, not inside describe('convertHeicToJpeg', ...) — Jest's module
+// mocking is only reliably hoisted (via babel-plugin-jest-hoist) to the top
+// of its immediately enclosing scope, so a jest.mock nested inside a
+// describe callback only hoists to the top of that callback, not the
+// module. It happens to still work today since convertHeicToJpeg's
+// `import('heic-to/csp')` is dynamic and only runs inside an it() body
+// (after all describe callbacks have already registered their mocks during
+// Jest's collection phase) — but that's fragile: any future static import
+// of the same module elsewhere in this file would run before the describe
+// callback does, silently missing the mock.
+const mockHeicTo = jest.fn();
+jest.mock('heic-to/csp', () => ({ heicTo: (...args) => mockHeicTo(...args) }));
+
 function mockFileReaderReturning(bytes) {
   return class {
     readAsArrayBuffer() {
@@ -80,9 +93,6 @@ describe('isHeicFile', () => {
 });
 
 describe('convertHeicToJpeg', () => {
-  const mockHeicTo = jest.fn();
-  jest.mock('heic-to/csp', () => ({ heicTo: (...args) => mockHeicTo(...args) }));
-
   beforeEach(() => {
     mockHeicTo.mockReset();
   });

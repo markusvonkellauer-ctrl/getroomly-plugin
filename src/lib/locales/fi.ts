@@ -57,5 +57,5 @@ export const fi: TranslationStrings = {
     'Tämä toiminto ei ole tilapäisesti käytettävissä. Yritä myöhemmin uudelleen.',
   loadingProgressLabel: 'Luonnin eteneminen',
   errorUnsupportedImageFormat:
-    'Tätä kuvamuotoa ei tueta. Vie kuva JPEG- tai PNG-muodossa ja yritä uudelleen.',
+    'Tätä kuvamuotoa ei tueta. Vie kuva JPEG-, PNG- tai WebP-muodossa ja yritä uudelleen.',
 };

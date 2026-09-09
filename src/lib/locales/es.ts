@@ -58,5 +58,5 @@ export const es: TranslationStrings = {
     'Esta función no está disponible temporalmente. Inténtalo de nuevo más tarde.',
   loadingProgressLabel: 'Progreso de generación',
   errorUnsupportedImageFormat:
-    'Este formato de imagen no es compatible. Exporta la foto como JPEG o PNG e inténtalo de nuevo.',
+    'Este formato de imagen no es compatible. Exporta la foto como JPEG, PNG o WebP e inténtalo de nuevo.',
 };

@@ -55,5 +55,5 @@ export const da: TranslationStrings = {
   errorTemporarilyUnavailable: 'Denne funktion er midlertidigt utilgængelig. Prøv igen senere.',
   loadingProgressLabel: 'Genereringsforløb',
   errorUnsupportedImageFormat:
-    'Dette billedformat understøttes ikke. Eksporter billedet som JPEG eller PNG, og prøv igen.',
+    'Dette billedformat understøttes ikke. Eksporter billedet som JPEG, PNG eller WebP, og prøv igen.',
 };

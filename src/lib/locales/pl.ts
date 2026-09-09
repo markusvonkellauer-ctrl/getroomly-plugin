@@ -57,5 +57,5 @@ export const pl: TranslationStrings = {
   errorTemporarilyUnavailable: 'Ta funkcja jest tymczasowo niedostępna. Spróbuj ponownie później.',
   loadingProgressLabel: 'Postęp generowania',
   errorUnsupportedImageFormat:
-    'Ten format obrazu nie jest obsługiwany. Wyeksportuj zdjęcie jako JPEG lub PNG i spróbuj ponownie.',
+    'Ten format obrazu nie jest obsługiwany. Wyeksportuj zdjęcie jako JPEG, PNG lub WebP i spróbuj ponownie.',
 };

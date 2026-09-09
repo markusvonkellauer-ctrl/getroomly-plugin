@@ -54,5 +54,5 @@ export const zh: TranslationStrings = {
   termsClose: '关闭',
   errorTemporarilyUnavailable: '此功能暂时不可用。请稍后再试。',
   loadingProgressLabel: '生成进度',
-  errorUnsupportedImageFormat: '不支持此图片格式。请将照片导出为 JPEG 或 PNG 格式后重试。',
+  errorUnsupportedImageFormat: '不支持此图片格式。请将照片导出为 JPEG、PNG 或 WebP 格式后重试。',
 };

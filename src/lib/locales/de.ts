@@ -59,5 +59,5 @@ export const de: TranslationStrings = {
     'Diese Funktion ist vorübergehend nicht verfügbar. Bitte versuchen Sie es später erneut.',
   loadingProgressLabel: 'Generierungsfortschritt',
   errorUnsupportedImageFormat:
-    'Dieses Bildformat wird nicht unterstützt. Bitte exportiere das Foto als JPEG oder PNG und versuche es erneut.',
+    'Dieses Bildformat wird nicht unterstützt. Bitte exportiere das Foto als JPEG, PNG oder WebP und versuche es erneut.',
 };
