@@ -25,8 +25,8 @@ import {
   validateImageFile,
 } from '../../src/services/ai-generation';
 
-const mockHeic2any = jest.fn();
-jest.mock('heic2any', () => ({ __esModule: true, default: (...args) => mockHeic2any(...args) }));
+const mockHeicTo = jest.fn();
+jest.mock('heic-to/csp', () => ({ heicTo: (...args) => mockHeicTo(...args) }));
 
 global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
 global.URL.revokeObjectURL = jest.fn();
@@ -373,7 +373,7 @@ describe('RoomVisualizationFlow', () => {
   test('a HEIC file (even mislabeled with a .jpeg extension) is converted to JPEG before upload', async () => {
     const RealFileReader = global.FileReader;
     global.FileReader = HeicSignatureFileReader;
-    mockHeic2any.mockResolvedValue(new Blob(['converted'], { type: 'image/jpeg' }));
+    mockHeicTo.mockResolvedValue(new Blob(['converted'], { type: 'image/jpeg' }));
     generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
 
     try {
@@ -401,7 +401,7 @@ describe('RoomVisualizationFlow', () => {
   test('shows a friendly localized error and returns to upload when HEIC conversion fails', async () => {
     const RealFileReader = global.FileReader;
     global.FileReader = HeicSignatureFileReader;
-    mockHeic2any.mockRejectedValue(new Error('decode failed'));
+    mockHeicTo.mockRejectedValue(new Error('decode failed'));
     const onError = jest.fn();
 
     try {
@@ -435,7 +435,7 @@ describe('RoomVisualizationFlow', () => {
     });
 
     await waitFor(() => expect(generateRoomVisualization).toHaveBeenCalledTimes(1));
-    expect(mockHeic2any).not.toHaveBeenCalled();
+    expect(mockHeicTo).not.toHaveBeenCalled();
   });
 
   test('a stale HEIC sniff (superseded by a newer selection before it resolves) does not affect the newer selection', async () => {
