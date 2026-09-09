@@ -366,6 +366,10 @@ describe('RoomVisualizationFlow', () => {
     // than a clear "expected not null" assertion message.
     expect(input).not.toBeNull();
     const accept = input.getAttribute('accept');
+    // Same reasoning as the input itself: a null accept would otherwise
+    // fail the toContain matchers with a less clear error than an explicit
+    // "expected not null" assertion pointing at the missing attribute.
+    expect(accept).not.toBeNull();
     expect(accept).toContain('image/heic');
     expect(accept).toContain('image/heif');
     expect(accept).toContain('.heic');
