@@ -812,10 +812,10 @@ export function RoomVisualizationFlow({
         // aren't standard web image formats) so a genuinely-named .heic
         // file — the common case straight off an iPhone camera roll, not
         // just a mislabeled .jpeg — is actually selectable via the file
-        // picker at all. Without this, isHeicFile()/convertHeicToJpeg()
-        // below can never run for that case: the OS file picker filters
-        // non-matching files out of the dialog before a selection can even
-        // happen.
+        // picker at all. Without this, handleFileSelect's HEIC handling
+        // (isHeicFile()/convertHeicToJpeg()) can never run for that case:
+        // the OS file picker filters non-matching files out of the dialog
+        // before a selection can even happen.
         accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
         onChange={handleFileSelect}
         style={{ display: 'none' }}

@@ -361,6 +361,10 @@ describe('RoomVisualizationFlow', () => {
     render(<RoomVisualizationFlow {...defaultProps} />);
 
     const input = document.querySelector('input[type="file"]');
+    // Explicit assertion, not a bare property access — a null input would
+    // otherwise throw a TypeError on .getAttribute, a less helpful failure
+    // than a clear "expected not null" assertion message.
+    expect(input).not.toBeNull();
     const accept = input.getAttribute('accept');
     expect(accept).toContain('image/heic');
     expect(accept).toContain('image/heif');
