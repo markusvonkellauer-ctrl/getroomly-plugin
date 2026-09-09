@@ -466,6 +466,40 @@ describe('RoomVisualizationFlow', () => {
     }
   });
 
+  test('progress stays at 0% during HEIC conversion, instead of climbing then jumping back when generation starts', async () => {
+    // Regression coverage for a Copilot review finding on PR #92: setting
+    // isGenerating (not just step) to 'processing' before conversion starts
+    // the progress-bar timer effect immediately, letting progress visibly
+    // climb during the multi-second conversion — only for handleGenerate to
+    // reset it back to 0 once real generation actually begins, a jarring
+    // backward jump. isGenerating now stays false until handleGenerate
+    // itself sets it, so progress never moves during conversion at all.
+    const RealFileReader = global.FileReader;
+    global.FileReader = HeicSignatureFileReader;
+    mockHeicTo.mockReturnValueOnce(new Promise(() => {}));
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const heicFile = new File(['heic bytes'], 'photo.jpeg', { type: 'image/jpeg' });
+
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), heicFile);
+      });
+
+      await waitFor(() => {
+        expect(document.querySelector('.getroomly-spinner-rot')).toBeInTheDocument();
+      });
+
+      // Progress advances on a real 100ms interval when the timer is
+      // running — wait past several ticks' worth of real time and confirm
+      // it's still exactly 0%, not just momentarily.
+      await new Promise(resolve => setTimeout(resolve, 350));
+      expect(screen.getByText('0%')).toBeInTheDocument();
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
   test('shows a friendly localized error and returns to upload when HEIC conversion fails', async () => {
     const RealFileReader = global.FileReader;
     global.FileReader = HeicSignatureFileReader;
