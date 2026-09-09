@@ -181,6 +181,34 @@ describe('RoomVisualizationFlow', () => {
     expect(statusText.parentElement).toBe(spinner.parentElement);
   });
 
+  test('the progress bar fill uses raw (fractional) progress for smooth motion, not whole-percent steps', async () => {
+    // Regression check: the fill's width previously used Math.floor(progress)
+    // to match aria-valuenow/the displayed percentage exactly. Progress
+    // advances ~0.64 points per 100ms tick, so flooring only changed the
+    // rendered width every 1-2 ticks (100-200ms, unevenly) — combined with
+    // the fixed 100ms CSS transition, that read as a stutter (move, pause,
+    // move) instead of smooth continuous motion. Polls for a fractional
+    // width, since the exact value at any instant depends on real elapsed
+    // time.
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    act(() => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(document.querySelector('[role="progressbar"]')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      const fill = document.querySelector('[role="progressbar"] > div');
+      const match = fill.style.width.match(/^([\d.]+)%$/);
+      expect(match).not.toBeNull();
+      expect(Number.isInteger(Number(match[1]))).toBe(false);
+    });
+  });
+
   test('the processing footer shows only the percentage, not a duplicate status message', async () => {
     generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
 
