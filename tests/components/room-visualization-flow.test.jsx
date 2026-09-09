@@ -203,6 +203,10 @@ describe('RoomVisualizationFlow', () => {
 
     await waitFor(() => {
       const fill = document.querySelector('[role="progressbar"] > div');
+      // Explicit assertion, not a bare property access — a null fill would
+      // otherwise throw inside waitFor and surface only as an opaque
+      // timeout, not this specific reason.
+      expect(fill).not.toBeNull();
       const match = fill.style.width.match(/^([\d.]+)%$/);
       expect(match).not.toBeNull();
       expect(Number.isInteger(Number(match[1]))).toBe(false);
