@@ -827,19 +827,28 @@ export function RoomVisualizationFlow({
       {/* Photo stays untouched — no dimming, no scrim. transform:scale(1.04)
           bleeds the blur-reveal's edge pixels outside the visible frame
           (the parent's overflow:hidden clips them) instead of shrinking the
-          blur radius, which would weaken the reveal effect. */}
-      <img
-        src={uploadedImage || ''}
-        alt="Room being processed"
-        className="getroomly-blur-reveal"
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          display: 'block',
-          transform: 'scale(1.04)',
-        }}
-      />
+          blur radius, which would weaken the reveal effect.
+          Conditional, not src={uploadedImage || ''} — during a HEIC
+          conversion, this step is entered (to show the loading UI) before
+          uploadedImage is populated (it's only set once the post-conversion
+          readAsDataURL completes), so an unconditional empty src would
+          render a broken-image icon over the dark background for the
+          entire conversion. Omitting the element entirely just shows the
+          dark background + spinner overlay, which reads fine as "loading". */}
+      {uploadedImage && (
+        <img
+          src={uploadedImage}
+          alt="Room being processed"
+          className="getroomly-blur-reveal"
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+            transform: 'scale(1.04)',
+          }}
+        />
+      )}
 
       {/* Loading stack — a sibling of the image, not a descendant, so it
           never inherits the image's blur filter. */}
