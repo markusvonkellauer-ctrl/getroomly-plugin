@@ -350,6 +350,24 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  test('the file input accepts HEIC/HEIF, so a genuinely-named .heic file is selectable at all', () => {
+    // Regression coverage for a Copilot review finding on PR #92: without
+    // HEIC/HEIF in `accept`, the OS file picker filters real .heic/.heif
+    // files out of the dialog before a selection can even happen — the new
+    // isHeicFile()/convertHeicToJpeg() handling could only ever be reached
+    // by a *mislabeled* file (e.g. HEIC bytes named photo.jpeg), never a
+    // genuinely-named one, which is the common case straight off an
+    // iPhone camera roll.
+    render(<RoomVisualizationFlow {...defaultProps} />);
+
+    const input = document.querySelector('input[type="file"]');
+    const accept = input.getAttribute('accept');
+    expect(accept).toContain('image/heic');
+    expect(accept).toContain('image/heif');
+    expect(accept).toContain('.heic');
+    expect(accept).toContain('.heif');
+  });
+
   test('rejects invalid file type and stays on upload step', async () => {
     validateImageFile.mockReturnValueOnce({ isValid: false, error: 'Invalid file format.' });
 
