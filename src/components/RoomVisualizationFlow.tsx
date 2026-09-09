@@ -5,8 +5,10 @@ import {
   submitFeedback,
   validateImageFile,
 } from '@/services/ai-generation';
+import { AppConfig } from '@/config/app-config';
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
+import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 interface RoomVisualizationFlowProps {
@@ -246,33 +248,30 @@ export function RoomVisualizationFlow({
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
       return;
     }
 
-    const validation = validateImageFile(file);
-    if (!validation.isValid) {
-      const errorMsg = validation.error || 'Invalid file';
-      console.error('[Plugin] Validation error:', errorMsg);
-      window.dispatchEvent(
-        new CustomEvent('getroomly-error', {
-          detail: { error: errorMsg, productId, sessionId },
-        })
-      );
-      onError?.(errorMsg);
-      return;
-    }
+    // Bumped before any async work (HEIC sniff/conversion, then FileReader)
+    // so a superseded selection — a newer file chosen, or the component
+    // unmounted, while any of it is in flight — can be told apart from the
+    // current one and ignored, exactly like the FileReader guard below.
+    const token = ++fileReadTokenRef.current;
 
-    // Shared by onerror and the non-string-result path below: both are "we
-    // couldn't get a usable image out of the file" and must recover the same
-    // way — clear the file input so the browser fires onChange again if the
-    // user retries the same file (an unchanged input value means no change
-    // event), and surface the failure to the host.
+    // Shared by every failure path below: all are "we couldn't get a usable
+    // image out of the file" and must recover the same way — clear the file
+    // input so the browser fires onChange again if the user retries the same
+    // file (an unchanged input value means no change event), reset out of
+    // the processing step if a HEIC conversion attempt had already entered
+    // it (a no-op if still on the upload step), and surface the failure to
+    // the host.
     const failRead = (errorMsg: string) => {
       uploadedImageRef.current = null;
       setUploadedImage(null);
+      setStep('upload');
+      setIsGenerating(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -284,11 +283,77 @@ export function RoomVisualizationFlow({
       onError?.(errorMsg);
     };
 
+    // Never trust the extension or declared MIME type for this check — a
+    // HEIC photo saved/shared with a .jpeg extension reports
+    // file.type === 'image/jpeg' but is still undecodable by this (or any
+    // non-Safari) browser, so validateImageFile below would wrongly accept
+    // it only for the preview/original image to silently fail to render
+    // later. Converting first means the rest of this function never has to
+    // know the original file wasn't already a browser-native format.
+    let imageFile = file;
+    let isHeic: boolean;
+    try {
+      isHeic = await isHeicFile(file);
+    } catch (err) {
+      // isHeicFile rejects if the underlying FileReader errors — without
+      // this catch, that would throw out of handleFileSelect as an
+      // unhandled rejection, since nothing awaits this event handler's
+      // returned promise.
+      if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+        return;
+      }
+      console.error('[Plugin] HEIC signature check failed:', err);
+      failRead('Failed to read image file');
+      return;
+    }
+    // Superseded by a newer selection, or the component unmounted, while the
+    // sniff above was in flight — bail out before touching any state, same
+    // as every other async step in this function.
+    if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+      return;
+    }
+
+    if (isHeic) {
+      if (file.size > AppConfig.images.maxFileSize) {
+        const maxSizeMB = AppConfig.images.maxFileSize / (1024 * 1024);
+        failRead(`File size too large. Maximum size is ${maxSizeMB}MB.`);
+        return;
+      }
+      // Conversion can take a few seconds — show the existing processing UI
+      // immediately rather than leaving the upload button looking frozen.
+      // handleGenerate (called once conversion + the FileReader read below
+      // both succeed) re-sets these same values, which is harmless.
+      setIsGenerating(true);
+      setProgress(0);
+      setMessageIndex(0);
+      setStep('processing');
+      try {
+        imageFile = await convertHeicToJpeg(file);
+      } catch (err) {
+        if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+          return;
+        }
+        console.error('[Plugin] HEIC conversion failed:', err);
+        failRead(t.errorUnsupportedImageFormat);
+        return;
+      }
+      if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+        return;
+      }
+    }
+
+    const validation = validateImageFile(imageFile);
+    if (!validation.isValid) {
+      const errorMsg = validation.error || 'Invalid file';
+      console.error('[Plugin] Validation error:', errorMsg);
+      failRead(errorMsg);
+      return;
+    }
+
     // A data URL (not a blob: URL) so the "original" preview stays valid for
     // the whole review session — blob: URLs are backed by browser memory and
     // can be silently reclaimed under memory pressure (e.g. a concurrent
     // Google Meet screen share), which broke "Show Original" with no error.
-    const token = ++fileReadTokenRef.current;
     const reader = new FileReader();
     reader.onload = () => {
       // Superseded by a newer selection, or the component unmounted, while
@@ -307,7 +372,7 @@ export function RoomVisualizationFlow({
       const dataUrl = reader.result;
       uploadedImageRef.current = dataUrl;
       setUploadedImage(dataUrl);
-      handleGenerate(file);
+      handleGenerate(imageFile);
     };
     reader.onerror = () => {
       if (!isMountedRef.current || fileReadTokenRef.current !== token) {
@@ -316,7 +381,7 @@ export function RoomVisualizationFlow({
       console.error('[Plugin] FileReader error:', reader.error);
       failRead('Failed to read image file');
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(imageFile);
   };
 
   const handleNewPhoto = () => {

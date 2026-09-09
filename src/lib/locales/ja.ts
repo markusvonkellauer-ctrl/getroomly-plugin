@@ -56,4 +56,6 @@ export const ja: TranslationStrings = {
   errorTemporarilyUnavailable:
     'この機能は現在ご利用いただけません。しばらくしてから再度お試しください。',
   loadingProgressLabel: '生成の進捗',
+  errorUnsupportedImageFormat:
+    'この画像形式はサポートされていません。JPEGまたはPNG形式で書き出してから、もう一度お試しください。',
 };
