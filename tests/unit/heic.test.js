@@ -43,9 +43,18 @@ function mockFileReaderReturning(bytes) {
 function withMockFileReader(bytes, fn) {
   const RealFileReader = global.FileReader;
   global.FileReader = mockFileReaderReturning(bytes);
-  return fn().finally(() => {
-    global.FileReader = RealFileReader;
-  });
+  // Promise.resolve().then(fn), not fn().finally(...) — every current call
+  // site passes an async () => {} callback, which can't throw synchronously
+  // (an async function always returns a promise, even when its body
+  // throws), but that's a fragile invariant to rely on. Routing the call
+  // itself through .then() means even a synchronous throw becomes a
+  // rejection instead of an uncaught exception, so .finally() below always
+  // runs and restores the real FileReader.
+  return Promise.resolve()
+    .then(fn)
+    .finally(() => {
+      global.FileReader = RealFileReader;
+    });
 }
 
 const ftypBox = brand => [
