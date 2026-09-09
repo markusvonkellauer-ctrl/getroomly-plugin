@@ -43,15 +43,20 @@ function mockFileReaderReturning(bytes) {
 function withMockFileReader(bytes, fn) {
   const RealFileReader = global.FileReader;
   global.FileReader = mockFileReaderReturning(bytes);
-  // Promise.resolve().then(fn), not fn().finally(...) — every current call
-  // site passes an async () => {} callback, which can't throw synchronously
-  // (an async function always returns a promise, even when its body
-  // throws), but that's a fragile invariant to rely on. Routing the call
-  // itself through .then() means even a synchronous throw becomes a
-  // rejection instead of an uncaught exception, so .finally() below always
-  // runs and restores the real FileReader.
+  // Promise.resolve().then(() => fn()), not fn().finally(...) — every
+  // current call site passes an async () => {} callback, which can't throw
+  // synchronously (an async function always returns a promise, even when
+  // its body throws), but that's a fragile invariant to rely on. Routing
+  // the call itself through .then() means even a synchronous throw becomes
+  // a rejection instead of an uncaught exception, so .finally() below
+  // always runs and restores the real FileReader. The extra arrow
+  // (`() => fn()`, not `.then(fn)` directly) matters: .then() invokes its
+  // handler with the resolved value as an argument, and .then(fn) would
+  // pass that (here, undefined) into fn — harmless for today's
+  // argument-less callbacks, but not identical to the original fn() call
+  // this replaces.
   return Promise.resolve()
-    .then(fn)
+    .then(() => fn())
     .finally(() => {
       global.FileReader = RealFileReader;
     });
