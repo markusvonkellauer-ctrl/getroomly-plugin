@@ -25,6 +25,9 @@ import {
   validateImageFile,
 } from '../../src/services/ai-generation';
 
+const mockHeic2any = jest.fn();
+jest.mock('heic2any', () => ({ __esModule: true, default: (...args) => mockHeic2any(...args) }));
+
 global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
 global.URL.revokeObjectURL = jest.fn();
 
@@ -329,6 +332,112 @@ describe('RoomVisualizationFlow', () => {
     expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
   });
 
+  // ─── HEIC detection/conversion ─────────────────────────────────────────────
+  // Regression coverage: a HEIC photo (the default iPhone camera format) is
+  // often saved/shared with a .jpeg extension without ever being converted —
+  // file.type then reports 'image/jpeg', which is why detection here can
+  // never rely on the extension or declared MIME type, only the file's real
+  // magic bytes (see src/lib/heic.ts's isHeicFile).
+
+  // jsdom's Blob has no .arrayBuffer()/.text()/.stream(), and the default
+  // global FileReader mock (tests/setup.js) always resolves readAsArrayBuffer
+  // with an empty buffer — deliberately, so it never flags any other test's
+  // fixture files as HEIC. This local mock instead resolves with a real
+  // ftyp+heic signature for the sniff, while still behaving like the default
+  // mock for the main readAsDataURL call, so the rest of the upload flow
+  // proceeds normally.
+  class HeicSignatureFileReader {
+    readAsArrayBuffer() {
+      const bytes = [
+        0,
+        0,
+        0,
+        24,
+        ...'ftyp'.split('').map(c => c.charCodeAt(0)),
+        ...'heic'.split('').map(c => c.charCodeAt(0)),
+      ];
+      const buffer = new Uint8Array(bytes).buffer;
+      queueMicrotask(() => {
+        this.result = buffer;
+        this.onload?.();
+      });
+    }
+    readAsDataURL() {
+      queueMicrotask(() => {
+        this.result = 'data:image/jpeg;base64,mockedBase64';
+        this.onload?.();
+      });
+    }
+  }
+
+  test('a HEIC file (even mislabeled with a .jpeg extension) is converted to JPEG before upload', async () => {
+    const RealFileReader = global.FileReader;
+    global.FileReader = HeicSignatureFileReader;
+    mockHeic2any.mockResolvedValue(new Blob(['converted'], { type: 'image/jpeg' }));
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      // Named .jpeg, like the real report this covers — file.type is
+      // 'image/jpeg' despite the bytes actually being HEIC.
+      const heicFile = new File(['heic bytes'], 'photo.jpeg', { type: 'image/jpeg' });
+
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), heicFile);
+      });
+
+      await waitFor(() => expect(generateRoomVisualization).toHaveBeenCalledTimes(1));
+      const uploadedBlob = generateRoomVisualization.mock.calls[0][0].imageBlob;
+      expect(uploadedBlob).toBeInstanceOf(File);
+      expect(uploadedBlob.name).toBe('photo.jpg');
+      expect(uploadedBlob.type).toBe('image/jpeg');
+      // The converted file, not the original (undecodable) HEIC bytes.
+      expect(uploadedBlob).not.toBe(heicFile);
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
+  test('shows a friendly localized error and returns to upload when HEIC conversion fails', async () => {
+    const RealFileReader = global.FileReader;
+    global.FileReader = HeicSignatureFileReader;
+    mockHeic2any.mockRejectedValue(new Error('decode failed'));
+    const onError = jest.fn();
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} onError={onError} />);
+      const input = document.querySelector('input[type="file"]');
+      const heicFile = new File(['heic bytes'], 'photo.jpeg', { type: 'image/jpeg' });
+
+      await act(async () => {
+        uploadFile(input, heicFile);
+      });
+
+      await waitFor(() => {
+        expect(onError).toHaveBeenCalledWith(translations.en.errorUnsupportedImageFormat);
+      });
+      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(generateRoomVisualization).not.toHaveBeenCalled();
+      // Retrying (a converted file, or a different photo) must fire onChange
+      // again — an unchanged input value would silently swallow the retry.
+      expect(input.value).toBe('');
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
+  test('does not attempt HEIC conversion for an ordinary JPEG upload', async () => {
+    generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => expect(generateRoomVisualization).toHaveBeenCalledTimes(1));
+    expect(mockHeic2any).not.toHaveBeenCalled();
+  });
+
   // ─── Original image survives as a data: URL (not blob:) ──────────────────
   // Regression test: blob: URLs are backed by browser memory and can be
   // silently reclaimed under memory pressure (observed with a concurrent
@@ -358,6 +467,10 @@ describe('RoomVisualizationFlow', () => {
   test('reading the uploaded file fails gracefully: stays on upload step, clears the input, and calls onError', async () => {
     const RealFileReader = global.FileReader;
     class FailingFileReader {
+      readAsArrayBuffer() {
+        this.result = new ArrayBuffer(0);
+        queueMicrotask(() => this.onload?.());
+      }
       readAsDataURL() {
         queueMicrotask(() => this.onerror?.(new Event('error')));
       }
@@ -389,6 +502,10 @@ describe('RoomVisualizationFlow', () => {
   test('a non-string FileReader.result is treated as a read failure, not silently dropped', async () => {
     const RealFileReader = global.FileReader;
     class NonStringResultFileReader {
+      readAsArrayBuffer() {
+        this.result = new ArrayBuffer(0);
+        queueMicrotask(() => this.onload?.());
+      }
       readAsDataURL() {
         this.result = new ArrayBuffer(0); // unexpected — readAsDataURL should yield a string
         queueMicrotask(() => this.onload?.());
@@ -423,6 +540,13 @@ describe('RoomVisualizationFlow', () => {
       constructor() {
         instances.push(this);
       }
+      // Auto-resolves the HEIC magic-byte sniff (0 bytes → not HEIC) so this
+      // mock only needs to manually drive the *main* read below, same as
+      // before that extra internal read was introduced.
+      readAsArrayBuffer() {
+        this.result = new ArrayBuffer(0);
+        queueMicrotask(() => this.onload?.());
+      }
       readAsDataURL(file) {
         this.result = `data:image/jpeg;base64,${file.name}`;
       }
@@ -438,15 +562,24 @@ describe('RoomVisualizationFlow', () => {
 
       // Two selections in a row before either read resolves — the second
       // supersedes the first (matches a double file-picker/drop in practice).
+      // Each selection now constructs two FileReaders (HEIC sniff, then the
+      // main read) — an `await act` between them lets the sniff's
+      // auto-resolving microtask settle so the main reader actually gets
+      // constructed before the next selection fires.
       act(() => uploadFile(input, fileA));
+      await act(async () => {});
       act(() => uploadFile(input, fileB));
+      await act(async () => {});
+
+      const mainReaderA = instances[1];
+      const mainReaderB = instances[3];
 
       // The stale read (A) resolves first — must be a no-op.
-      act(() => instances[0].onload?.());
+      act(() => mainReaderA.onload?.());
       expect(generateRoomVisualization).not.toHaveBeenCalled();
 
       // The current read (B) resolves — this one proceeds.
-      await act(async () => instances[1].onload?.());
+      await act(async () => mainReaderB.onload?.());
       await waitFor(() => expect(generateRoomVisualization).toHaveBeenCalledTimes(1));
       expect(generateRoomVisualization.mock.calls[0][0].imageBlob).toBe(fileB);
     } finally {
@@ -461,6 +594,10 @@ describe('RoomVisualizationFlow', () => {
       constructor() {
         instances.push(this);
       }
+      readAsArrayBuffer() {
+        this.result = new ArrayBuffer(0);
+        queueMicrotask(() => this.onload?.());
+      }
       readAsDataURL() {
         this.result = 'data:image/jpeg;base64,x';
       }
@@ -471,9 +608,12 @@ describe('RoomVisualizationFlow', () => {
     try {
       const { unmount } = render(<RoomVisualizationFlow {...defaultProps} />);
       act(() => uploadFile(document.querySelector('input[type="file"]'), makeFile()));
+      // Lets the HEIC-sniff microtask resolve, constructing the main reader
+      // (instances[1]), before unmounting.
+      await act(async () => {});
 
       unmount();
-      act(() => instances[0].onload?.());
+      act(() => instances[1].onload?.());
 
       expect(generateRoomVisualization).not.toHaveBeenCalled();
       // React's warning is often split across multiple console.error args

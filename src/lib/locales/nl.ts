@@ -56,4 +56,6 @@ export const nl: TranslationStrings = {
   errorTemporarilyUnavailable:
     'Deze functie is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
   loadingProgressLabel: 'Genereringsvoortgang',
+  errorUnsupportedImageFormat:
+    'Dit afbeeldingsformaat wordt niet ondersteund. Exporteer de foto als JPEG of PNG en probeer het opnieuw.',
 };

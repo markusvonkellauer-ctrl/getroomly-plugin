@@ -46,6 +46,14 @@ if (typeof window !== 'undefined') {
         this.result = 'data:image/jpeg;base64,mockedBase64';
         if (this.onload) this.onload();
       });
+      // Empty (byteLength 0) is a deliberate default: heic.ts's isHeicFile()
+      // treats anything under 12 bytes as "not HEIC", so every existing
+      // test's fixture files are unaffected unless a test explicitly
+      // constructs HEIC-signature bytes for this to read.
+      this.readAsArrayBuffer = jest.fn(() => {
+        this.result = new ArrayBuffer(0);
+        if (this.onload) this.onload();
+      });
     }
   };
 

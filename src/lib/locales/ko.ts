@@ -56,4 +56,6 @@ export const ko: TranslationStrings = {
   errorTemporarilyUnavailable:
     '이 기능은 현재 일시적으로 사용할 수 없습니다. 나중에 다시 시도해 주세요.',
   loadingProgressLabel: '생성 진행률',
+  errorUnsupportedImageFormat:
+    '지원되지 않는 이미지 형식입니다. 사진을 JPEG 또는 PNG 형식으로 내보낸 후 다시 시도해 주세요.',
 };

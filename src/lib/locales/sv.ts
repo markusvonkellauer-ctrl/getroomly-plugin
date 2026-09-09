@@ -55,4 +55,6 @@ export const sv: TranslationStrings = {
   errorTemporarilyUnavailable:
     'Den här funktionen är tillfälligt otillgänglig. Försök igen senare.',
   loadingProgressLabel: 'Genereringsförlopp',
+  errorUnsupportedImageFormat:
+    'Det här bildformatet stöds inte. Exportera bilden som JPEG eller PNG och försök igen.',
 };

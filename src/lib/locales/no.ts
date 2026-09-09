@@ -54,4 +54,6 @@ export const no: TranslationStrings = {
   termsClose: 'Lukk',
   errorTemporarilyUnavailable: 'Denne funksjonen er midlertidig utilgjengelig. Prøv igjen senere.',
   loadingProgressLabel: 'Genereringsforløp',
+  errorUnsupportedImageFormat:
+    'Dette bildeformatet støttes ikke. Eksporter bildet som JPEG eller PNG og prøv igjen.',
 };
