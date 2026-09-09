@@ -881,7 +881,13 @@ export function RoomVisualizationFlow({
         <div
           role="progressbar"
           aria-label={t.loadingProgressLabel}
-          aria-valuenow={Math.floor(progress)}
+          // Raw value, matching the visual fill below — flooring this (like
+          // the displayed percentage text) would let assistive tech report
+          // a stale value (e.g. 0%) while the bar is visibly further along.
+          // aria-valuetext gives a clean rounded number for the spoken
+          // announcement without sacrificing the numeric value's accuracy.
+          aria-valuenow={progress}
+          aria-valuetext={`${Math.floor(progress)}%`}
           aria-valuemin={0}
           aria-valuemax={100}
           style={{
@@ -900,10 +906,18 @@ export function RoomVisualizationFlow({
               left: 0,
               height: '100%',
               background: '#00c9a7',
-              // Math.floor, matching aria-valuenow and the footer percentage
-              // below — the raw fractional value would let the visual fill
-              // and the announced/displayed progress momentarily disagree.
-              width: `${Math.floor(progress)}%`,
+              // Raw (fractional) progress, not Math.floor — progress advances
+              // ~0.64 points per 100ms tick, so flooring only changes the
+              // rendered width every 1-2 ticks (100-200ms, unevenly), which
+              // combined with the 100ms transition below produced a visible
+              // stutter: move, pause, move again. The raw value updates
+              // every tick, so the transition below has a fresh target every
+              // 100ms and the fill reads as continuous motion. aria-valuenow
+              // (above) matches this same raw value now too, with
+              // aria-valuetext providing the rounded spoken number — only
+              // the displayed percentage text stays Math.floor'd, for a
+              // clean whole-number readout.
+              width: `${progress}%`,
               transition: 'width 100ms linear',
             }}
           />
