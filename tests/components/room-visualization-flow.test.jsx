@@ -197,12 +197,14 @@ describe('RoomVisualizationFlow', () => {
       uploadFile(document.querySelector('input[type="file"]'), makeFile());
     });
 
-    await waitFor(() => {
-      expect(document.querySelector('[role="progressbar"]')).toBeInTheDocument();
+    // findByRole, not a raw CSS selector — reflects how assistive tech
+    // actually locates this element (by its accessible role/name).
+    const progressbar = await screen.findByRole('progressbar', {
+      name: translations.en.loadingProgressLabel,
     });
 
     await waitFor(() => {
-      const fill = document.querySelector('[role="progressbar"] > div');
+      const fill = progressbar.querySelector('div');
       // Explicit assertion, not a bare property access — a null fill would
       // otherwise throw inside waitFor and surface only as an opaque
       // timeout, not this specific reason.

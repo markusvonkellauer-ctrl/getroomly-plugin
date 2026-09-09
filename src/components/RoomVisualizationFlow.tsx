@@ -881,7 +881,13 @@ export function RoomVisualizationFlow({
         <div
           role="progressbar"
           aria-label={t.loadingProgressLabel}
-          aria-valuenow={Math.floor(progress)}
+          // Raw value, matching the visual fill below — flooring this (like
+          // the displayed percentage text) would let assistive tech report
+          // a stale value (e.g. 0%) while the bar is visibly further along.
+          // aria-valuetext gives a clean rounded number for the spoken
+          // announcement without sacrificing the numeric value's accuracy.
+          aria-valuenow={progress}
+          aria-valuetext={`${Math.floor(progress)}%`}
           aria-valuemin={0}
           aria-valuemax={100}
           style={{
