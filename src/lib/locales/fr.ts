@@ -55,4 +55,7 @@ export const fr: TranslationStrings = {
   termsClose: 'Fermer',
   errorTemporarilyUnavailable:
     'Cette fonctionnalité est temporairement indisponible. Veuillez réessayer plus tard.',
+  loadingProgressLabel: 'Progression de la génération',
+  errorUnsupportedImageFormat:
+    "Ce format d'image n'est pas pris en charge. Exportez la photo au format JPEG, PNG ou WebP et réessayez.",
 };

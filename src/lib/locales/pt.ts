@@ -57,4 +57,7 @@ export const pt: TranslationStrings = {
   termsClose: 'Fechar',
   errorTemporarilyUnavailable:
     'Esta funcionalidade está temporariamente indisponível. Tente novamente mais tarde.',
+  loadingProgressLabel: 'Progresso da geração',
+  errorUnsupportedImageFormat:
+    'Este formato de imagem não é suportado. Exporte a foto como JPEG, PNG ou WebP e tente novamente.',
 };

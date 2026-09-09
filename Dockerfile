@@ -67,8 +67,30 @@ server {
     try_files $uri =404;
   }
 
+  # LGPL-3.0 attribution for heic-to (see src/lib/heic.ts) — served publicly
+  # alongside plugin.js so it's genuinely distributed with the software, not
+  # just sitting in a private repo.
+  location = /THIRD-PARTY-NOTICES.txt {
+    add_header Cache-Control "no-cache, must-revalidate" always;
+    add_header Access-Control-Allow-Origin "*" always;
+    try_files $uri =404;
+  }
+
   location ~ \.(svg|png|ico)$ {
     add_header Cache-Control "public, max-age=86400" always;
+    add_header Access-Control-Allow-Origin "*" always;
+    try_files $uri =404;
+  }
+
+  # Lazily-imported code split off from plugin.js (e.g. the HEIC→JPEG
+  # converter) — dynamic import() inside plugin.js resolves these relative
+  # to its own URL, so they're fetched from this same host regardless of
+  # which site embeds the widget. Filenames are content-hashed by the build
+  # (vite.config.ts's chunkFileNames), so a changed file always gets a new
+  # URL — safe to cache forever instead of the no-cache policy plugin.js
+  # itself needs.
+  location ^~ /chunks/ {
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
     add_header Access-Control-Allow-Origin "*" always;
     try_files $uri =404;
   }

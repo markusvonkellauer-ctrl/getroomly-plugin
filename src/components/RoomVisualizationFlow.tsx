@@ -3,10 +3,12 @@ import {
   AIGenerationError,
   generateRoomVisualization,
   submitFeedback,
+  validateFileSize,
   validateImageFile,
 } from '@/services/ai-generation';
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
+import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 interface RoomVisualizationFlowProps {
@@ -246,33 +248,30 @@ export function RoomVisualizationFlow({
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
       return;
     }
 
-    const validation = validateImageFile(file);
-    if (!validation.isValid) {
-      const errorMsg = validation.error || 'Invalid file';
-      console.error('[Plugin] Validation error:', errorMsg);
-      window.dispatchEvent(
-        new CustomEvent('getroomly-error', {
-          detail: { error: errorMsg, productId, sessionId },
-        })
-      );
-      onError?.(errorMsg);
-      return;
-    }
+    // Bumped before any async work (HEIC sniff/conversion, then FileReader)
+    // so a superseded selection — a newer file chosen, or the component
+    // unmounted, while any of it is in flight — can be told apart from the
+    // current one and ignored, exactly like the FileReader guard below.
+    const token = ++fileReadTokenRef.current;
 
-    // Shared by onerror and the non-string-result path below: both are "we
-    // couldn't get a usable image out of the file" and must recover the same
-    // way — clear the file input so the browser fires onChange again if the
-    // user retries the same file (an unchanged input value means no change
-    // event), and surface the failure to the host.
+    // Shared by every failure path below: all are "we couldn't get a usable
+    // image out of the file" and must recover the same way — clear the file
+    // input so the browser fires onChange again if the user retries the same
+    // file (an unchanged input value means no change event), reset out of
+    // the processing step if a HEIC conversion attempt had already entered
+    // it (a no-op if still on the upload step), and surface the failure to
+    // the host.
     const failRead = (errorMsg: string) => {
       uploadedImageRef.current = null;
       setUploadedImage(null);
+      setStep('upload');
+      setIsGenerating(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -284,11 +283,81 @@ export function RoomVisualizationFlow({
       onError?.(errorMsg);
     };
 
+    // Never trust the extension or declared MIME type for this check — a
+    // HEIC photo saved/shared with a .jpeg extension reports
+    // file.type === 'image/jpeg' but is still undecodable by this (or any
+    // non-Safari) browser, so validateImageFile below would wrongly accept
+    // it only for the preview/original image to silently fail to render
+    // later. Converting first means the rest of this function never has to
+    // know the original file wasn't already a browser-native format.
+    let imageFile = file;
+    let isHeic: boolean;
+    try {
+      isHeic = await isHeicFile(file);
+    } catch (err) {
+      // isHeicFile rejects if the underlying FileReader errors — without
+      // this catch, that would throw out of handleFileSelect as an
+      // unhandled rejection, since nothing awaits this event handler's
+      // returned promise.
+      if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+        return;
+      }
+      console.error('[Plugin] HEIC signature check failed:', err);
+      failRead('Failed to read image file');
+      return;
+    }
+    // Superseded by a newer selection, or the component unmounted, while the
+    // sniff above was in flight — bail out before touching any state, same
+    // as every other async step in this function.
+    if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+      return;
+    }
+
+    if (isHeic) {
+      const sizeValidation = validateFileSize(file.size);
+      if (!sizeValidation.isValid) {
+        failRead(sizeValidation.error || 'File too large');
+        return;
+      }
+      // Conversion can take a few seconds — show the processing UI
+      // immediately rather than leaving the upload button looking frozen.
+      // Deliberately NOT setIsGenerating(true) here: that flag gates the
+      // progress-bar timer effect below, and starting it during conversion
+      // would let progress visibly climb, then snap back to 0 once
+      // handleGenerate (called after conversion + the FileReader read below
+      // both succeed) resets it to actually start generation — a jarring
+      // backward jump. Progress stays frozen at 0 during conversion
+      // instead; the spinner/dark background still show via step alone.
+      setProgress(0);
+      setMessageIndex(0);
+      setStep('processing');
+      try {
+        imageFile = await convertHeicToJpeg(file);
+      } catch (err) {
+        if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+          return;
+        }
+        console.error('[Plugin] HEIC conversion failed:', err);
+        failRead(t.errorUnsupportedImageFormat);
+        return;
+      }
+      if (!isMountedRef.current || fileReadTokenRef.current !== token) {
+        return;
+      }
+    }
+
+    const validation = validateImageFile(imageFile);
+    if (!validation.isValid) {
+      const errorMsg = validation.error || 'Invalid file';
+      console.error('[Plugin] Validation error:', errorMsg);
+      failRead(errorMsg);
+      return;
+    }
+
     // A data URL (not a blob: URL) so the "original" preview stays valid for
     // the whole review session — blob: URLs are backed by browser memory and
     // can be silently reclaimed under memory pressure (e.g. a concurrent
     // Google Meet screen share), which broke "Show Original" with no error.
-    const token = ++fileReadTokenRef.current;
     const reader = new FileReader();
     reader.onload = () => {
       // Superseded by a newer selection, or the component unmounted, while
@@ -307,7 +376,7 @@ export function RoomVisualizationFlow({
       const dataUrl = reader.result;
       uploadedImageRef.current = dataUrl;
       setUploadedImage(dataUrl);
-      handleGenerate(file);
+      handleGenerate(imageFile);
     };
     reader.onerror = () => {
       if (!isMountedRef.current || fileReadTokenRef.current !== token) {
@@ -316,7 +385,7 @@ export function RoomVisualizationFlow({
       console.error('[Plugin] FileReader error:', reader.error);
       failRead('Failed to read image file');
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(imageFile);
   };
 
   const handleNewPhoto = () => {
@@ -737,7 +806,17 @@ export function RoomVisualizationFlow({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/jpeg,image/jpg,image/png,image/webp"
+        // Includes HEIC/HEIF (both MIME types and extensions — browsers
+        // fall back to extension matching when a HEIC file's reported MIME
+        // type is empty or inconsistent, which happens often since these
+        // aren't standard web image formats) so a genuinely-named .heic
+        // file — the common case straight off an iPhone camera roll, not
+        // just a mislabeled .jpeg — is actually selectable via the file
+        // picker at all. Without this, handleFileSelect's HEIC handling
+        // (isHeicFile()/convertHeicToJpeg()) can never run for that case:
+        // the OS file picker filters non-matching files out of the dialog
+        // before a selection can even happen.
+        accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
         onChange={handleFileSelect}
         style={{ display: 'none' }}
       />
@@ -759,51 +838,110 @@ export function RoomVisualizationFlow({
         overflow: 'hidden',
       }}
     >
-      <img
-        src={uploadedImage || ''}
-        alt="Room being processed"
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          display: 'block',
-          opacity: progress >= 85 ? 0.9 : 0.4,
-          filter: progress >= 85 ? 'blur(0px) grayscale(0%)' : 'blur(4px) grayscale(60%)',
-          transition: 'all 1000ms ease',
-        }}
-      />
+      {/* Photo stays untouched — no dimming, no scrim. transform:scale(1.04)
+          bleeds the blur-reveal's edge pixels outside the visible frame
+          (the parent's overflow:hidden clips them) instead of shrinking the
+          blur radius, which would weaken the reveal effect.
+          Conditional, not src={uploadedImage || ''} — during a HEIC
+          conversion, this step is entered (to show the loading UI) before
+          uploadedImage is populated (it's only set once the post-conversion
+          readAsDataURL completes), so an unconditional empty src would
+          render a broken-image icon over the dark background for the
+          entire conversion. Omitting the element entirely just shows the
+          dark background + spinner overlay, which reads fine as "loading". */}
+      {uploadedImage && (
+        <img
+          src={uploadedImage}
+          alt="Room being processed"
+          className="getroomly-blur-reveal"
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+            transform: 'scale(1.04)',
+          }}
+        />
+      )}
 
-      {/* Central Spinner */}
+      {/* Loading stack — a sibling of the image, not a descendant, so it
+          never inherits the image's blur filter. */}
       <div
         style={{
           position: 'absolute',
           inset: '0',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'transparent',
           zIndex: 30,
           pointerEvents: 'none',
         }}
       >
+        <div className="getroomly-spinner-rot" aria-hidden="true">
+          <div className="getroomly-spinner-form" />
+        </div>
+
+        {/* Purely decorative flavor text, not a live region: it cycles every
+            3s and can run well past that during the creep phase, so
+            announcing every change would be chatty. The progressbar below
+            carries the actual accessible progress state. */}
         <div
           style={{
-            background: 'rgba(0, 0, 0, 0.6)',
-            backdropFilter: 'blur(12px)',
-            borderRadius: '50%',
-            padding: '24px',
-            boxShadow: '0 0 40px color-mix(in srgb, var(--getroomly-primary) 40%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--getroomly-primary) 40%, transparent)',
+            marginTop: '34px',
+            fontSize: '12px',
+            fontWeight: 600,
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            color: '#ffffff',
+            textShadow: '0 1px 3px rgba(0, 0, 0, 0.55)',
+            textAlign: 'center',
+          }}
+        >
+          {t.loadingMessages[messageIndex]}
+        </div>
+
+        <div
+          role="progressbar"
+          aria-label={t.loadingProgressLabel}
+          // Raw value, matching the visual fill below — flooring this (like
+          // the displayed percentage text) would let assistive tech report
+          // a stale value (e.g. 0%) while the bar is visibly further along.
+          // aria-valuetext gives a clean rounded number for the spoken
+          // announcement without sacrificing the numeric value's accuracy.
+          aria-valuenow={progress}
+          aria-valuetext={`${Math.floor(progress)}%`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          style={{
+            marginTop: '14px',
+            width: 'min(340px, 60%)',
+            position: 'relative',
+            height: '4px',
+            background: 'rgba(255, 255, 255, 0.28)',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.35)',
           }}
         >
           <div
             style={{
-              width: '48px',
-              height: '48px',
-              border: '2.5px solid color-mix(in srgb, var(--getroomly-primary) 30%, transparent)',
-              borderTop: '2.5px solid var(--getroomly-primary)',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              height: '100%',
+              background: '#00c9a7',
+              // Raw (fractional) progress, not Math.floor — progress advances
+              // ~0.64 points per 100ms tick, so flooring only changes the
+              // rendered width every 1-2 ticks (100-200ms, unevenly), which
+              // combined with the 100ms transition below produced a visible
+              // stutter: move, pause, move again. The raw value updates
+              // every tick, so the transition below has a fresh target every
+              // 100ms and the fill reads as continuous motion. aria-valuenow
+              // (above) matches this same raw value now too, with
+              // aria-valuetext providing the rounded spoken number — only
+              // the displayed percentage text stays Math.floor'd, for a
+              // clean whole-number readout.
+              width: `${progress}%`,
+              transition: 'width 100ms linear',
             }}
           />
         </div>
@@ -1275,6 +1413,11 @@ export function RoomVisualizationFlow({
   );
 
   // Processing Footer Component (Step 2)
+  // Status text + progress bar now live over the image (see
+  // renderProcessingStep) — this keeps only the percentage figure, in its
+  // existing position/style, per explicit instruction not to move it yet.
+  // The footer is intentionally left otherwise empty during load; what (if
+  // anything) fills that space is an open design question for later.
   const renderProcessingFooter = () => (
     <div
       style={{
@@ -1286,71 +1429,19 @@ export function RoomVisualizationFlow({
         margin: '0 auto',
       }}
     >
-      {/* Cycling Loading Message */}
       <div
         style={{
-          height: '16px',
           display: 'flex',
-          alignItems: 'center',
           justifyContent: 'center',
-          width: '100%',
-          color: 'var(--getroomly-primary)',
-          fontSize: '10px',
+          marginTop: '4px',
+          color: 'color-mix(in srgb, var(--getroomly-primary) 70%, transparent)',
           fontWeight: '700',
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          textAlign: 'center',
+          fontSize: '10px',
+          letterSpacing: '0.1em',
+          fontFamily: 'ui-monospace, Consolas, monospace',
         }}
       >
-        {t.loadingMessages[messageIndex]}
-      </div>
-
-      {/* Progress Bar */}
-      <div
-        style={{
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px',
-        }}
-      >
-        <div
-          style={{
-            position: 'relative',
-            width: '100%',
-            height: '4px',
-            background: 'color-mix(in srgb, var(--getroomly-primary) 20%, transparent)',
-            borderRadius: '2px',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              height: '100%',
-              background: 'var(--getroomly-primary)',
-              boxShadow: '0 0 8px color-mix(in srgb, var(--getroomly-primary) 80%, transparent)',
-              width: `${progress}%`,
-              transition: 'width 100ms linear',
-            }}
-          />
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            marginTop: '4px',
-            color: 'color-mix(in srgb, var(--getroomly-primary) 70%, transparent)',
-            fontWeight: '700',
-            fontSize: '10px',
-            letterSpacing: '0.1em',
-            fontFamily: 'ui-monospace, Consolas, monospace',
-          }}
-        >
-          {Math.floor(progress)}%
-        </div>
+        {Math.floor(progress)}%
       </div>
     </div>
   );

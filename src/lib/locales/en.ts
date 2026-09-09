@@ -53,4 +53,7 @@ export const en: TranslationStrings = {
     'You retain all ownership of your original photos. GetRoomly and its partners retain all rights to the product visualisations and the underlying AI technology.',
   termsClose: 'Close',
   errorTemporarilyUnavailable: 'This feature is temporarily unavailable. Please try again later.',
+  loadingProgressLabel: 'Generation progress',
+  errorUnsupportedImageFormat:
+    "This photo format isn't supported. Please export it as JPEG, PNG, or WebP and try again.",
 };

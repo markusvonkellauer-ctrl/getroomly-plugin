@@ -53,4 +53,7 @@ export const da: TranslationStrings = {
     'Du bevarer al ejendomsret til dine originale fotos. GetRoomly og dets partnere bevarer alle rettigheder til produktvisualiseringerne og den underliggende AI-teknologi.',
   termsClose: 'Luk',
   errorTemporarilyUnavailable: 'Denne funktion er midlertidigt utilgængelig. Prøv igen senere.',
+  loadingProgressLabel: 'Genereringsforløb',
+  errorUnsupportedImageFormat:
+    'Dette billedformat understøttes ikke. Eksporter billedet som JPEG, PNG eller WebP, og prøv igen.',
 };

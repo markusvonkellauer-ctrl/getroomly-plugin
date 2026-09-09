@@ -79,6 +79,20 @@ export interface TranslationStrings {
    * seeing this, not something to explain to them.
    */
   errorTemporarilyUnavailable: string;
+  /**
+   * aria-label for the processing-step progress bar — the visible percentage
+   * is decorative-adjacent text, not a programmatic label, so the
+   * role="progressbar" element needs its own accessible name.
+   */
+  loadingProgressLabel: string;
+  /**
+   * Shown when an uploaded photo is HEIC/HEIF (the default iPhone camera
+   * format) and client-side conversion to JPEG fails or can't load — see
+   * heic.ts's convertHeicToJpeg and RoomVisualizationFlow.tsx's
+   * handleFileSelect. Names the fix (re-export as JPEG/PNG) rather than the
+   * technical cause, since "HEIC" and "decode" mean nothing to a shopper.
+   */
+  errorUnsupportedImageFormat: string;
 }
 
 export type SupportedLanguage =

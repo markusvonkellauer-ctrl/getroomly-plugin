@@ -56,4 +56,7 @@ export const el: TranslationStrings = {
   termsClose: 'Κλείσιμο',
   errorTemporarilyUnavailable:
     'Αυτή η λειτουργία είναι προσωρινά μη διαθέσιμη. Δοκιμάστε ξανά αργότερα.',
+  loadingProgressLabel: 'Πρόοδος δημιουργίας',
+  errorUnsupportedImageFormat:
+    'Αυτή η μορφή εικόνας δεν υποστηρίζεται. Εξαγάγετε τη φωτογραφία ως JPEG, PNG ή WebP και δοκιμάστε ξανά.',
 };

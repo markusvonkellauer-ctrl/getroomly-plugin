@@ -10,6 +10,7 @@ This is the embeddable artifact. The backend it talks to is [**GetRoomly Backend
 |---|---|---|
 | Plugin bundle | `https://plugin.getroomly.ai/plugin.js` | `https://dev-plugin.getroomly.ai/plugin.js` |
 | Stylesheet (optional) | `https://plugin.getroomly.ai/style.css` | `https://dev-plugin.getroomly.ai/style.css` |
+| Third-party licenses | `https://plugin.getroomly.ai/THIRD-PARTY-NOTICES.txt` | `https://dev-plugin.getroomly.ai/THIRD-PARTY-NOTICES.txt` |
 | Backend API | `https://api.getroomly.ai` | `https://dev-api.getroomly.ai` |
 | Demo page | `https://demo.getroomly.ai` | `https://dev.getroomly.ai` |
 | Built from | `main` | `development` |
@@ -466,7 +467,7 @@ CI (`.github/workflows/ci.yml`) runs lint, format check, typecheck and unit test
 
 Modern evergreen browsers (Chrome, Edge, Firefox, Safari current + 1). Plugin ships as an ES module — no IE / legacy support. Uses `customElements`, shadow DOM, `createImageBitmap` (with an `Image()` fallback) and `crypto.randomUUID` (with a fallback).
 
-Bundle size budget: keep `plugin.js` under ~600 KB minified. Currently ~540 KB.
+Bundle size budget: keep `plugin.js` under ~600 KB minified. Currently ~602 KB — over budget; the next addition to `plugin.js` itself should trim something rather than push it further. Code that isn't needed on every page load (e.g. `src/lib/heic.ts`'s HEIC→JPEG converter, ~3 MB — a real WASM `libheif` build via `heic-to`, not the smaller pure-JS decoder this repo started with, which failed to decode some perfectly ordinary real-world HEIC photos) belongs in its own `import()`-split chunk instead — Vite emits those under `dist/chunks/`, matched by an nginx allowlist entry in `Dockerfile`. That budget only covers `plugin.js` itself; lazy chunks are excluded since they're never fetched unless actually needed.
 
 ## Reference
 
