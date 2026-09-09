@@ -466,6 +466,52 @@ describe('RoomVisualizationFlow', () => {
     }
   });
 
+  test('progress stays at 0% during HEIC conversion, instead of climbing then jumping back when generation starts', async () => {
+    // Regression coverage for a Copilot review finding on PR #92: setting
+    // isGenerating to true (alongside step to 'processing') before
+    // conversion starts the progress-bar timer effect immediately, letting
+    // progress visibly climb during the multi-second conversion — only for
+    // handleGenerate to reset it back to 0 once real generation actually
+    // begins, a jarring backward jump. isGenerating now stays false until
+    // handleGenerate itself sets it, so progress never moves during
+    // conversion at all.
+    const RealFileReader = global.FileReader;
+    global.FileReader = HeicSignatureFileReader;
+    mockHeicTo.mockReturnValueOnce(new Promise(() => {}));
+
+    try {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const heicFile = new File(['heic bytes'], 'photo.jpeg', { type: 'image/jpeg' });
+
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), heicFile);
+      });
+
+      await waitFor(() => {
+        expect(document.querySelector('.getroomly-spinner-rot')).toBeInTheDocument();
+      });
+
+      // Fake timers only from here, not for the whole test — engaged after
+      // the waitFor above (which polls using real timers) has already
+      // resolved, to avoid the well-known pain of mixing testing-library's
+      // polling with fake timers. The assertion is purely "no timer-driven
+      // progress update happens", not about real elapsed time, so
+      // advancing fake time past several 100ms ticks is deterministic and
+      // instant instead of an actual 350ms sleep.
+      jest.useFakeTimers();
+      try {
+        act(() => {
+          jest.advanceTimersByTime(350);
+        });
+        expect(screen.getByText('0%')).toBeInTheDocument();
+      } finally {
+        jest.useRealTimers();
+      }
+    } finally {
+      global.FileReader = RealFileReader;
+    }
+  });
+
   test('shows a friendly localized error and returns to upload when HEIC conversion fails', async () => {
     const RealFileReader = global.FileReader;
     global.FileReader = HeicSignatureFileReader;

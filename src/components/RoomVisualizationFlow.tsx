@@ -319,11 +319,15 @@ export function RoomVisualizationFlow({
         failRead(sizeValidation.error || 'File too large');
         return;
       }
-      // Conversion can take a few seconds — show the existing processing UI
+      // Conversion can take a few seconds — show the processing UI
       // immediately rather than leaving the upload button looking frozen.
-      // handleGenerate (called once conversion + the FileReader read below
-      // both succeed) re-sets these same values, which is harmless.
-      setIsGenerating(true);
+      // Deliberately NOT setIsGenerating(true) here: that flag gates the
+      // progress-bar timer effect below, and starting it during conversion
+      // would let progress visibly climb, then snap back to 0 once
+      // handleGenerate (called after conversion + the FileReader read below
+      // both succeed) resets it to actually start generation — a jarring
+      // backward jump. Progress stays frozen at 0 during conversion
+      // instead; the spinner/dark background still show via step alone.
       setProgress(0);
       setMessageIndex(0);
       setStep('processing');
