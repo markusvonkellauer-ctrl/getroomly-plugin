@@ -443,7 +443,11 @@ describe('RoomVisualizationFlow', () => {
     global.FileReader = HeicSignatureFileReader;
     // Never resolves — keeps the component mid-conversion so the DOM can be
     // inspected during that window.
-    mockHeicTo.mockReturnValue(new Promise(() => {}));
+    // mockReturnValueOnce, not mockReturnValue — jest.clearAllMocks() in
+    // beforeEach doesn't reset mock implementations, so a persistent
+    // default here would leak this never-resolving promise into later
+    // tests if file order changes or more HEIC tests are added.
+    mockHeicTo.mockReturnValueOnce(new Promise(() => {}));
 
     try {
       render(<RoomVisualizationFlow {...defaultProps} />);
