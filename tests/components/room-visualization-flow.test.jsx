@@ -350,6 +350,32 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  test('the file input accepts HEIC/HEIF, so a genuinely-named .heic file is selectable at all', () => {
+    // Regression coverage for a Copilot review finding on PR #92: without
+    // HEIC/HEIF in `accept`, the OS file picker filters real .heic/.heif
+    // files out of the dialog before a selection can even happen — the new
+    // isHeicFile()/convertHeicToJpeg() handling could only ever be reached
+    // by a *mislabeled* file (e.g. HEIC bytes named photo.jpeg), never a
+    // genuinely-named one, which is the common case straight off an
+    // iPhone camera roll.
+    render(<RoomVisualizationFlow {...defaultProps} />);
+
+    const input = document.querySelector('input[type="file"]');
+    // Explicit assertion, not a bare property access — a null input would
+    // otherwise throw a TypeError on .getAttribute, a less helpful failure
+    // than a clear "expected not null" assertion message.
+    expect(input).not.toBeNull();
+    const accept = input.getAttribute('accept');
+    // Same reasoning as the input itself: a null accept would otherwise
+    // fail the toContain matchers with a less clear error than an explicit
+    // "expected not null" assertion pointing at the missing attribute.
+    expect(accept).not.toBeNull();
+    expect(accept).toContain('image/heic');
+    expect(accept).toContain('image/heif');
+    expect(accept).toContain('.heic');
+    expect(accept).toContain('.heif');
+  });
+
   test('rejects invalid file type and stays on upload step', async () => {
     validateImageFile.mockReturnValueOnce({ isValid: false, error: 'Invalid file format.' });
 
