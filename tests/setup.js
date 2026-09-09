@@ -40,6 +40,18 @@ if (typeof window !== 'undefined') {
   global.fetch = jest.fn();
 
   // Mock file reader
+  // Both methods below call onload synchronously, deliberately, matching
+  // each other — a review has repeatedly flagged readAsArrayBuffer's sync
+  // firing as an inconsistency with "the existing async readAsDataURL
+  // mock", but readAsDataURL right above it is just as synchronous; there's
+  // nothing to make consistent with. Real FileReader reads are async in
+  // browsers, and making this mock genuinely async (e.g. via
+  // queueMicrotask) would be a reasonable enhancement in isolation, but
+  // dozens of existing tests across this suite call `act(() => { upload...
+  // })` (not `await act(async () => ...)`) relying on this exact
+  // synchronous timing — changing it here would require updating every one
+  // of them, a broad refactor disproportionate to what's actually been
+  // reported against this file.
   global.FileReader = class {
     constructor() {
       this.readAsDataURL = jest.fn(() => {
