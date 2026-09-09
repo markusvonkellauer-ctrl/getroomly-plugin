@@ -80,23 +80,23 @@ describe('isHeicFile', () => {
 });
 
 describe('convertHeicToJpeg', () => {
-  const mockHeic2any = jest.fn();
-  jest.mock('heic2any', () => ({ __esModule: true, default: (...args) => mockHeic2any(...args) }));
+  const mockHeicTo = jest.fn();
+  jest.mock('heic-to/csp', () => ({ heicTo: (...args) => mockHeicTo(...args) }));
 
   beforeEach(() => {
-    mockHeic2any.mockReset();
+    mockHeicTo.mockReset();
   });
 
-  it('converts via heic2any and returns a File named *.jpg with type image/jpeg', async () => {
+  it('converts via heic-to and returns a File named *.jpg with type image/jpeg', async () => {
     const convertedBlob = new Blob(['converted'], { type: 'image/jpeg' });
-    mockHeic2any.mockResolvedValue(convertedBlob);
+    mockHeicTo.mockResolvedValue(convertedBlob);
 
     const source = new File(['heic bytes'], 'IMG_1234.HEIC', { type: 'image/heic' });
     const result = await convertHeicToJpeg(source);
 
-    expect(mockHeic2any).toHaveBeenCalledWith({
+    expect(mockHeicTo).toHaveBeenCalledWith({
       blob: source,
-      toType: 'image/jpeg',
+      type: 'image/jpeg',
       quality: 0.85,
     });
     expect(result).toBeInstanceOf(File);
@@ -104,22 +104,8 @@ describe('convertHeicToJpeg', () => {
     expect(result.type).toBe('image/jpeg');
   });
 
-  it('takes the first blob when heic2any returns an array (multi-image HEIC)', async () => {
-    // jsdom's Blob has no .text()/.arrayBuffer() to assert on content
-    // directly (verified empirically — see the file-level comment above),
-    // so distinctly-sized content is used to tell "first" and "second"
-    // apart via .size, which jsdom does support.
-    const first = new Blob(['first-blob-content'], { type: 'image/jpeg' });
-    const second = new Blob(['second'], { type: 'image/jpeg' });
-    mockHeic2any.mockResolvedValue([first, second]);
-
-    const result = await convertHeicToJpeg(new File(['x'], 'burst.heic'));
-
-    expect(result.size).toBe(first.size);
-  });
-
   it('propagates a conversion failure so the caller can fall back', async () => {
-    mockHeic2any.mockRejectedValue(new Error('decode failed'));
+    mockHeicTo.mockRejectedValue(new Error('decode failed'));
 
     await expect(convertHeicToJpeg(new File(['x'], 'broken.heic'))).rejects.toThrow(
       'decode failed'
