@@ -491,11 +491,22 @@ describe('RoomVisualizationFlow', () => {
         expect(document.querySelector('.getroomly-spinner-rot')).toBeInTheDocument();
       });
 
-      // Progress advances on a real 100ms interval when the timer is
-      // running — wait past several ticks' worth of real time and confirm
-      // it's still exactly 0%, not just momentarily.
-      await new Promise(resolve => setTimeout(resolve, 350));
-      expect(screen.getByText('0%')).toBeInTheDocument();
+      // Fake timers only from here, not for the whole test — engaged after
+      // the waitFor above (which polls using real timers) has already
+      // resolved, to avoid the well-known pain of mixing testing-library's
+      // polling with fake timers. The assertion is purely "no timer-driven
+      // progress update happens", not about real elapsed time, so
+      // advancing fake time past several 100ms ticks is deterministic and
+      // instant instead of an actual 350ms sleep.
+      jest.useFakeTimers();
+      try {
+        act(() => {
+          jest.advanceTimersByTime(350);
+        });
+        expect(screen.getByText('0%')).toBeInTheDocument();
+      } finally {
+        jest.useRealTimers();
+      }
     } finally {
       global.FileReader = RealFileReader;
     }
