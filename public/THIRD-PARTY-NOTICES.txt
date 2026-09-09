@@ -12,9 +12,16 @@ Version: 1.5.2
 Used for: converting HEIC/HEIF photo uploads to JPEG in the browser
 License: GNU Lesser General Public License v3.0 (LGPL-3.0)
 
-Distributed as a separate, unmodified, lazily-loaded file
-(dist/chunks/heic-to-*.js) — never bundled or statically linked into
-plugin.js itself.
+Built from the published heic-to package's own source, with no
+changes of our own to that source, into its own separate,
+lazily-loaded chunk, served under /chunks/ alongside plugin.js (see
+the Dockerfile's nginx configuration). Never bundled or statically
+linked into plugin.js itself. The chunk's exact build-time filename
+is not fixed (it is content-hashed and may change between releases),
+and the built, minified output is not claimed to be byte-identical to
+heic-to's own published files — normal build-tool processing
+(minification, module wrapping) applies here the same as it does to
+this project's own code.
 
 The LGPL-3.0 text below is reproduced verbatim from heic-to's own
 published LICENSE file, in full — it is not truncated. LGPL-3.0 is
