@@ -1,3 +1,5 @@
+@import './loading-spinner.css';
+
 /* Global white background */
 html,
 body {
@@ -50,80 +52,6 @@ body {
   }
   100% {
     transform: rotate(360deg);
-  }
-}
-
-/* Duplicated in index.css deliberately, for the same reason @keyframes spin
-   above is duplicated there too (these are new, separate keyframes — not
-   copies of `spin`): index.css is inlined into the Shadow DOM for the
-   production widget build (shadow-entry.tsx), which never loads App.css, so
-   it needs its own copy of these rules to render RoomVisualizationFlow's
-   processing step correctly. App.css backs App.tsx's styling for the
-   non-Shadow dev/demo mount (main.tsx) — that mount happens to also import
-   index.css directly, so both copies do load there, but App.css still
-   carries its own so App.tsx's styling isn't dependent on that pairing. */
-/* Morphing teal loading spinner (processing step) */
-.getroomly-spinner-rot {
-  width: 120px;
-  height: 120px;
-  animation: getroomly-spin-rot 4.2s linear infinite;
-}
-.getroomly-spinner-form {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(160deg, #6ff3dc 0%, #00c9a7 45%, #00806e 100%);
-  box-shadow: 0 10px 26px rgba(6, 10, 9, 0.38);
-  border-radius: 66% 34% 40% 60% / 36% 64% 36% 64%;
-  animation: getroomly-spin-morph 5s ease-in-out infinite;
-}
-@keyframes getroomly-spin-rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes getroomly-spin-morph {
-  0%,
-  100% {
-    border-radius: 66% 34% 40% 60% / 36% 64% 36% 64%;
-  }
-  33% {
-    border-radius: 36% 64% 70% 30% / 64% 32% 68% 36%;
-  }
-  66% {
-    border-radius: 54% 46% 30% 70% / 32% 70% 30% 68%;
-  }
-}
-
-/* Progressive blur-to-sharp reveal for the processing-step photo.
-   Explicit base filter (not just the keyframes' 0% state) so the very first
-   paint is already blurred — some browsers can otherwise flash the sharp
-   image for a frame before the animation engine attaches. */
-/* No will-change here: it's a discrete (non-animatable) property, so
-   clearing it from a keyframe isn't reliably honored across browsers and
-   can leave the image permanently layer-promoted. A one-time 14s animation
-   on a single image doesn't need the compositor hint badly enough to be
-   worth chasing a JS-based clear for it. */
-.getroomly-blur-reveal {
-  filter: blur(14px);
-  animation: getroomly-blur-reveal 14s ease-out forwards;
-}
-@keyframes getroomly-blur-reveal {
-  from {
-    filter: blur(14px);
-  }
-  to {
-    filter: blur(0px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .getroomly-spinner-form {
-    animation: none;
-    border-radius: 66% 34% 40% 60% / 36% 64% 36% 64%;
-  }
-  .getroomly-blur-reveal {
-    animation: none;
-    filter: blur(0px);
   }
 }
 
