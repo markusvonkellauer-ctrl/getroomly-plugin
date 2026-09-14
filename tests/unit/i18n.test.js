@@ -121,6 +121,67 @@ describe("i18n: TLD detection (Nordic Nest's 16 market domains)", () => {
     expect(detectLanguageFromTLD()).toBe('de');
   });
 
+  describe('staging-label fallback (e.g. Nordic Nest\'s "stage-de.nordicnest.dev")', () => {
+    const stagingDomainToLanguage = {
+      'stage-de.nordicnest.dev': 'de',
+      'stage-no.nordicnest.dev': 'no',
+      'stage-se.nordicnest.dev': 'sv',
+      'stage-fi.nordicnest.dev': 'fi',
+      'de-stage.nordicnest.dev': 'de', // reversed order, same pattern
+      'staging-de.nordicnest.dev': 'de', // "staging", not just "stage"
+      'dev-no.nordicnest.dev': 'no',
+    };
+
+    for (const [domain, expectedLang] of Object.entries(stagingDomainToLanguage)) {
+      it(`resolves ${domain} to "${expectedLang}" via the staging-label fallback`, () => {
+        setHostname(domain);
+        expect(detectLanguageFromTLD()).toBe(expectedLang);
+      });
+    }
+
+    it('only fires when the real TLD does not already match (production is checked first)', () => {
+      // A hostname whose actual TLD already resolves must never fall through
+      // to the staging-label check, even if a label elsewhere could also
+      // match — the TLD result wins.
+      setHostname('stage-de.nordicnest.se');
+      expect(detectLanguageFromTLD()).toBe('sv');
+    });
+
+    it('does not match a market code appearing as a plain substring, not a hyphen-delimited token', () => {
+      // Regression guard against false positives: "de-luxe-collection"
+      // contains "de" as a substring, and "no-reply" contains "no" — neither
+      // is a real {env}-{code} staging label, so both must fall back to
+      // English, not silently mis-detect a market.
+      setHostname('de-luxe-collection.example.dev');
+      expect(detectLanguageFromTLD()).toBe('en');
+
+      setHostname('no-reply.example.dev');
+      expect(detectLanguageFromTLD()).toBe('en');
+    });
+
+    it('does not match an environment keyword alone, without an accompanying market code', () => {
+      setHostname('staging.example.dev');
+      expect(detectLanguageFromTLD()).toBe('en');
+    });
+
+    it('does not match a market code alone, without an accompanying environment keyword', () => {
+      // "de" alone here is a hyphen-joined label part, not the real TLD —
+      // must not match unless paired with a recognised environment keyword.
+      setHostname('de-preview.example.dev');
+      expect(detectLanguageFromTLD()).toBe('en');
+    });
+
+    it('is case-insensitive, same as the TLD check', () => {
+      setHostname('STAGE-DE.NORDICNEST.DEV');
+      expect(detectLanguageFromTLD()).toBe('de');
+    });
+
+    it('falls back to English when nothing matches at all', () => {
+      setHostname('stage-xx.example.dev');
+      expect(detectLanguageFromTLD()).toBe('en');
+    });
+  });
+
   it('getTranslations() falls back safely to the detection chain when passed an invalid language string', () => {
     // Simulates a host page's untyped JS sending a typo'd or stale value
     // (e.g. window.GetRoomlyEmbedConfig.language = 'ger' instead of 'de')

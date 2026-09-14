@@ -3,7 +3,10 @@
 //
 // Language is resolved once per config read using this priority chain:
 //   1. window.GetRoomlyEmbedConfig.language  (host page sets this explicitly)
-//   2. TLD detection                         (see TLD_MAP below, default -> "en")
+//   2. TLD detection                         (see TLD_MAP below)
+//   3. Staging-label detection               (see detectLanguageFromStagingLabel,
+//                                              e.g. "stage-de.nordicnest.dev")
+//   4. Default -> "en"
 // See use-embed-config.ts for where this is applied to the resolved config.
 //
 // Each language's strings live in their own file under ./locales/ — every
@@ -174,12 +177,59 @@ const TLD_MAP: ReadonlyMap<string, SupportedLanguage> = new Map([
   ['it', 'it'],
 ]);
 
-/** TLD-based fallback: see TLD_MAP above. Unmapped TLDs (incl. .com) -> English. */
+// Staging/preview environments are commonly named with an environment
+// keyword and a market code joined by a hyphen in one hostname label (e.g.
+// Nordic Nest's "stage-de.nordicnest.dev", "stage-no.nordicnest.dev") — the
+// TLD itself (.dev) never matches TLD_MAP, so without this, every staging
+// domain silently falls back to English regardless of market.
+//
+// Deliberately narrow to reduce false positives: requires an EXACT
+// environment keyword AND an exact market code as the two hyphen-separated
+// parts of one label — not a substring search. A substring search would
+// also match unrelated things like "de-luxe-collection" (contains "de") or
+// "no-reply" (contains "no"). This pattern only fires for the specific
+// {env}-{code} / {code}-{env} shape, so those don't match at all.
+const ENVIRONMENT_LABEL_KEYWORDS: ReadonlySet<string> = new Set([
+  'stage',
+  'staging',
+  'test',
+  'dev',
+  'qa',
+  'preprod',
+  'uat',
+]);
+
+function detectLanguageFromStagingLabel(hostname: string): SupportedLanguage {
+  for (const label of hostname.split('.')) {
+    const parts = label.split('-');
+    if (parts.length !== 2) {
+      continue;
+    }
+    const [first, second] = parts;
+    if (ENVIRONMENT_LABEL_KEYWORDS.has(first) && TLD_MAP.has(second)) {
+      return TLD_MAP.get(second) as SupportedLanguage;
+    }
+    if (ENVIRONMENT_LABEL_KEYWORDS.has(second) && TLD_MAP.has(first)) {
+      return TLD_MAP.get(first) as SupportedLanguage;
+    }
+  }
+  return 'en';
+}
+
+/**
+ * TLD-based detection: see TLD_MAP above. Checked first (production domains
+ * always resolve here) — only when that finds no match does this fall
+ * through to detectLanguageFromStagingLabel's narrower staging-hostname
+ * pattern. Unmapped/unmatched on both -> English.
+ */
 export function detectLanguageFromTLD(): SupportedLanguage {
   const hostname = window.location.hostname.toLowerCase();
   const tld = hostname.split('.').pop();
   const mapped = tld && TLD_MAP.get(tld);
-  return mapped || 'en';
+  if (mapped) {
+    return mapped;
+  }
+  return detectLanguageFromStagingLabel(hostname);
 }
 
 /**
