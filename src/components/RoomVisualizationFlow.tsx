@@ -1055,13 +1055,15 @@ export function RoomVisualizationFlow({
     const filename = `${productName}-${showOriginalImage ? 'original' : 'visualization'}.jpg`;
 
     try {
-      // iOS Safari frequently ignores the `download` attribute on a link
-      // pointing at a cross-origin URL (this image is served from our own
-      // API/CDN, not the host page's domain) — it just navigates to the
-      // image instead of downloading it, with no error thrown. Fetching
-      // the bytes ourselves and using a same-origin blob: URL instead is
-      // the same technique handleShareWithFriends already relies on below,
-      // and Safari honors `download` reliably for blob: URLs.
+      // imageToDownload is a `data:` URI (generateRoomVisualization returns
+      // the image inline as base64 — see ai-generation.ts), and iOS Safari
+      // frequently ignores the `download` attribute on a link pointing at a
+      // `data:` URI — it just navigates to/opens the image instead of
+      // downloading it, with no error thrown. The same restriction applies
+      // to cross-origin http(s) URLs, so this fix covers both. Fetching the
+      // bytes ourselves and using a blob: URL instead is the same technique
+      // handleShareWithFriends already relies on below, and Safari honors
+      // `download` reliably for blob: URLs.
       const response = await fetch(imageToDownload);
       if (!response.ok) {
         throw new Error(`Failed to fetch image for download: ${response.status}`);

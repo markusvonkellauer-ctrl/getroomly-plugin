@@ -946,7 +946,13 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
-  describe('download to device (Safari cross-origin download fix)', () => {
+  describe('download to device (Safari data: URI download fix)', () => {
+    // generateRoomVisualization always resolves imageUrl as a base64 data:
+    // URI (see ai-generation.ts) — real production traffic never hands
+    // handleDownloadToDevice a plain http(s) CDN URL, so fixtures use the
+    // same shape to actually exercise the code path this fix targets.
+    const RESULT_DATA_URL = 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=';
+
     const renderAtResult = async (generationResult, props = {}) => {
       generateRoomVisualization.mockResolvedValueOnce(generationResult);
       render(<RoomVisualizationFlow {...defaultProps} {...props} />);
@@ -974,7 +980,7 @@ describe('RoomVisualizationFlow', () => {
       console.error = originalConsoleError;
     });
 
-    test('fetches the image as a blob and downloads via a same-origin blob: URL, not the original cross-origin URL', async () => {
+    test('fetches the image as a blob and downloads via a blob: URL instead of the raw data: URI', async () => {
       const user = userEvent.setup();
       const fakeBlob = new Blob(['fake-image-bytes']);
       global.fetch = jest.fn().mockResolvedValue({
@@ -983,13 +989,15 @@ describe('RoomVisualizationFlow', () => {
         blob: jest.fn().mockResolvedValue(fakeBlob),
       });
       global.URL.createObjectURL.mockReturnValueOnce('blob:mock-download-url');
-      const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
 
-      await renderAtResult({ imageUrl: 'https://cdn.example.com/result.jpg' });
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
       await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
-      expect(global.fetch).toHaveBeenCalledWith('https://cdn.example.com/result.jpg');
+      expect(global.fetch).toHaveBeenCalledWith(RESULT_DATA_URL);
       expect(global.URL.createObjectURL).toHaveBeenCalledWith(fakeBlob);
       expect(clickSpy).toHaveBeenCalledTimes(1);
       const clickedLink = clickSpy.mock.instances[0];
@@ -1013,10 +1021,16 @@ describe('RoomVisualizationFlow', () => {
       const user = userEvent.setup();
       global.fetch = jest
         .fn()
-        .mockResolvedValue({ ok: true, status: 200, blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
-      const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        .mockResolvedValue({
+          ok: true,
+          status: 200,
+          blob: jest.fn().mockResolvedValue(new Blob(['x'])),
+        });
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
 
-      await renderAtResult({ imageUrl: 'https://cdn.example.com/result.jpg' });
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
       await user.click(screen.getByRole('button', { name: 'Show Original' }));
       await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
@@ -1031,15 +1045,17 @@ describe('RoomVisualizationFlow', () => {
     test('falls back to a direct (non-blob) download link if fetching the image fails', async () => {
       const user = userEvent.setup();
       global.fetch = jest.fn().mockRejectedValue(new Error('network error'));
-      const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
 
-      await renderAtResult({ imageUrl: 'https://cdn.example.com/result.jpg' });
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
       await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       expect(global.URL.createObjectURL).not.toHaveBeenCalled();
       const clickedLink = clickSpy.mock.instances[0];
-      expect(clickedLink.href).toBe('https://cdn.example.com/result.jpg');
+      expect(clickedLink.href).toBe(RESULT_DATA_URL);
       expect(clickedLink.download).toBe('Test Rug-visualization.jpg');
 
       clickSpy.mockRestore();
@@ -1052,15 +1068,17 @@ describe('RoomVisualizationFlow', () => {
         status: 404,
         blob: jest.fn().mockResolvedValue(new Blob(['not found'])),
       });
-      const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
 
-      await renderAtResult({ imageUrl: 'https://cdn.example.com/result.jpg' });
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
       await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       expect(global.URL.createObjectURL).not.toHaveBeenCalled();
       const clickedLink = clickSpy.mock.instances[0];
-      expect(clickedLink.href).toBe('https://cdn.example.com/result.jpg');
+      expect(clickedLink.href).toBe(RESULT_DATA_URL);
 
       clickSpy.mockRestore();
     });
@@ -1069,18 +1087,22 @@ describe('RoomVisualizationFlow', () => {
       const user = userEvent.setup();
       global.fetch = jest
         .fn()
-        .mockResolvedValue({ ok: true, status: 200, blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
+        .mockResolvedValue({
+          ok: true,
+          status: 200,
+          blob: jest.fn().mockResolvedValue(new Blob(['x'])),
+        });
       jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
       const onSaveShare = jest.fn();
 
       await renderAtResult(
-        { imageUrl: 'https://cdn.example.com/result.jpg' },
+        { imageUrl: RESULT_DATA_URL },
         { config: { callbacks: { onSaveShare } } }
       );
       await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
-      expect(onSaveShare).toHaveBeenCalledWith('https://cdn.example.com/result.jpg', 'rug-001');
+      expect(onSaveShare).toHaveBeenCalledWith(RESULT_DATA_URL, 'rug-001');
       await waitFor(() => expect(screen.queryByText('Download to Device')).not.toBeInTheDocument());
     });
   });
