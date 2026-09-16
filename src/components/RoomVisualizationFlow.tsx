@@ -1044,13 +1044,46 @@ export function RoomVisualizationFlow({
     config?.callbacks?.onShowOriginal?.(imageToShow || '', productId);
   };
 
-  const handleDownloadToDevice = () => {
+  const handleDownloadToDevice = async () => {
     const imageToDownload = showOriginalImage ? uploadedImage : resultImage;
     config?.callbacks?.onSaveShare?.(imageToDownload || '', productId);
-    const link = document.createElement('a');
-    link.download = `${productName}-${showOriginalImage ? 'original' : 'visualization'}.jpg`;
-    link.href = imageToDownload || '';
-    link.click();
+    if (!imageToDownload) {
+      setSaveShareDropdownOpen(false);
+      return;
+    }
+
+    const filename = `${productName}-${showOriginalImage ? 'original' : 'visualization'}.jpg`;
+
+    try {
+      // iOS Safari frequently ignores the `download` attribute on a link
+      // pointing at a cross-origin URL (this image is served from our own
+      // API/CDN, not the host page's domain) — it just navigates to the
+      // image instead of downloading it, with no error thrown. Fetching
+      // the bytes ourselves and using a same-origin blob: URL instead is
+      // the same technique handleShareWithFriends already relies on below,
+      // and Safari honors `download` reliably for blob: URLs.
+      const response = await fetch(imageToDownload);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = blobUrl;
+      link.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      // Last-resort fallback for the rare case the fetch itself fails
+      // (e.g. a genuine network error) — same behavior as before this fix,
+      // better than nothing on browsers where the direct link does work.
+      console.warn(
+        '[Plugin] Failed to fetch image for download, falling back to direct link:',
+        error
+      );
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = imageToDownload;
+      link.click();
+    }
+
     setSaveShareDropdownOpen(false);
   };
 

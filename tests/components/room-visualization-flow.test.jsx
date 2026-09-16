@@ -5,6 +5,7 @@
  */
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlow';
 import { translations } from '../../src/lib/i18n';
 
@@ -942,6 +943,108 @@ describe('RoomVisualizationFlow', () => {
 
       // Still renders the result step — a failed feedback PATCH must never break the UI.
       expect(screen.getByText('Review Your New Room')).toBeInTheDocument();
+    });
+  });
+
+  describe('download to device (Safari cross-origin download fix)', () => {
+    const renderAtResult = async (generationResult, props = {}) => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    const openSaveShareMenu = async user => {
+      await user.click(screen.getByRole('button', { name: 'Save / Share' }));
+      await waitFor(() => screen.getByText('Download to Device'));
+    };
+
+    // jsdom doesn't implement real navigation, so clicking the <a download>
+    // element logs an unimplemented "not implemented" navigation error to
+    // stderr — expected noise from exercising the real download link, not a
+    // sign anything is broken.
+    let originalConsoleError;
+    beforeEach(() => {
+      originalConsoleError = console.error;
+      console.error = jest.fn();
+    });
+    afterEach(() => {
+      console.error = originalConsoleError;
+    });
+
+    test('fetches the image as a blob and downloads via a same-origin blob: URL, not the original cross-origin URL', async () => {
+      const user = userEvent.setup();
+      const fakeBlob = new Blob(['fake-image-bytes']);
+      global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn().mockResolvedValue(fakeBlob) });
+      global.URL.createObjectURL.mockReturnValueOnce('blob:mock-download-url');
+      const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: 'https://cdn.example.com/result.jpg' });
+      await openSaveShareMenu(user);
+      await user.click(screen.getByText('Download to Device'));
+
+      expect(global.fetch).toHaveBeenCalledWith('https://cdn.example.com/result.jpg');
+      expect(global.URL.createObjectURL).toHaveBeenCalledWith(fakeBlob);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      const clickedLink = clickSpy.mock.instances[0];
+      expect(clickedLink.href).toBe('blob:mock-download-url');
+      expect(clickedLink.download).toBe('Test Rug-visualization.jpg');
+      expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-download-url');
+
+      clickSpy.mockRestore();
+    });
+
+    test('names the file "...-original.jpg" and downloads the uploaded photo when showing the original image', async () => {
+      const user = userEvent.setup();
+      global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
+      const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: 'https://cdn.example.com/result.jpg' });
+      await user.click(screen.getByRole('button', { name: 'Show Original' }));
+      await openSaveShareMenu(user);
+      await user.click(screen.getByText('Download to Device'));
+
+      expect(global.fetch).toHaveBeenCalledWith(expect.stringMatching(/^data:image\/jpeg;base64,/));
+      const clickedLink = clickSpy.mock.instances[0];
+      expect(clickedLink.download).toBe('Test Rug-original.jpg');
+
+      clickSpy.mockRestore();
+    });
+
+    test('falls back to a direct (non-blob) download link if fetching the image fails', async () => {
+      const user = userEvent.setup();
+      global.fetch = jest.fn().mockRejectedValue(new Error('network error'));
+      const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: 'https://cdn.example.com/result.jpg' });
+      await openSaveShareMenu(user);
+      await user.click(screen.getByText('Download to Device'));
+
+      expect(global.URL.createObjectURL).not.toHaveBeenCalled();
+      const clickedLink = clickSpy.mock.instances[0];
+      expect(clickedLink.href).toBe('https://cdn.example.com/result.jpg');
+      expect(clickedLink.download).toBe('Test Rug-visualization.jpg');
+
+      clickSpy.mockRestore();
+    });
+
+    test('calls onSaveShare with the image being downloaded and closes the dropdown', async () => {
+      const user = userEvent.setup();
+      global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
+      jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      const onSaveShare = jest.fn();
+
+      await renderAtResult(
+        { imageUrl: 'https://cdn.example.com/result.jpg' },
+        { config: { callbacks: { onSaveShare } } }
+      );
+      await openSaveShareMenu(user);
+      await user.click(screen.getByText('Download to Device'));
+
+      expect(onSaveShare).toHaveBeenCalledWith('https://cdn.example.com/result.jpg', 'rug-001');
+      await waitFor(() => expect(screen.queryByText('Download to Device')).not.toBeInTheDocument());
     });
   });
 });
