@@ -1063,13 +1063,20 @@ export function RoomVisualizationFlow({
       // the same technique handleShareWithFriends already relies on below,
       // and Safari honors `download` reliably for blob: URLs.
       const response = await fetch(imageToDownload);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image for download: ${response.status}`);
+      }
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.download = filename;
       link.href = blobUrl;
       link.click();
-      URL.revokeObjectURL(blobUrl);
+      // Revoking synchronously can race Safari's actual (async) download
+      // start and invalidate the blob before it's read — the exact failure
+      // this fix targets. Deferring to the next macrotask lets the browser
+      // begin consuming the blob URL first.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
     } catch (error) {
       // Last-resort fallback for the rare case the fetch itself fails
       // (e.g. a genuine network error) — same behavior as before this fix,

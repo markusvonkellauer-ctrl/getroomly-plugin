@@ -964,7 +964,7 @@ describe('RoomVisualizationFlow', () => {
     // jsdom doesn't implement real navigation, so clicking the <a download>
     // element logs an unimplemented "not implemented" navigation error to
     // stderr — expected noise from exercising the real download link, not a
-    // sign anything is broken.
+    // sign that anything is broken.
     let originalConsoleError;
     beforeEach(() => {
       originalConsoleError = console.error;
@@ -977,7 +977,11 @@ describe('RoomVisualizationFlow', () => {
     test('fetches the image as a blob and downloads via a same-origin blob: URL, not the original cross-origin URL', async () => {
       const user = userEvent.setup();
       const fakeBlob = new Blob(['fake-image-bytes']);
-      global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn().mockResolvedValue(fakeBlob) });
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        blob: jest.fn().mockResolvedValue(fakeBlob),
+      });
       global.URL.createObjectURL.mockReturnValueOnce('blob:mock-download-url');
       const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
@@ -991,14 +995,25 @@ describe('RoomVisualizationFlow', () => {
       const clickedLink = clickSpy.mock.instances[0];
       expect(clickedLink.href).toBe('blob:mock-download-url');
       expect(clickedLink.download).toBe('Test Rug-visualization.jpg');
-      expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-download-url');
+
+      // Revocation is deliberately deferred a macrotask (not fired
+      // synchronously in the same tick as click()) so it doesn't race
+      // Safari's async download start — see the comment in
+      // handleDownloadToDevice. userEvent's own internal ticks mean it may
+      // already have fired by the time we get here, so this only asserts
+      // it does happen, not exactly when.
+      await waitFor(() =>
+        expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-download-url')
+      );
 
       clickSpy.mockRestore();
     });
 
     test('names the file "...-original.jpg" and downloads the uploaded photo when showing the original image', async () => {
       const user = userEvent.setup();
-      global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: true, status: 200, blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
       const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: 'https://cdn.example.com/result.jpg' });
@@ -1030,9 +1045,31 @@ describe('RoomVisualizationFlow', () => {
       clickSpy.mockRestore();
     });
 
+    test('falls back to a direct download link when fetch resolves with a non-2xx status (e.g. an expired image URL)', async () => {
+      const user = userEvent.setup();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        blob: jest.fn().mockResolvedValue(new Blob(['not found'])),
+      });
+      const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: 'https://cdn.example.com/result.jpg' });
+      await openSaveShareMenu(user);
+      await user.click(screen.getByText('Download to Device'));
+
+      expect(global.URL.createObjectURL).not.toHaveBeenCalled();
+      const clickedLink = clickSpy.mock.instances[0];
+      expect(clickedLink.href).toBe('https://cdn.example.com/result.jpg');
+
+      clickSpy.mockRestore();
+    });
+
     test('calls onSaveShare with the image being downloaded and closes the dropdown', async () => {
       const user = userEvent.setup();
-      global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ ok: true, status: 200, blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
       jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
       const onSaveShare = jest.fn();
 
