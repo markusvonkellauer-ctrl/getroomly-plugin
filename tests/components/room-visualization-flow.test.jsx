@@ -1019,13 +1019,11 @@ describe('RoomVisualizationFlow', () => {
 
     test('names the file "...-original.jpg" and downloads the uploaded photo when showing the original image', async () => {
       const user = userEvent.setup();
-      global.fetch = jest
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          status: 200,
-          blob: jest.fn().mockResolvedValue(new Blob(['x'])),
-        });
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        blob: jest.fn().mockResolvedValue(new Blob(['x'])),
+      });
       const clickSpy = jest
         .spyOn(HTMLAnchorElement.prototype, 'click')
         .mockImplementation(() => {});
@@ -1085,13 +1083,11 @@ describe('RoomVisualizationFlow', () => {
 
     test('calls onSaveShare with the image being downloaded and closes the dropdown', async () => {
       const user = userEvent.setup();
-      global.fetch = jest
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          status: 200,
-          blob: jest.fn().mockResolvedValue(new Blob(['x'])),
-        });
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        blob: jest.fn().mockResolvedValue(new Blob(['x'])),
+      });
       jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
       const onSaveShare = jest.fn();
 

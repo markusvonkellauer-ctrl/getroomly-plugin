@@ -1115,10 +1115,10 @@ export function RoomVisualizationFlow({
         setSaveShareDropdownOpen(false);
         return;
       }
-      handleDownloadToDevice();
+      await handleDownloadToDevice();
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
-        handleDownloadToDevice();
+        await handleDownloadToDevice();
       }
     }
     setSaveShareDropdownOpen(false);
