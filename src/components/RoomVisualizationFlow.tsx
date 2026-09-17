@@ -66,11 +66,13 @@ export function RoomVisualizationFlow({
   // Result step state
   const [showOriginalImage, setShowOriginalImage] = useState(false);
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
-  // 'open' = question + thumbs visible, 'thanks' = replaced by a thank-you
-  // message for 2200ms, 'gone' = cleared, leaving an empty (height-
-  // preserving) row. Each timer is keyed to its own ref (feedback vs.
-  // download status below) -- a shared setTimeout handle would let one
-  // reset cancel/overwrite the other's pending clear.
+  // 'open' = the two thumb circles are visible on the image, 'thanks' =
+  // replaced in place by a confirmation pill for 2200ms, 'gone' = cleared,
+  // nothing shown at that position (there's no footer row left to
+  // preserve height for -- see renderResultStep's top band). Each timer is
+  // keyed to its own ref (feedback vs. download status below) -- a shared
+  // setTimeout handle would let one reset cancel/overwrite the other's
+  // pending clear.
   const [feedbackState, setFeedbackState] = useState<'open' | 'thanks' | 'gone'>('open');
   const feedbackTimerRef = useRef<number | null>(null);
   // Transient confirmation shown under the disclaimer for 2400ms after a
@@ -1089,8 +1091,8 @@ export function RoomVisualizationFlow({
     );
   };
 
-  // Shared by handleLike/handleDislike: shows the thank-you message for
-  // 2200ms, then clears it, leaving an empty (height-preserving) row.
+  // Shared by handleLike/handleDislike: shows the confirmation pill on the
+  // image for 2200ms, then clears it, leaving nothing at that position.
   const thankForFeedback = () => {
     setFeedbackState('thanks');
     if (feedbackTimerRef.current) {
@@ -1237,7 +1239,37 @@ export function RoomVisualizationFlow({
     }
   };
 
+  // The image's own maxHeight needs some headroom above the raw
+  // ResizeObserver measurement so the top band (toggle + thumbs, appended
+  // below) has room to wrap without its own overflow:hidden well clipping
+  // it -- found in review that a fully-wrapped band can need up to ~144px.
+  // But headroom taken here is headroom NOT actually available per the
+  // real measurement -- resultContentRef can legitimately shrink below
+  // that (min-height:0, overflow:hidden on both it and this wrapper), so
+  // adding it back blindly reopens the exact modal/wrapper clipping bug
+  // the ResizeObserver measurement was added to fix in the first place
+  // (verified: at a 400px-tall viewport, measured available height is only
+  // ~53px -- flooring that straight to 150px would clip the image by
+  // ~97px against the footer below it). Capped at +40px so the worst case
+  // is bounded and testable, not "however much the target needs" -- this
+  // does NOT fully guarantee the band never clips in the most extreme
+  // combined case (very narrow AND very short at once, needing all three
+  // of: the toggle pill wrapping its own two buttons, the thumb group also
+  // wrapping its own two buttons, per feedbackWrapExtraHeadroom); that
+  // residual gap is an accepted, documented tradeoff against reintroducing
+  // the worse and more common modal-clipping bug -- same precedent as the
+  // pre-ResizeObserver formula's own acknowledged pathological-viewport
+  // overflow.
+  const imageHeightHeadroomForBand = measuredPx => {
+    const target = 150;
+    const maxHeadroom = 40;
+    return Math.min(maxHeadroom, Math.max(0, target - measuredPx));
+  };
+
   const renderResultStep = () => {
+    const measuredImageHeight = availableImageHeightPx ?? 150;
+    const imageMaxHeightPx = measuredImageHeight + imageHeightHeadroomForBand(measuredImageHeight);
+
     return (
       <div
         style={{
@@ -1288,7 +1320,7 @@ export function RoomVisualizationFlow({
               style={{
                 display: 'block',
                 maxWidth: '100%',
-                // Exact available space, measured off resultContentRef via
+                // Available space, measured off resultContentRef via
                 // ResizeObserver (see its declaration) -- correct regardless
                 // of header/footer height, which varies by language and by
                 // which optional footer rows are currently showing. A static
@@ -1297,24 +1329,10 @@ export function RoomVisualizationFlow({
                 // real shrunk box (Puppeteer measured ~39px of clipping at a
                 // 375x568 viewport), since the wrapper's overflow:hidden +
                 // minHeight:0 lets it shrink independently of any fixed
-                // guess.
-                //
-                // Math.max(..., 150): a genuine floor, not just a pre-
-                // measurement fallback -- found in review that the top band
-                // (toggle + thumbs, see below) can need up to ~144px when it
-                // wraps to two lines (German/Finnish's longer Före/Efter
-                // text can wrap the toggle pill itself internally, on top of
-                // the thumb group dropping to its own row). Since the band
-                // is position:absolute inside this image's own
-                // overflow:hidden well, a shorter image would silently clip
-                // it. 150 covers that with a small margin. This is a
-                // narrow, deliberate exception to "trust the measurement":
-                // it can very rarely push the image ~0-40px past what
-                // ResizeObserver measured as truly available, verified with
-                // Puppeteer against the existing modal/wrapper-clipping
-                // suite (16 languages x 4 viewport heights) to confirm it
-                // doesn't reopen that bug in any currently-tested case.
-                maxHeight: `${Math.max(availableImageHeightPx ?? 150, 150)}px`,
+                // guess. Plus a small, capped headroom addition for the top
+                // band below -- see imageHeightHeadroomForBand's comment for
+                // why it's capped rather than a flat floor.
+                maxHeight: `${imageMaxHeightPx}px`,
                 width: 'auto',
                 height: 'auto',
                 transform: `scale(${imageScale})`,
@@ -1466,7 +1484,27 @@ export function RoomVisualizationFlow({
                 <div
                   role="group"
                   aria-label={t.feedbackQuestion}
-                  style={{ display: 'flex', flexShrink: 0, gap: '8px', marginLeft: 'auto' }}
+                  style={{
+                    display: 'flex',
+                    flexShrink: 0,
+                    // The two 44px hit targets (96px combined with the gap)
+                    // don't shrink, and a steeply portrait photo can render
+                    // narrower than that even alone on the band's second
+                    // line (found in review: a 9:16 crop at this PR's own
+                    // 150px height floor works out to ~84px wide, well under
+                    // 96px). flexWrap here lets the two buttons stack onto
+                    // their own lines too, instead of overflowing the
+                    // band's right edge and being clipped by the image
+                    // well's overflow:hidden -- the same graceful-
+                    // degradation approach already used for the toggle
+                    // pill's own buttons and for this row within the band.
+                    flexWrap: 'wrap',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    gap: '8px',
+                    marginLeft: 'auto',
+                    justifyContent: 'flex-end',
+                  }}
                 >
                   {/* Two independent circles, not a segmented pill like the
                       toggle above -- the pill shape signals "a choice
