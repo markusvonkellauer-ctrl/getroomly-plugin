@@ -1211,6 +1211,45 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  // ─── Result footer spacing (real component styles) ─────────────────────────
+  //
+  // tests/visual/overflow.test.js's Puppeteer suite verifies the CONSEQUENCE
+  // of this spacing in real layout (footer/image geometry), but does so
+  // against a hand-authored HTML fixture that hard-codes the same gap/
+  // minHeight values it's meant to protect -- reverting the actual
+  // production styles wouldn't be caught by that fixture at all, since it
+  // never reads from RoomVisualizationFlow.tsx. This reads the real
+  // rendered DOM's inline style attributes straight off the actual
+  // component, so a revert of either value fails here regardless of what
+  // the Puppeteer fixture assumes.
+  describe('result footer spacing (real component styles)', () => {
+    const renderAtResult = async generationResult => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      const utils = render(<RoomVisualizationFlow {...defaultProps} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+      return utils;
+    };
+
+    test('the footer column uses an 8px row gap, and the download-status line has no minHeight', async () => {
+      const { container } = await renderAtResult({ imageUrl: 'blob:result' });
+
+      // Two elements share role="status" (the feedback question span is the
+      // other one) -- the download-status line is the <p>.
+      const statusP = container.querySelector('p[role="status"]');
+      expect(statusP).not.toBeNull();
+      expect(statusP.style.minHeight).toBe('');
+
+      // The status <p> is a direct child of the footer's own flex column,
+      // per renderResultFooter's structure -- its parent IS the element
+      // whose gap this asserts.
+      const footerColumn = statusP.parentElement;
+      expect(footerColumn.style.gap).toBe('8px');
+    });
+  });
+
   // ─── Like/Dislike feedback ─────────────────────────────────────────────────
 
   describe('feedback buttons', () => {
