@@ -1138,6 +1138,79 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  // ─── Result image maxHeight (ResizeObserver wiring) ────────────────────────
+  //
+  // jsdom has no real layout engine, so these can't verify pixel geometry --
+  // that's tests/visual/overflow.test.js's job, via faithful CSS
+  // reproductions in a real browser. What that Puppeteer suite can't cover
+  // is whether resultContentRef's actual useEffect in
+  // RoomVisualizationFlow.tsx really wires up a ResizeObserver on the real
+  // content wrapper and really feeds its measurement into the real image's
+  // maxHeight -- a regression there (wrong ref, effect not re-running,
+  // reading the wrong entry property) would be invisible to a suite that
+  // only re-implements the same idea in a hand-authored fixture. This
+  // exercises the actual hook, using a controllable ResizeObserver mock so
+  // its callback can be fired manually (jsdom doesn't implement a real one,
+  // which is also why RoomVisualizationFlow.tsx's own `typeof
+  // ResizeObserver === 'undefined'` guard silently no-ops in every other
+  // test in this file).
+  describe('result image maxHeight (ResizeObserver wiring)', () => {
+    class MockResizeObserver {
+      constructor(callback) {
+        this.callback = callback;
+        MockResizeObserver.instances.push(this);
+      }
+      observe(element) {
+        this.element = element;
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    MockResizeObserver.instances = [];
+
+    let originalResizeObserver;
+    beforeEach(() => {
+      originalResizeObserver = global.ResizeObserver;
+      MockResizeObserver.instances = [];
+      global.ResizeObserver = MockResizeObserver;
+    });
+    afterEach(() => {
+      global.ResizeObserver = originalResizeObserver;
+    });
+
+    const renderAtResult = async generationResult => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    test('starts at the 150px fallback before any ResizeObserver measurement arrives', async () => {
+      await renderAtResult({ imageUrl: 'blob:result' });
+
+      const img = screen.getByAltText('New Design');
+      expect(img.style.maxHeight).toBe('150px');
+    });
+
+    test('observes the image\'s content-wrapper ancestor and applies its measured height as maxHeight', async () => {
+      await renderAtResult({ imageUrl: 'blob:result' });
+
+      const img = screen.getByAltText('New Design');
+      expect(MockResizeObserver.instances).toHaveLength(1);
+      const observer = MockResizeObserver.instances[0];
+      expect(observer.element).not.toBeNull();
+      expect(observer.element.contains(img)).toBe(true);
+
+      act(() => {
+        observer.callback([{ contentRect: { height: 234 } }]);
+      });
+
+      expect(img.style.maxHeight).toBe('234px');
+    });
+  });
+
   // ─── Like/Dislike feedback ─────────────────────────────────────────────────
 
   describe('feedback buttons', () => {

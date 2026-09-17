@@ -1383,7 +1383,7 @@ export function RoomVisualizationFlow({
                 // content width. Without a cap, the well's overflow:hidden
                 // would silently clip the pill's right side instead of
                 // wrapping it. (The feedback thumbs used to also overlay
-                // this well and need their own width reservation here --
+                // this well and needed their own width reservation here --
                 // they've since moved into the control stack below the
                 // image, so that collision can't happen anymore.)
                 maxWidth: 'calc(100% - 28px)',
