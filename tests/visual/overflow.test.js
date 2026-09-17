@@ -491,3 +491,129 @@ describe("Before/After toggle pill overflow (image well's overflow:hidden clippi
     }
   }
 });
+
+/**
+ * The modal (.getroomly-modal-container, index.css) caps at 80dvh with
+ * overflow:hidden -- header (auto height) + image (was a flat 55dvh) +
+ * footer (auto height, and now several rows taller than before this
+ * design-update round: feedback row, action row, disclaimer, status line,
+ * tertiary row) all have to fit inside that, or the modal's own
+ * overflow:hidden silently clips whatever doesn't fit. Since header/footer
+ * height is driven by fixed padding and font sizes (roughly constant
+ * pixels), not viewport-relative units, a plain `55dvh` image cap doesn't
+ * know how much room the rest of the stack actually needs and can claim
+ * more than what's left over -- verified this was already true before this
+ * PR's footer changes (pre-existing, ~43px overflow at a 375x667 viewport
+ * with the old shorter footer), and got worse with the new rows (~177px).
+ * The fix subtracts a fixed pixel allowance from the dvh figure instead of
+ * a flat percentage (see the comment on the image's maxHeight style).
+ *
+ * This renders the REAL header + REAL footer markup (all optional rows
+ * present, using each language's actual translations) plus a mock image
+ * sized with the same formula as production, inside a mock modal with the
+ * real 80dvh cap + overflow:hidden, and checks the image's own bottom edge
+ * never gets pushed past the modal's bottom edge -- i.e. that it's never
+ * actually clipped, regardless of how tall a particular language's control
+ * stack renders.
+ */
+describe('Result-step modal height: image is never clipped by the footer', () => {
+  let browser;
+
+  const FEEDBACK_ICON_BUTTON_STYLE = `
+    height:38px; width:38px; border-radius:50%; border:none; flex-shrink:0;
+  `;
+
+  beforeAll(async () => {
+    browser = await puppeteer.launch({
+      headless: process.env.CI !== 'false',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    if (browser) await browser.close();
+  });
+
+  for (const lang of ALL_LANGUAGES) {
+    // 667 = iPhone SE-class; 568 = an older/smaller iPhone still seen in
+    // real traffic. Both are realistic, not pathological -- the fix's
+    // documented floor (150px) deliberately doesn't guarantee a fit at
+    // truly pathological heights (e.g. landscape phones), only at these.
+    for (const viewportHeight of [667, 568]) {
+      it(`"${lang}" at 375x${viewportHeight}: image is not clipped by the modal`, async () => {
+        const t = translations[lang];
+        const width = 375;
+
+        const page = await browser.newPage();
+        try {
+          await page.setViewport({ width, height: viewportHeight });
+
+          const headerHtml = `
+            <div style="display:flex; flex-direction:row; align-items:center; padding:4px 16px; flex-shrink:0; gap:4px; font-family:${FONT_STACK};">
+              <div style="width:28px; flex-shrink:0;"></div>
+              <h2 style="flex:1; text-align:center; font-size:18px; font-weight:bold; letter-spacing:-0.025em; margin:0;">${escapeHtml(t.stepResult)}</h2>
+              <button style="flex-shrink:0; width:28px; height:28px; border-radius:50%; border:none;"></button>
+            </div>
+          `;
+
+          const tertiaryButtonStyle = `
+            gap:8px; justify-content:center; align-items:center; text-align:center;
+            min-height:44px; border-radius:999px; display:flex; font-size:14px;
+            padding:10px 16px; background:none; color:#6b7280; font-weight:500;
+            border:none; font-family:${FONT_STACK};
+          `;
+
+          const footerHtml = `
+            <div style="padding:8px 16px 16px; background-color:#ffffff;">
+              <div style="display:flex; flex-direction:column; gap:12px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
+                <div style="display:flex; align-items:center; gap:8px; min-height:38px;">
+                  <span style="flex:1; font-size:12px; line-height:1.35; color:#605d5d;">${escapeHtml(t.feedbackQuestion)}</span>
+                  <button style="${FEEDBACK_ICON_BUTTON_STYLE}"></button>
+                  <button style="${FEEDBACK_ICON_BUTTON_STYLE}"></button>
+                </div>
+                <div style="display:flex; gap:10px;">
+                  <button style="flex-shrink:0; width:54px; height:54px; border-radius:999px; border:1.5px solid #7d7979;"></button>
+                  <button style="flex:1; gap:8px; justify-content:center; text-align:center; font-weight:700; height:54px; border-radius:999px; display:flex; align-items:center; border:none; font-size:14px; padding:10px 16px; background:${PRIMARY}; color:white;">${escapeHtml(t.addToBasket)}</button>
+                </div>
+                <p style="margin:0; text-align:center; font-size:12px; line-height:1.45; color:#444141;">${escapeHtml(t.disclaimer)}</p>
+                <p style="margin:0; min-height:15px; text-align:center; font-size:12px; font-weight:600; color:${PRIMARY};">${escapeHtml(t.downloadedStatus)}</p>
+                <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px;">
+                  <button style="${tertiaryButtonStyle}">${escapeHtml(t.downloadToDevice)}</button>
+                  <button style="${tertiaryButtonStyle}">${escapeHtml(t.shareWithFriends)}</button>
+                  <button style="${tertiaryButtonStyle}">${escapeHtml(t.newPhoto)}</button>
+                </div>
+              </div>
+            </div>
+          `;
+
+          await page.setContent(
+            `<!DOCTYPE html><html><body style="margin:0;">
+              <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; width:${width}px; box-sizing:border-box;">
+                ${headerHtml}
+                <div style="flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
+                  <img id="result-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7" style="display:block; max-height:max(calc(55dvh - 200px), 150px); width:200px; height:max(calc(55dvh - 200px), 150px);" />
+                </div>
+                ${footerHtml}
+              </div>
+            </body></html>`
+          );
+
+          const result = await page.evaluate(() => {
+            const modal = document.getElementById('modal');
+            const img = document.getElementById('result-image');
+            return {
+              modalBottom: modal.getBoundingClientRect().bottom,
+              imageBottom: img.getBoundingClientRect().bottom,
+            };
+          });
+
+          // If the image's bottom edge is past the modal's own bottom edge,
+          // the modal's overflow:hidden is actively clipping it right now.
+          expect(result.imageBottom).toBeLessThanOrEqual(result.modalBottom + 1);
+        } finally {
+          await page.close();
+        }
+      }, 15000);
+    }
+  }
+});

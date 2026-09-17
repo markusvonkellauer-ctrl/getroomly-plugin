@@ -1168,13 +1168,15 @@ describe('RoomVisualizationFlow', () => {
       expect(submitFeedback).not.toHaveBeenCalled();
     });
 
-    test('a second click on the same button is a no-op, and the question is replaced by a thank-you message', async () => {
+    test('after one click, both feedback buttons unmount and are replaced by a thank-you message', async () => {
       await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
 
-      const likeButton = screen.getByRole('button', { name: 'Yes, it looks realistic' });
-      fireEvent.click(likeButton);
-      // Buttons unmount once feedback is submitted (guarded by feedbackState),
-      // so a stale reference can't be clicked twice — this asserts that guard.
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
+
+      // Both buttons unmount once feedbackState leaves 'open' — a second click
+      // is impossible in real usage because there's no button left to click,
+      // not because a handler guards against it. Confirmed by their absence.
+      expect(screen.queryByRole('button', { name: 'Yes, it looks realistic' })).not.toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: "No, it doesn't look realistic" })
       ).not.toBeInTheDocument();

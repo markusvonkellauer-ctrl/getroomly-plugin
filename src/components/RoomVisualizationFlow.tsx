@@ -1248,11 +1248,36 @@ export function RoomVisualizationFlow({
               style={{
                 display: 'block',
                 maxWidth: '100%',
-                // 55dvh (dynamic viewport height) auto-adjusts as iOS Safari's
-                // browser chrome shows/hides. Leaves ~45dvh for header + action
-                // buttons. Percentage max-height on inline-block wrapper
-                // collapses to zero — dvh sidesteps the cascade issue.
-                maxHeight: '55dvh',
+                // dvh (dynamic viewport height) auto-adjusts as iOS Safari's
+                // browser chrome shows/hides. Percentage max-height on the
+                // inline-block wrapper collapses to zero — dvh sidesteps the
+                // cascade issue, since imageContainerRef's div is deliberately
+                // shrink-to-fit (see its own comment) rather than filling its
+                // flex parent, so a percentage here couldn't resolve anyway.
+                //
+                // The `- 200px` matters: 55dvh alone measures against the
+                // whole viewport, not the actual space left over after the
+                // header and footer (which reserve a roughly constant pixel
+                // amount, not a viewport-relative one). Verified with
+                // Puppeteer at a 375x667 (iPhone SE-class) viewport with the
+                // full control stack (feedback row, action row, disclaimer,
+                // status line, tertiary row) all present: header+footer
+                // measured ~344px, leaving ~190px inside the 80dvh modal cap
+                // (.getroomly-modal-container, index.css) for the image --
+                // plain 55dvh (~367px) overflows that by ~177px, which the
+                // modal's own overflow:hidden then silently clips. This is
+                // not new: the unmodified pre-this-PR footer already
+                // overflowed by ~43px at the same viewport, just less
+                // severely -- widening the control stack made an existing
+                // bug worse rather than introducing a new one, but "not new"
+                // doesn't mean "fine to leave," so this fixes both at once.
+                //
+                // max(..., 150px): a floor for pathologically short
+                // viewports (landscape phones, tiny embedded iframes) where
+                // 55dvh - 200px would otherwise go to zero or negative --
+                // CSS clamps a negative max-height to 0, which would hide
+                // the image outright instead of just shrinking it.
+                maxHeight: 'max(calc(55dvh - 200px), 150px)',
                 width: 'auto',
                 height: 'auto',
                 transform: `scale(${imageScale})`,
