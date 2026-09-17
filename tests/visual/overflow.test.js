@@ -597,12 +597,25 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
           // of the image's own size -- sets the image's real height from
           // the wrapper's measured contentRect, exactly like
           // resultContentRef's effect in RoomVisualizationFlow.tsx.
+          //
+          // Mirrors the real component's img style field-for-field: same
+          // 150px initial fallback (availableImageHeightPx ?? 150), same
+          // width:'auto'/height:'auto' (NOT forced to the measured value --
+          // forcing height would let this test pass even if the real
+          // maxHeight calculation were wrong, since equality would be
+          // tautological rather than a consequence of the CSS cascade).
+          // The used height instead comes from letting the browser's own
+          // replaced-element sizing algorithm apply max-height against a
+          // real (non-1:1) intrinsic aspect ratio, exactly as it does for
+          // an actual photo -- a 4:3 SVG placeholder stands in for that,
+          // since a 1x1 GIF's trivial intrinsic ratio can't exercise the
+          // clamp at all.
           await page.setContent(
             `<!DOCTYPE html><html><body style="margin:0;">
               <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; width:${width}px; box-sizing:border-box;">
                 ${headerHtml}
                 <div id="content-wrapper" style="flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
-                  <img id="result-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7" style="display:block; max-height:400px; width:200px; height:400px;" />
+                  <img id="result-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3C/svg%3E" style="display:block; max-width:100%; max-height:150px; width:auto; height:auto;" />
                 </div>
                 ${footerHtml}
               </div>
@@ -612,7 +625,6 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
                 const ro = new ResizeObserver(entries => {
                   const h = entries[0].contentRect.height;
                   img.style.maxHeight = h + 'px';
-                  img.style.height = h + 'px';
                   window.__lastMeasuredHeight = h;
                 });
                 ro.observe(wrapper);

@@ -1100,25 +1100,31 @@ describe('RoomVisualizationFlow', () => {
       await waitFor(() => screen.getByText('Review Your New Room'));
     };
 
-    test('starts unfavorited, labeled "Save to favourites"', async () => {
+    test('starts unfavorited, labeled "Save to favourites", aria-pressed false', async () => {
       await renderAtResult({ imageUrl: 'blob:result' });
 
-      expect(screen.getByRole('button', { name: 'Save to favourites' })).toBeInTheDocument();
+      const button = screen.getByRole('button', { name: 'Save to favourites' });
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveAttribute('aria-pressed', 'false');
     });
 
-    test('starts favorited when config.isFavorite is true, labeled "Saved to favourites"', async () => {
+    test('starts favorited when config.isFavorite is true, labeled "Saved to favourites", aria-pressed true', async () => {
       await renderAtResult({ imageUrl: 'blob:result' }, { config: { isFavorite: true } });
 
-      expect(screen.getByRole('button', { name: 'Saved to favourites' })).toBeInTheDocument();
+      const button = screen.getByRole('button', { name: 'Saved to favourites' });
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveAttribute('aria-pressed', 'true');
     });
 
-    test('clicking toggles the label and calls onFavorite with the result image', async () => {
+    test('clicking toggles the label, aria-pressed, and calls onFavorite with the result image', async () => {
       const onFavorite = jest.fn();
       await renderAtResult({ imageUrl: 'blob:result' }, { config: { callbacks: { onFavorite } } });
 
       fireEvent.click(screen.getByRole('button', { name: 'Save to favourites' }));
 
-      expect(screen.getByRole('button', { name: 'Saved to favourites' })).toBeInTheDocument();
+      const button = screen.getByRole('button', { name: 'Saved to favourites' });
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveAttribute('aria-pressed', 'true');
       expect(onFavorite).toHaveBeenCalledWith('blob:result', 'rug-001');
     });
 

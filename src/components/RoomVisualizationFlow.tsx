@@ -1568,6 +1568,7 @@ export function RoomVisualizationFlow({
             <button
               onClick={handleFavorite}
               aria-label={isFavorited ? t.favoriteLabelActive : t.favoriteLabel}
+              aria-pressed={isFavorited}
               style={{
                 flexShrink: 0,
                 width: '54px',
