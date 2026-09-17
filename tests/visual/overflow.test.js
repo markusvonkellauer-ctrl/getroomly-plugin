@@ -553,6 +553,19 @@ describe('Top band: Before/After toggle + feedback thumbs never overlap or clip'
         // even when it's alone on its own line, not just when sharing a
         // line with justify-content:space-between.
         expect(thumbsRect.right).toBeGreaterThan(wellRect.right - 20);
+
+        // The band is position:absolute inside the image well, which has
+        // overflow:hidden -- wrapping only grows the band's own height, it
+        // can't make the well taller. Found in review that a wrapped band
+        // (worst case: German/Finnish also forces the toggle pill itself to
+        // wrap its own two buttons internally, on top of the thumb group
+        // dropping to its own row) measured ~144px deep, and
+        // RoomVisualizationFlow.tsx's image maxHeight has a matching
+        // Math.max(..., 150) floor specifically so a short well can't clip
+        // this. This is the regression check for that floor: the wrapped
+        // band's real deepest point must fit within it.
+        const bandDepth = thumbsRect.bottom - wellRect.top;
+        expect(bandDepth).toBeLessThanOrEqual(150);
       } finally {
         await page.close();
       }
@@ -683,7 +696,7 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
                 const img = document.getElementById('result-image');
                 const ro = new ResizeObserver(entries => {
                   const h = entries[0].contentRect.height;
-                  img.style.maxHeight = h + 'px';
+                  img.style.maxHeight = Math.max(h, 150) + 'px';
                   window.__lastMeasuredHeight = h;
                 });
                 ro.observe(wrapper);
@@ -808,7 +821,7 @@ describe('Result footer: idle download-status line collapses instead of reservin
             const img = document.getElementById('result-image');
             const ro = new ResizeObserver(entries => {
               const h = entries[0].contentRect.height;
-              img.style.maxHeight = h + 'px';
+              img.style.maxHeight = Math.max(h, 150) + 'px';
               window.__lastMeasuredHeight = h;
             });
             ro.observe(wrapper);

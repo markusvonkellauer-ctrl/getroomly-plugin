@@ -1297,10 +1297,24 @@ export function RoomVisualizationFlow({
                 // real shrunk box (Puppeteer measured ~39px of clipping at a
                 // 375x568 viewport), since the wrapper's overflow:hidden +
                 // minHeight:0 lets it shrink independently of any fixed
-                // guess. `150` is only the fallback for the brief instant
-                // before the first ResizeObserver callback fires (typically
-                // before first paint) or if ResizeObserver is unsupported.
-                maxHeight: `${availableImageHeightPx ?? 150}px`,
+                // guess.
+                //
+                // Math.max(..., 150): a genuine floor, not just a pre-
+                // measurement fallback -- found in review that the top band
+                // (toggle + thumbs, see below) can need up to ~144px when it
+                // wraps to two lines (German/Finnish's longer Före/Efter
+                // text can wrap the toggle pill itself internally, on top of
+                // the thumb group dropping to its own row). Since the band
+                // is position:absolute inside this image's own
+                // overflow:hidden well, a shorter image would silently clip
+                // it. 150 covers that with a small margin. This is a
+                // narrow, deliberate exception to "trust the measurement":
+                // it can very rarely push the image ~0-40px past what
+                // ResizeObserver measured as truly available, verified with
+                // Puppeteer against the existing modal/wrapper-clipping
+                // suite (16 languages x 4 viewport heights) to confirm it
+                // doesn't reopen that bug in any currently-tested case.
+                maxHeight: `${Math.max(availableImageHeightPx ?? 150, 150)}px`,
                 width: 'auto',
                 height: 'auto',
                 transform: `scale(${imageScale})`,
@@ -1559,6 +1573,17 @@ export function RoomVisualizationFlow({
                   style={{
                     marginLeft: 'auto',
                     flexShrink: 0,
+                    // Same reservation as the toggle pill above -- at the
+                    // narrowest realistic well (140px, ~112px inside the
+                    // band's own insets) several languages' feedbackThanks
+                    // text is wider than that with no wrap, and the image
+                    // wrapper's own overflow:hidden would silently clip it
+                    // instead of wrapping (found in review, verified with
+                    // Puppeteer: even English overflowed by ~50px at 140px
+                    // before this was added). No whiteSpace:nowrap here, so
+                    // text wraps within the pill once constrained.
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
                     fontWeight: 600,
                     fontSize: '11.5px',
                     lineHeight: 1.25,
