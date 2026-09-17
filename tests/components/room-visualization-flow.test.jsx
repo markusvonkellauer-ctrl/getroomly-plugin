@@ -676,10 +676,11 @@ describe('RoomVisualizationFlow', () => {
   // ─── Original image survives as a data: URL (not blob:) ──────────────────
   // Regression test: blob: URLs are backed by browser memory and can be
   // silently reclaimed under memory pressure (observed with a concurrent
-  // Google Meet screen share), which broke "Show Original" with a broken
-  // image and no error. The fix reads the file as a data: URL instead.
+  // Google Meet screen share), which broke the Before/After toggle with a
+  // broken image and no error. The fix reads the file as a data: URL
+  // instead.
 
-  test('"Show Original" displays the uploaded photo as a data: URL, not blob:', async () => {
+  test('the Before/After toggle displays the uploaded photo as a data: URL, not blob:', async () => {
     generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'data:image/webp;base64,result' });
 
     render(<RoomVisualizationFlow {...defaultProps} />);
@@ -691,7 +692,7 @@ describe('RoomVisualizationFlow', () => {
     await waitFor(() => screen.getByText('Review Your New Room'));
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Show Original' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Before' }));
     });
 
     const originalImg = await screen.findByAltText('Original Room');
@@ -886,6 +887,191 @@ describe('RoomVisualizationFlow', () => {
     expect(input.value).toBe('');
   });
 
+  // ─── Before/After toggle pill ───────────────────────────────────────────
+
+  describe('Before/After toggle pill', () => {
+    const renderAtResult = async (generationResult, props = {}) => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    test('starts on "After" (aria-pressed), and switches when "Before" is clicked', async () => {
+      const user = userEvent.setup();
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+
+      expect(screen.getByRole('button', { name: 'Before' })).toHaveAttribute(
+        'aria-pressed',
+        'false'
+      );
+      expect(screen.getByRole('button', { name: 'After' })).toHaveAttribute('aria-pressed', 'true');
+
+      // The actual cross-fading images, not just the pill's own state --
+      // both layers are always mounted, so what matters is which one is
+      // visible/hidden, not which exists.
+      const afterImg = screen.getByAltText('New Design');
+      const beforeImg = screen.getByAltText('Original Room');
+      expect(afterImg.src).toBe('data:image/jpeg;base64,result');
+      expect(beforeImg.src).toBe('data:image/jpeg;base64,mockedBase64');
+      expect(afterImg.style.opacity).toBe('');
+      expect(beforeImg.style.opacity).toBe('0');
+      expect(afterImg).toHaveAttribute('aria-hidden', 'false');
+      expect(beforeImg).toHaveAttribute('aria-hidden', 'true');
+
+      await user.click(screen.getByRole('button', { name: 'Before' }));
+
+      expect(screen.getByRole('button', { name: 'Before' })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
+      expect(screen.getByRole('button', { name: 'After' })).toHaveAttribute(
+        'aria-pressed',
+        'false'
+      );
+      expect(beforeImg.style.opacity).toBe('1');
+      expect(afterImg).toHaveAttribute('aria-hidden', 'true');
+      expect(beforeImg).toHaveAttribute('aria-hidden', 'false');
+    });
+
+    test('calls onShowOriginal with the uploaded photo when switching to Before, and the result image when switching back to After', async () => {
+      const user = userEvent.setup();
+      const onShowOriginal = jest.fn();
+
+      await renderAtResult(
+        { imageUrl: 'data:image/jpeg;base64,result' },
+        { config: { callbacks: { onShowOriginal } } }
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Before' }));
+      expect(onShowOriginal).toHaveBeenLastCalledWith(
+        'data:image/jpeg;base64,mockedBase64',
+        'rug-001'
+      );
+
+      await user.click(screen.getByRole('button', { name: 'After' }));
+      expect(onShowOriginal).toHaveBeenLastCalledWith('data:image/jpeg;base64,result', 'rug-001');
+
+      expect(onShowOriginal).toHaveBeenCalledTimes(2);
+    });
+
+    test('a repeat click on the already-active side is a no-op (does not re-fire onShowOriginal)', async () => {
+      const user = userEvent.setup();
+      const onShowOriginal = jest.fn();
+
+      await renderAtResult(
+        { imageUrl: 'data:image/jpeg;base64,result' },
+        { config: { callbacks: { onShowOriginal } } }
+      );
+
+      await user.click(screen.getByRole('button', { name: 'After' }));
+
+      expect(onShowOriginal).not.toHaveBeenCalled();
+    });
+
+    test('does not render the toggle when config.buttons.showOriginal is false', async () => {
+      await renderAtResult(
+        { imageUrl: 'data:image/jpeg;base64,result' },
+        { config: { buttons: { showOriginal: false } } }
+      );
+
+      expect(screen.queryByRole('button', { name: 'Before' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'After' })).not.toBeInTheDocument();
+    });
+  });
+
+  // ─── Double-tap-to-reset-zoom must ignore taps on overlay controls ────────
+
+  describe('double-tap zoom vs. the Before/After toggle', () => {
+    const renderAtResult = async generationResult => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    // jsdom implements the TouchEvent constructor but not the Touch
+    // constructor -- a plain object with target/clientX/clientY/identifier
+    // works fine as a touch list entry (verified: e.touches[0].target
+    // correctly resolves to the real element).
+    const touch = (target, x = 0, y = 0) => ({ target, clientX: x, clientY: y, identifier: 0 });
+    const dispatchTouchStart = (el, touches) => {
+      el.dispatchEvent(new TouchEvent('touchstart', { touches, bubbles: true }));
+    };
+
+    test('a rapid double-tap directly on the image still resets zoom (the feature itself still works)', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+
+      // Pinch-zoom in first, via a real two-finger touchstart + touchmove,
+      // so there's something for the double-tap to reset.
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', {
+            touches: [touch(img, 0, 0), touch(img, 100, 0)],
+            bubbles: true,
+          })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(img, 0, 0), touch(img, 200, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+      expect(img.style.transform).toBe('scale(2)');
+
+      await act(async () => {
+        dispatchTouchStart(container, [touch(img)]);
+        dispatchTouchStart(container, [touch(img)]);
+      });
+
+      expect(img.style.transform).toBe('scale(1)');
+    });
+
+    test('rapidly switching Before -> After via the toggle does not reset an already-zoomed image', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      const beforeButton = screen.getByRole('button', { name: 'Before' });
+      const afterButton = screen.getByRole('button', { name: 'After' });
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', {
+            touches: [touch(img, 0, 0), touch(img, 100, 0)],
+            bubbles: true,
+          })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(img, 0, 0), touch(img, 200, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+      expect(img.style.transform).toBe('scale(2)');
+
+      // Two taps on two DIFFERENT buttons, both within the 300ms
+      // double-tap window -- would have reset zoom before this fix, since
+      // both are touchstart events with touches.length === 1 inside the
+      // same imageContainerRef.
+      await act(async () => {
+        dispatchTouchStart(container, [touch(beforeButton)]);
+        dispatchTouchStart(container, [touch(afterButton)]);
+      });
+
+      expect(img.style.transform).toBe('scale(2)');
+    });
+  });
+
   // ─── Like/Dislike feedback ─────────────────────────────────────────────────
 
   describe('feedback buttons', () => {
@@ -1018,7 +1204,7 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await user.click(screen.getByRole('button', { name: 'Show Original' }));
+      await user.click(screen.getByRole('button', { name: 'Before' }));
       await user.click(screen.getByText('Download Image'));
 
       expect(global.fetch).not.toHaveBeenCalled();

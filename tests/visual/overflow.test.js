@@ -132,21 +132,6 @@ const BUTTON_SPECS = [
       </div>`,
   },
   {
-    name: 'Show Original (RoomVisualizationFlow.tsx:1075-1096)',
-    translationKey: 'showOriginal',
-    containerWidths: [240, 160],
-    render: (text, width) => `
-      <div style="width:${width}px; box-sizing:border-box;">
-        <button id="target" style="
-          width:100%; box-sizing:border-box; gap:8px; justify-content:center;
-          text-align:center; height:44px; border-radius:6px; display:flex;
-          align-items:center; font-size:14px; padding:10px 16px;
-          border:1px solid rgba(176,143,106,0.3); color:${PRIMARY};
-          background:white; font-weight:700; font-family:${FONT_STACK};
-        ">${text}</button>
-      </div>`,
-  },
-  {
     // tertiaryButtonStyle (RoomVisualizationFlow.tsx:1295-1309) applies to
     // all three tertiary-row buttons below. Not width:100% inside its own
     // grid column anymore — it's an auto-width flex item, one of three
@@ -392,6 +377,132 @@ describe('Cross-language tertiary row overflow (combined row, not per-button)', 
           });
 
           expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 1);
+        } finally {
+          await page.close();
+        }
+      }, 15000);
+    }
+  }
+});
+
+/**
+ * The Before/After toggle pill (RoomVisualizationFlow.tsx, the pill inside
+ * renderResultStep) has auto-width buttons with no column to squeeze into,
+ * so a per-button isolated-width check (like the specs at the top of this
+ * file) can't actually fail regardless of how wide the button renders --
+ * an earlier version of this fixture did exactly that and was a no-op.
+ * The real risk here is twofold: (1) the image well has `overflow:hidden`
+ * and the pill has `maxWidth` + `flexWrap:wrap` (not a fixed width) so it
+ * can't be pushed past the well's own edge -- wrapping to a second line
+ * instead; (2) the pill's maxWidth reserves 80px when the feedback thumbs
+ * (bottom-right, ~72px footprint, same z-index, rendered after the pill)
+ * are also showing, so the two overlays can't collide and cover part of
+ * the toggle. This renders both toggle buttons AND a mock feedback group
+ * together inside a mock image well and checks both: the pill never
+ * crosses the well's right edge, and the pill never overlaps the feedback
+ * group's bounds -- at 488px/328px (matching the widths used above) AND at
+ * a genuinely narrow width simulating a portrait-photo well: the well is
+ * sized to the uploaded photo's own aspect ratio, not the modal width, so
+ * a tall/narrow upload can render a well far narrower than the modal
+ * itself -- this is the case both fixes specifically target.
+ */
+describe("Before/After toggle pill overflow (image well's overflow:hidden clipping)", () => {
+  let browser;
+
+  // Mirrors the real component's conditional maxWidth: reserves 80px
+  // (feedback's ~72px footprint + a little breathing room) only when the
+  // feedback group is also present, same as
+  // `showFeedback && !hasSubmittedFeedback` in the real component.
+  const pillStyle = feedbackShown => `
+    position:absolute; left:14px; bottom:14px; display:flex; flex-wrap:wrap;
+    max-width:calc(100% - 28px${feedbackShown ? ' - 80px' : ''}); gap:4px; padding:4px;
+    border-radius:999px; background:rgba(255,255,255,.94); box-sizing:border-box;
+  `;
+  const BUTTON_STYLE = `
+    box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
+    font-size:12px; font-weight:600; font-family:${FONT_STACK};
+    background:${PRIMARY}; color:white;
+  `;
+  // Matches the real feedback group's footprint (two 32px circular
+  // buttons + 8px gap), positioned bottom:16px, right:16px.
+  const FEEDBACK_STYLE = `
+    position:absolute; bottom:16px; right:16px; display:flex; gap:8px;
+    box-sizing:border-box;
+  `;
+  const FEEDBACK_BUTTON_STYLE = `height:32px; width:32px; border-radius:50%; background:#fff;`;
+
+  beforeAll(async () => {
+    browser = await puppeteer.launch({
+      headless: process.env.CI !== 'false',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    if (browser) await browser.close();
+  });
+
+  for (const lang of ALL_LANGUAGES) {
+    // 140px simulates a narrow/portrait-photo well -- far narrower than
+    // the 488px/328px figures elsewhere in this file, which assume a well
+    // roughly as wide as the modal itself. This well's width is driven by
+    // the uploaded photo's own aspect ratio, not the modal, so it can be
+    // much narrower in practice.
+    for (const width of [488, 328, 140]) {
+      it(`toggle pill — "${lang}" at ${width}px image well width is not clipped by overflow:hidden, and does not overlap the feedback thumbs`, async () => {
+        const t = translations[lang];
+        const texts = [t.toggleBefore, t.toggleAfter];
+        for (const text of texts) {
+          expect(typeof text).toBe('string');
+          expect(text.length).toBeGreaterThan(0);
+        }
+
+        const page = await browser.newPage();
+        try {
+          await page.setViewport({ width: width + 40, height: 250 });
+          const buttons = texts
+            .map(
+              text =>
+                `<button class="pill-btn" style="${BUTTON_STYLE}">${escapeHtml(text)}</button>`
+            )
+            .join('');
+          await page.setContent(
+            `<!DOCTYPE html><html><body style="margin:0; padding:20px;">
+              <div id="well" style="
+                position:relative; width:${width}px; height:150px;
+                overflow:hidden; box-sizing:border-box; background:#221a17;
+              ">
+                <div class="pill" style="${pillStyle(true)}">${buttons}</div>
+                <div class="feedback" style="${FEEDBACK_STYLE}">
+                  <button style="${FEEDBACK_BUTTON_STYLE}"></button>
+                  <button style="${FEEDBACK_BUTTON_STYLE}"></button>
+                </div>
+              </div>
+            </body></html>`
+          );
+
+          const box = await page.evaluate(() => {
+            const well = document.getElementById('well');
+            const pill = document.querySelector('.pill');
+            const feedback = document.querySelector('.feedback');
+            const pillRect = pill.getBoundingClientRect();
+            const feedbackRect = feedback.getBoundingClientRect();
+            return {
+              wellRight: well.getBoundingClientRect().right,
+              pillRight: pillRect.right,
+              pillLeft: pillRect.left,
+              feedbackLeft: feedbackRect.left,
+            };
+          });
+
+          // The well has overflow:hidden in the real component -- anything
+          // past its right edge is silently clipped, not wrapped or shrunk.
+          expect(box.pillRight).toBeLessThanOrEqual(box.wellRight + 1);
+          // The feedback group is rendered after (and paints over) the
+          // pill at the same z-index -- if the pill's right edge reaches
+          // the feedback group's left edge, feedback covers part of the
+          // pill, making a toggle button inaccessible.
+          expect(box.pillRight).toBeLessThanOrEqual(box.feedbackLeft + 1);
         } finally {
           await page.close();
         }

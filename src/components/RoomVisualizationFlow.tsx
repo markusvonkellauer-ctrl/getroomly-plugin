@@ -414,50 +414,76 @@ export function RoomVisualizationFlow({
     []
   );
 
-  useEffect(() => {
-    const el = imageContainerRef.current;
-    if (!el) {
-      return;
-    }
+  // Callback ref, not useEffect + a plain useRef: the image well
+  // (imageContainerRef's element) only exists in the DOM during the
+  // 'result' step, but a useEffect with a fixed dependency array only
+  // runs once, on the component's first mount -- while still in the
+  // 'upload' step, before this div exists at all. That meant these
+  // listeners were being attached to `null` and never re-attached once
+  // the real element mounted: pinch-zoom and double-tap-to-reset-zoom
+  // never actually worked. A callback ref runs every time the DOM node
+  // itself mounts/unmounts, which is what this needs -- confirmed via
+  // debug logging that a plain useRef effect here only ever saw `el` as
+  // null. React 19 supports returning a cleanup function directly from a
+  // ref callback, mirroring a useEffect's own attach/cleanup shape.
+  const attachImageContainerRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      imageContainerRef.current = el;
+      if (!el) {
+        return;
+      }
 
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        pinchRef.current = {
-          startDist: getDistance(e.touches[0], e.touches[1]),
-          startScale: imageScaleRef.current,
-        };
-      } else if (e.touches.length === 1) {
-        const now = Date.now();
-        if (now - lastTapRef.current < 300) {
-          setImageScale(1);
+      const onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length === 2) {
+          pinchRef.current = {
+            startDist: getDistance(e.touches[0], e.touches[1]),
+            startScale: imageScaleRef.current,
+          };
+        } else if (e.touches.length === 1) {
+          // Ignore taps landing on an interactive control (favorite,
+          // feedback, Before/After toggle) -- they're all descendants of
+          // this container, so without this a tap on one of them would
+          // otherwise register as a double-tap-to-reset-zoom gesture on
+          // the image itself. E.g. quickly switching Before -> After
+          // could reset an already-zoomed image as an unintended side
+          // effect of using the toggle.
+          const target = e.touches[0].target;
+          if (target instanceof Element && target.closest('button')) {
+            return;
+          }
+          const now = Date.now();
+          if (now - lastTapRef.current < 300) {
+            setImageScale(1);
+          }
+          lastTapRef.current = now;
         }
-        lastTapRef.current = now;
-      }
-    };
+      };
 
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 2 && pinchRef.current) {
-        e.preventDefault();
-        const newDist = getDistance(e.touches[0], e.touches[1]);
-        const ratio = newDist / pinchRef.current.startDist;
-        const next = Math.min(Math.max(pinchRef.current.startScale * ratio, 1), 4);
-        setImageScale(next);
-      }
-    };
+      const onTouchMove = (e: TouchEvent) => {
+        if (e.touches.length === 2 && pinchRef.current) {
+          e.preventDefault();
+          const newDist = getDistance(e.touches[0], e.touches[1]);
+          const ratio = newDist / pinchRef.current.startDist;
+          const next = Math.min(Math.max(pinchRef.current.startScale * ratio, 1), 4);
+          setImageScale(next);
+        }
+      };
 
-    const onTouchEnd = () => {
-      pinchRef.current = null;
-    };
+      const onTouchEnd = () => {
+        pinchRef.current = null;
+      };
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
-    return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
-    };
-  }, [getDistance, setImageScale]);
+      el.addEventListener('touchstart', onTouchStart, { passive: true });
+      el.addEventListener('touchmove', onTouchMove, { passive: false });
+      el.addEventListener('touchend', onTouchEnd, { passive: true });
+      return () => {
+        el.removeEventListener('touchstart', onTouchStart);
+        el.removeEventListener('touchmove', onTouchMove);
+        el.removeEventListener('touchend', onTouchEnd);
+      };
+    },
+    [getDistance, setImageScale]
+  );
 
   const renderStepIndicator = (currentStep: 'upload' | 'processing' | 'result') => {
     const steps = [
@@ -1037,9 +1063,15 @@ export function RoomVisualizationFlow({
     }
   };
 
-  const handleShowOriginal = () => {
-    setShowOriginalImage(!showOriginalImage);
-    const imageToShow = !showOriginalImage ? uploadedImage : resultImage;
+  // Före/Efter toggle pill sets a specific side directly (not a blind
+  // toggle) -- it's two buttons, not one, so a no-op guard on the already-
+  // active side avoids firing onShowOriginal redundantly on a repeat click.
+  const handleSetShowOriginal = (showOriginal: boolean) => {
+    if (showOriginal === showOriginalImage) {
+      return;
+    }
+    setShowOriginalImage(showOriginal);
+    const imageToShow = showOriginal ? uploadedImage : resultImage;
     config?.callbacks?.onShowOriginal?.(imageToShow || '', productId);
   };
 
@@ -1122,26 +1154,43 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Wrapper is display:inline-block so it shrinks to the image's actual
-            rendered dimensions. Overlays (label, favorite, thumbs) positioned
-            absolute against this wrapper are guaranteed to sit on the image
-            regardless of viewport size or image aspect ratio — no JS dimension
-            computation needed. */}
+        {/* Wrapper is display:inline-block so it shrinks to the base image's
+            actual rendered dimensions -- deliberately NOT switched to a
+            fixed-aspect flex:1 well with objectFit:cover to match the
+            design literally: this codebase has a long, hard-won history of
+            image-cropping regressions (see git log for
+            "objectFit:contain"/"no cropping"/reverts of exactly this kind
+            of change), so the sizing mechanism here is intentionally
+            unchanged. Overlays (badge, favorite, thumbs, toggle pill)
+            positioned absolute against this wrapper are guaranteed to sit
+            on the image regardless of viewport size or image aspect ratio
+            — no JS dimension computation needed. */}
         <div
-          ref={imageContainerRef}
+          ref={attachImageContainerRef}
           style={{
             position: 'relative',
             display: 'inline-block',
             maxWidth: '100%',
-            borderRadius: '8px',
+            borderRadius: '18px',
             overflow: 'hidden',
+            // Design's dark image-well background -- visible in any gap
+            // between the image's actual rendered box and its container
+            // (there normally isn't one, since the wrapper sizes to the
+            // image), and behind the cross-fade transition between layers.
+            background: '#221a17',
             cursor: imageScale > 1 ? 'grab' : 'default',
           }}
         >
+          {/* Base layer = the AI visualisation ("Efter"). Defines the
+              wrapper's actual size via normal flow -- the overlay below is
+              absolutely positioned against this box, not the other way
+              around, so this is the one layer whose sizing must stay
+              exactly as before. */}
           {(resultImage || uploadedImage) && (
             <img
-              src={showOriginalImage ? uploadedImage || '' : resultImage || ''}
-              alt={showOriginalImage ? t.labelOriginal : t.labelNew}
+              src={resultImage || uploadedImage || ''}
+              alt={t.labelNew}
+              aria-hidden={showOriginalImage}
               style={{
                 display: 'block',
                 maxWidth: '100%',
@@ -1160,24 +1209,137 @@ export function RoomVisualizationFlow({
             />
           )}
 
-          {/* Design Label */}
+          {/* Overlay layer = the shopper's original photo ("Före"),
+              cross-faded on top of the base layer. objectFit:contain (not
+              cover, matching the base layer's own never-crop behavior)
+              fills exactly the box the base image established above --
+              uploaded photo and AI result share the same aspect ratio in
+              practice (the generation preserves input dimensions), so this
+              is normally an exact fit, not a letterboxed one. */}
+          {resultImage && uploadedImage && (
+            <img
+              src={uploadedImage}
+              alt={t.labelOriginal}
+              aria-hidden={!showOriginalImage}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'block',
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                opacity: showOriginalImage ? 1 : 0,
+                // Same pinch/double-tap zoom transform as the base layer --
+                // without this, zooming while viewing "Before" had no
+                // effect, and switching from a zoomed "After" view briefly
+                // showed an unzoomed original mid cross-fade.
+                transform: `scale(${imageScale})`,
+                transformOrigin: 'center center',
+                transition:
+                  imageScale === 1
+                    ? 'opacity 0.3s ease, transform 0.25s ease'
+                    : 'opacity 0.3s ease',
+              }}
+            />
+          )}
+
+          {/* Status badge */}
           <div
             style={{
               position: 'absolute',
-              top: '16px',
-              left: '16px',
-              background: 'rgba(0, 0, 0, 0.5)',
+              top: '14px',
+              left: '14px',
+              background: 'rgba(0, 0, 0, 0.58)',
               color: 'white',
-              padding: '8px 12px',
-              borderRadius: '16px',
-              fontSize: '12px',
-              fontWeight: '500',
-              backdropFilter: 'blur(4px)',
+              padding: '8px 13px',
+              borderRadius: '999px',
+              fontSize: '10.5px',
+              fontWeight: '600',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              backdropFilter: 'blur(10px)',
               zIndex: 10,
             }}
           >
             {showOriginalImage ? t.labelOriginal : t.labelNew}
           </div>
+
+          {/* Före/Efter toggle pill */}
+          {showOriginal && resultImage && uploadedImage && (
+            <div
+              role="group"
+              aria-label={t.toggleGroupLabel}
+              style={{
+                position: 'absolute',
+                left: '14px',
+                bottom: '14px',
+                display: 'flex',
+                flexWrap: 'wrap',
+                // The well is sized to the uploaded photo's own aspect
+                // ratio, not the modal width -- a narrow/portrait photo can
+                // render a well far narrower than this pill's natural
+                // content width. Without a cap, the well's overflow:hidden
+                // would silently clip the pill's right side instead of
+                // wrapping it. When the feedback thumbs are also showing
+                // (bottom-right, ~72px footprint, same z-index, rendered
+                // after this pill so they'd paint on top of it), reserve
+                // that space too -- otherwise on a narrow well the two
+                // overlays can collide, with feedback covering part of the
+                // pill and making a toggle button unclickable.
+                maxWidth:
+                  showFeedback && !hasSubmittedFeedback
+                    ? 'calc(100% - 28px - 80px)'
+                    : 'calc(100% - 28px)',
+                // Without this, the default content-box sizing adds this
+                // element's own padding on top of maxWidth instead of
+                // inside it, so the rendered pill is wider than the
+                // reservation above accounts for.
+                boxSizing: 'border-box',
+                gap: '4px',
+                padding: '4px',
+                borderRadius: '999px',
+                background: 'rgba(255, 255, 255, 0.94)',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                zIndex: 10,
+              }}
+            >
+              <button
+                aria-pressed={showOriginalImage}
+                onClick={() => handleSetShowOriginal(true)}
+                style={{
+                  border: 0,
+                  borderRadius: '999px',
+                  padding: '9px 16px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  background: showOriginalImage ? 'var(--getroomly-primary-deep)' : 'transparent',
+                  color: showOriginalImage ? '#fff' : '#605d5d',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {t.toggleBefore}
+              </button>
+              <button
+                aria-pressed={!showOriginalImage}
+                onClick={() => handleSetShowOriginal(false)}
+                style={{
+                  border: 0,
+                  borderRadius: '999px',
+                  padding: '9px 16px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  background: !showOriginalImage ? 'var(--getroomly-primary-deep)' : 'transparent',
+                  color: !showOriginalImage ? '#fff' : '#605d5d',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {t.toggleAfter}
+              </button>
+            </div>
+          )}
 
           {/* Favorite Button */}
           {showFavorite && (
@@ -1324,65 +1486,35 @@ export function RoomVisualizationFlow({
         margin: '0 auto',
       }}
     >
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '8px',
-          width: '100%',
-        }}
-      >
-        {showAddToBasket && (
-          <button
-            onClick={handleAddToBasket}
-            style={{
-              width: '100%',
-              gap: '8px',
-              justifyContent: 'center',
-              textAlign: 'center',
-              fontWeight: '700',
-              height: '44px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              border: 'none',
-              fontSize: '14px',
-              padding: '10px 16px',
-              background: 'var(--getroomly-primary-deep)',
-              color: 'white',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-            }}
-          >
-            {t.addToBasket}
-          </button>
-        )}
-
-        {showOriginal && (
-          <button
-            onClick={handleShowOriginal}
-            style={{
-              width: '100%',
-              gap: '8px',
-              justifyContent: 'center',
-              textAlign: 'center',
-              height: '44px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              fontSize: '14px',
-              padding: '10px 16px',
-              border: '1px solid rgba(176, 143, 106, 0.3)',
-              color: 'var(--getroomly-primary-deep)',
-              background: 'white',
-              fontWeight: '700',
-            }}
-          >
-            {showOriginalImage ? t.showNew : t.showOriginal}
-          </button>
-        )}
-      </div>
+      {/* Before/After switching moved onto the image itself (the toggle
+          pill in renderResultStep) to match the design -- no longer a
+          footer button, so this is a single full-width action now instead
+          of a two-column grid. */}
+      {showAddToBasket && (
+        <button
+          onClick={handleAddToBasket}
+          style={{
+            width: '100%',
+            gap: '8px',
+            justifyContent: 'center',
+            textAlign: 'center',
+            fontWeight: '700',
+            height: '44px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            border: 'none',
+            fontSize: '14px',
+            padding: '10px 16px',
+            background: 'var(--getroomly-primary-deep)',
+            color: 'white',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          {t.addToBasket}
+        </button>
+      )}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px' }}>
         {showSaveShare && (
