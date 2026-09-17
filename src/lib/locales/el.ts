@@ -32,7 +32,6 @@ export const el: TranslationStrings = {
   addToBasket: 'Προσθήκη στο καλάθι',
   showNew: 'Εμφάνιση νέου',
   showOriginal: 'Εμφάνιση αρχικού',
-  saveShare: 'Αποθήκευση / Κοινοποίηση',
   downloadToDevice: 'Λήψη στη συσκευή',
   shareWithFriends: 'Κοινοποίηση σε φίλους',
   newPhoto: 'Νέα φωτογραφία',

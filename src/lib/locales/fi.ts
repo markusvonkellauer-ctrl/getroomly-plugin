@@ -31,7 +31,6 @@ export const fi: TranslationStrings = {
   addToBasket: 'Lisää ostoskoriin',
   showNew: 'Näytä uusi',
   showOriginal: 'Näytä alkuperäinen',
-  saveShare: 'Tallenna / Jaa',
   downloadToDevice: 'Lataa laitteelle',
   shareWithFriends: 'Jaa ystäville',
   newPhoto: 'Uusi kuva',

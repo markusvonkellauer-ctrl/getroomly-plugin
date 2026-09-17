@@ -30,7 +30,6 @@ export const no: TranslationStrings = {
   addToBasket: 'Legg i handlekurv',
   showNew: 'Vis ny',
   showOriginal: 'Vis original',
-  saveShare: 'Lagre / Del',
   downloadToDevice: 'Last ned til enhet',
   shareWithFriends: 'Del med venner',
   newPhoto: 'Nytt bilde',

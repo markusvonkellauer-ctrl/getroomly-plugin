@@ -57,7 +57,6 @@ export interface TranslationStrings {
   addToBasket: string;
   showNew: string;
   showOriginal: string;
-  saveShare: string;
   downloadToDevice: string;
   shareWithFriends: string;
   newPhoto: string;

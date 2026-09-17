@@ -83,6 +83,13 @@ const FONT_STACK = "system-ui, 'Segoe UI', Roboto, sans-serif";
  * EmbedButton.tsx:22-44) — 280px/200px below are realistic assumptions
  * for a typical e-commerce "Add to Cart" button column, not a value read
  * from source.
+ *
+ * The three tertiary-row buttons (download/share/new photo,
+ * RoomVisualizationFlow.tsx:1295-1309/1370-1390) aren't width:100% inside
+ * their own column — they're auto-width flex items sharing one row with
+ * two 6px gaps between them, so 158px/105px below is the same 488px/328px
+ * content width divided three ways instead of two: (488-12)/3 ≈ 158,
+ * (328-12)/3 ≈ 105.
  */
 const BUTTON_SPECS = [
   {
@@ -136,57 +143,57 @@ const BUTTON_SPECS = [
       </div>`,
   },
   {
-    name: 'Save / Share (RoomVisualizationFlow.tsx:1102-1122)',
-    translationKey: 'saveShare',
-    containerWidths: [240, 160],
-    render: (text, width) => `
-      <div style="width:${width}px; box-sizing:border-box;">
-        <button id="target" style="
-          width:100%; box-sizing:border-box; gap:8px; justify-content:center;
-          align-items:center; text-align:center; height:44px; border-radius:6px;
-          display:flex; font-size:14px; padding:10px 16px;
-          background:rgba(147,163,178,0.3); color:#6b7280; font-weight:700;
-          border:1px solid transparent; font-family:${FONT_STACK};
-        ">${text}</button>
-      </div>`,
-  },
-  {
-    name: 'New Photo (RoomVisualizationFlow.tsx:1165-1186)',
+    // tertiaryButtonStyle (RoomVisualizationFlow.tsx:1295-1309) applies to
+    // all three tertiary-row buttons below. Not width:100% inside its own
+    // grid column anymore — it's an auto-width flex item, one of three
+    // sharing one row (renderResultFooter, ~line 1370-1390), so the
+    // realistic per-item budget is roughly a third of the footer's own
+    // width (520px modal maxWidth / 360px mobile embed width, minus 16px
+    // padding each side, minus two 6px row gaps, divided by 3 — see the
+    // BUTTON_SPECS header comment above for where those 520px/360px
+    // figures come from).
+    name: 'New Photo (RoomVisualizationFlow.tsx:1385-1387, tertiary row)',
     translationKey: 'newPhoto',
-    containerWidths: [240, 160],
+    containerWidths: [158, 105],
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">
         <button id="target" style="
-          width:100%; box-sizing:border-box; gap:8px; justify-content:center;
-          align-items:center; text-align:center; height:44px; border-radius:6px;
+          box-sizing:border-box; gap:8px; justify-content:center;
+          align-items:center; text-align:center; min-height:44px; border-radius:999px;
           display:flex; font-size:14px; padding:10px 16px;
-          background:rgba(147,163,178,0.3); color:#6b7280; font-weight:700;
-          border:1px solid transparent; font-family:${FONT_STACK};
+          background:none; color:#6b7280; font-weight:500;
+          border:none; font-family:${FONT_STACK};
         ">${text}</button>
       </div>`,
   },
   {
-    name: 'Download to Device (dropdown item, RoomVisualizationFlow.tsx:1136-1147)',
+    name: 'Download to Device (RoomVisualizationFlow.tsx:1377-1379, tertiary row)',
     translationKey: 'downloadToDevice',
-    containerWidths: [180], // DropdownMenu.Content minWidth: '180px' (line 1132)
+    containerWidths: [158, 105],
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">
-        <div id="target" style="
-          padding:8px 12px; font-size:14px; border-radius:4px;
-          font-family:${FONT_STACK};
-        ">${text}</div>
+        <button id="target" style="
+          box-sizing:border-box; gap:8px; justify-content:center;
+          align-items:center; text-align:center; min-height:44px; border-radius:999px;
+          display:flex; font-size:14px; padding:10px 16px;
+          background:none; color:#6b7280; font-weight:500;
+          border:none; font-family:${FONT_STACK};
+        ">${text}</button>
       </div>`,
   },
   {
-    name: 'Share with Friends (dropdown item, RoomVisualizationFlow.tsx:1148-1159)',
+    name: 'Share with Friends (RoomVisualizationFlow.tsx:1380-1382, tertiary row)',
     translationKey: 'shareWithFriends',
-    containerWidths: [180],
+    containerWidths: [158, 105],
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">
-        <div id="target" style="
-          padding:8px 12px; font-size:14px; border-radius:4px;
-          font-family:${FONT_STACK};
-        ">${text}</div>
+        <button id="target" style="
+          box-sizing:border-box; gap:8px; justify-content:center;
+          align-items:center; text-align:center; min-height:44px; border-radius:999px;
+          display:flex; font-size:14px; padding:10px 16px;
+          background:none; color:#6b7280; font-weight:500;
+          border:none; font-family:${FONT_STACK};
+        ">${text}</button>
       </div>`,
   },
 ];

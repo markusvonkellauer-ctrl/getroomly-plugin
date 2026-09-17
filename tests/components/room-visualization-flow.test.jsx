@@ -965,11 +965,6 @@ describe('RoomVisualizationFlow', () => {
       await waitFor(() => screen.getByText('Review Your New Room'));
     };
 
-    const openSaveShareMenu = async user => {
-      await user.click(screen.getByRole('button', { name: 'Save / Share' }));
-      await waitFor(() => screen.getByText('Download to Device'));
-    };
-
     // jsdom doesn't implement real navigation, so clicking the <a download>
     // element logs an unimplemented "not implemented" navigation error to
     // stderr — expected noise from exercising the real download link, not a
@@ -991,7 +986,6 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       // No fetch at all for the data: URL path — the whole point of the
@@ -1025,7 +1019,6 @@ describe('RoomVisualizationFlow', () => {
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
       await user.click(screen.getByRole('button', { name: 'Show Original' }));
-      await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       expect(global.fetch).not.toHaveBeenCalled();
@@ -1043,7 +1036,6 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: nonDataUrl });
-      await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       // Deliberately no fetch-based conversion for a non-data: URL (our own
@@ -1059,7 +1051,7 @@ describe('RoomVisualizationFlow', () => {
       clickSpy.mockRestore();
     });
 
-    test('calls onSaveShare with the image being downloaded and closes the dropdown', async () => {
+    test('calls onSaveShare with the image being downloaded', async () => {
       const user = userEvent.setup();
       jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
       const onSaveShare = jest.fn();
@@ -1068,11 +1060,9 @@ describe('RoomVisualizationFlow', () => {
         { imageUrl: RESULT_DATA_URL },
         { config: { callbacks: { onSaveShare } } }
       );
-      await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       expect(onSaveShare).toHaveBeenCalledWith(RESULT_DATA_URL, 'rug-001');
-      await waitFor(() => expect(screen.queryByText('Download to Device')).not.toBeInTheDocument());
     });
   });
 });

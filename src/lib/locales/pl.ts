@@ -32,7 +32,6 @@ export const pl: TranslationStrings = {
   addToBasket: 'Dodaj do koszyka',
   showNew: 'Pokaż nowy',
   showOriginal: 'Pokaż oryginał',
-  saveShare: 'Zapisz / Udostępnij',
   downloadToDevice: 'Pobierz na urządzenie',
   shareWithFriends: 'Udostępnij znajomym',
   newPhoto: 'Nowe zdjęcie',

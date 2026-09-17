@@ -31,7 +31,6 @@ export const ja: TranslationStrings = {
   addToBasket: 'カートに追加',
   showNew: '新しい画像を表示',
   showOriginal: '元の画像を表示',
-  saveShare: '保存 / 共有',
   downloadToDevice: '端末にダウンロード',
   shareWithFriends: '友達と共有',
   newPhoto: '新しい写真',

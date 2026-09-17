@@ -30,7 +30,6 @@ export const sv: TranslationStrings = {
   addToBasket: 'Lägg i varukorg',
   showNew: 'Visa ny',
   showOriginal: 'Visa original',
-  saveShare: 'Spara / Dela',
   downloadToDevice: 'Ladda ner till enhet',
   shareWithFriends: 'Dela med vänner',
   newPhoto: 'Nytt foto',

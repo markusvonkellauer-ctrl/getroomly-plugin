@@ -31,7 +31,6 @@ export const nl: TranslationStrings = {
   addToBasket: 'In winkelmand',
   showNew: 'Toon nieuw',
   showOriginal: 'Toon origineel',
-  saveShare: 'Opslaan / Delen',
   downloadToDevice: 'Downloaden naar apparaat',
   shareWithFriends: 'Delen met vrienden',
   newPhoto: 'Nieuwe foto',
