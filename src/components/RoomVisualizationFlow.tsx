@@ -1424,7 +1424,12 @@ export function RoomVisualizationFlow({
           display: 'flex',
           justifyContent: 'center',
           marginTop: '4px',
-          color: 'color-mix(in srgb, var(--getroomly-primary) 70%, transparent)',
+          // Flat --getroomly-primary-deep, not a transparent mix of the
+          // lighter --getroomly-primary: at 70% opacity over the white
+          // footer, that effective color measured ~2.5:1 against white --
+          // this is real text (the progress percentage), not decoration,
+          // and needs the 4.5:1 AA minimum.
+          color: 'var(--getroomly-primary-deep)',
           fontWeight: '700',
           fontSize: '10px',
           letterSpacing: '0.1em',
