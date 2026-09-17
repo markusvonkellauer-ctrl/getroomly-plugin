@@ -6,7 +6,7 @@
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlow';
+import { RoomVisualizationFlow, dataUrlToBlob } from '../../src/components/RoomVisualizationFlow';
 import { translations } from '../../src/lib/i18n';
 
 jest.mock('../../src/services/ai-generation', () => ({
@@ -946,11 +946,30 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  describe('dataUrlToBlob', () => {
+    test('decodes a base64 data: URI into a Blob of the right type and size', () => {
+      const blob = dataUrlToBlob('data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=');
+      expect(blob).not.toBeNull();
+      expect(blob.type).toBe('image/jpeg');
+      expect(blob.size).toBe('fake-result-image'.length);
+    });
+
+    test('returns null for a plain http(s) URL', () => {
+      expect(dataUrlToBlob('https://cdn.example.com/result.jpg')).toBeNull();
+    });
+
+    test('returns null for a non-base64 data: URI', () => {
+      expect(dataUrlToBlob('data:image/svg+xml,<svg></svg>')).toBeNull();
+    });
+  });
+
   describe('download to device (Safari data: URI download fix)', () => {
     // generateRoomVisualization always resolves imageUrl as a base64 data:
     // URI (see ai-generation.ts) — real production traffic never hands
     // handleDownloadToDevice a plain http(s) CDN URL, so fixtures use the
-    // same shape to actually exercise the code path this fix targets.
+    // same shape to actually exercise the synchronous decode path this fix
+    // targets. A plain https: fixture is used separately below to exercise
+    // the (currently production-unreachable) async fetch-based fallback.
     const RESULT_DATA_URL = 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=';
 
     const renderAtResult = async (generationResult, props = {}) => {
@@ -980,8 +999,61 @@ describe('RoomVisualizationFlow', () => {
       console.error = originalConsoleError;
     });
 
-    test('fetches the image as a blob and downloads via a blob: URL instead of the raw data: URI', async () => {
+    test('downloads the data: URI as a blob: URL synchronously, without ever calling fetch', async () => {
       const user = userEvent.setup();
+      global.URL.createObjectURL.mockReturnValueOnce('blob:mock-download-url');
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await openSaveShareMenu(user);
+      await user.click(screen.getByText('Download to Device'));
+
+      // No fetch at all for the data: URL path — the whole point of the
+      // fix in this round is that decoding happens synchronously so
+      // link.click() fires in the same task as the user gesture, instead
+      // of after an awaited fetch() resumes in a later task (which can
+      // lose iOS Safari's transient user activation for the download).
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(global.URL.createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      const clickedLink = clickSpy.mock.instances[0];
+      expect(clickedLink.href).toBe('blob:mock-download-url');
+      expect(clickedLink.download).toBe('Test Rug-visualization.jpg');
+
+      // Revocation is deliberately deferred a macrotask (not fired
+      // synchronously in the same tick as click()) so it doesn't race
+      // Safari's async download start — see the comment in
+      // handleDownloadToDevice.
+      await waitFor(() =>
+        expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-download-url')
+      );
+
+      clickSpy.mockRestore();
+    });
+
+    test('names the file "...-original.jpg" and downloads the uploaded photo when showing the original image', async () => {
+      const user = userEvent.setup();
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await user.click(screen.getByRole('button', { name: 'Show Original' }));
+      await openSaveShareMenu(user);
+      await user.click(screen.getByText('Download to Device'));
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      const clickedLink = clickSpy.mock.instances[0];
+      expect(clickedLink.download).toBe('Test Rug-original.jpg');
+
+      clickSpy.mockRestore();
+    });
+
+    test('falls back to fetch-based blob conversion for a non-data: URL', async () => {
+      const user = userEvent.setup();
+      const nonDataUrl = 'https://cdn.example.com/result.jpg';
       const fakeBlob = new Blob(['fake-image-bytes']);
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
@@ -993,74 +1065,41 @@ describe('RoomVisualizationFlow', () => {
         .spyOn(HTMLAnchorElement.prototype, 'click')
         .mockImplementation(() => {});
 
-      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await renderAtResult({ imageUrl: nonDataUrl });
       await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
-      expect(global.fetch).toHaveBeenCalledWith(RESULT_DATA_URL);
+      expect(global.fetch).toHaveBeenCalledWith(nonDataUrl);
       expect(global.URL.createObjectURL).toHaveBeenCalledWith(fakeBlob);
-      expect(clickSpy).toHaveBeenCalledTimes(1);
       const clickedLink = clickSpy.mock.instances[0];
       expect(clickedLink.href).toBe('blob:mock-download-url');
-      expect(clickedLink.download).toBe('Test Rug-visualization.jpg');
-
-      // Revocation is deliberately deferred a macrotask (not fired
-      // synchronously in the same tick as click()) so it doesn't race
-      // Safari's async download start — see the comment in
-      // handleDownloadToDevice. userEvent's own internal ticks mean it may
-      // already have fired by the time we get here, so this only asserts
-      // it does happen, not exactly when.
-      await waitFor(() =>
-        expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-download-url')
-      );
 
       clickSpy.mockRestore();
     });
 
-    test('names the file "...-original.jpg" and downloads the uploaded photo when showing the original image', async () => {
+    test('falls back to a direct (non-blob) download link if the fetch fallback itself fails', async () => {
       const user = userEvent.setup();
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        blob: jest.fn().mockResolvedValue(new Blob(['x'])),
-      });
-      const clickSpy = jest
-        .spyOn(HTMLAnchorElement.prototype, 'click')
-        .mockImplementation(() => {});
-
-      await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await user.click(screen.getByRole('button', { name: 'Show Original' }));
-      await openSaveShareMenu(user);
-      await user.click(screen.getByText('Download to Device'));
-
-      expect(global.fetch).toHaveBeenCalledWith(expect.stringMatching(/^data:image\/jpeg;base64,/));
-      const clickedLink = clickSpy.mock.instances[0];
-      expect(clickedLink.download).toBe('Test Rug-original.jpg');
-
-      clickSpy.mockRestore();
-    });
-
-    test('falls back to a direct (non-blob) download link if fetching the image fails', async () => {
-      const user = userEvent.setup();
+      const nonDataUrl = 'https://cdn.example.com/result.jpg';
       global.fetch = jest.fn().mockRejectedValue(new Error('network error'));
       const clickSpy = jest
         .spyOn(HTMLAnchorElement.prototype, 'click')
         .mockImplementation(() => {});
 
-      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await renderAtResult({ imageUrl: nonDataUrl });
       await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       expect(global.URL.createObjectURL).not.toHaveBeenCalled();
       const clickedLink = clickSpy.mock.instances[0];
-      expect(clickedLink.href).toBe(RESULT_DATA_URL);
+      expect(clickedLink.href).toBe(nonDataUrl);
       expect(clickedLink.download).toBe('Test Rug-visualization.jpg');
 
       clickSpy.mockRestore();
     });
 
-    test('falls back to a direct download link when fetch resolves with a non-2xx status (e.g. an expired image URL)', async () => {
+    test('falls back to a direct download link when the fetch fallback resolves with a non-2xx status', async () => {
       const user = userEvent.setup();
+      const nonDataUrl = 'https://cdn.example.com/result.jpg';
       global.fetch = jest.fn().mockResolvedValue({
         ok: false,
         status: 404,
@@ -1070,24 +1109,19 @@ describe('RoomVisualizationFlow', () => {
         .spyOn(HTMLAnchorElement.prototype, 'click')
         .mockImplementation(() => {});
 
-      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await renderAtResult({ imageUrl: nonDataUrl });
       await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       expect(global.URL.createObjectURL).not.toHaveBeenCalled();
       const clickedLink = clickSpy.mock.instances[0];
-      expect(clickedLink.href).toBe(RESULT_DATA_URL);
+      expect(clickedLink.href).toBe(nonDataUrl);
 
       clickSpy.mockRestore();
     });
 
     test('calls onSaveShare with the image being downloaded and closes the dropdown', async () => {
       const user = userEvent.setup();
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        blob: jest.fn().mockResolvedValue(new Blob(['x'])),
-      });
       jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
       const onSaveShare = jest.fn();
 
