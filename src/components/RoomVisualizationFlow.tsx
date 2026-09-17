@@ -66,7 +66,51 @@ export function RoomVisualizationFlow({
   // Result step state
   const [showOriginalImage, setShowOriginalImage] = useState(false);
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
-  const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
+  // 'open' = question + thumbs visible, 'thanks' = replaced by a thank-you
+  // message for 2200ms, 'gone' = cleared, leaving an empty (height-
+  // preserving) row. Each timer is keyed to its own ref (feedback vs.
+  // download status below) -- a shared setTimeout handle would let one
+  // reset cancel/overwrite the other's pending clear.
+  const [feedbackState, setFeedbackState] = useState<'open' | 'thanks' | 'gone'>('open');
+  const feedbackTimerRef = useRef<number | null>(null);
+  // Transient confirmation shown under the disclaimer for 2400ms after a
+  // successful download -- kept as its own element (see render) so it
+  // never covers the permanent disclaimer text.
+  const [downloadStatusVisible, setDownloadStatusVisible] = useState(false);
+  const downloadStatusTimerRef = useRef<number | null>(null);
+
+  // The result image's own maxHeight can't be a plain CSS percentage: its
+  // flex ancestor (resultContentRef below) has overflow:hidden + minHeight:0,
+  // so flexbox is free to shrink it below the image's natural size whenever
+  // the header+footer (whose height varies with language/translated string
+  // length and with which optional footer rows are currently showing) leave
+  // less than a fixed CSS guess assumes -- verified with Puppeteer: a static
+  // `max(calc(55dvh - 200px), 150px)` guess left the image up to ~39px taller
+  // than the wrapper's real shrunk box at a 375x568 viewport, and the
+  // wrapper's own overflow:hidden silently clipped the excess. Since
+  // flex:1 1 auto + minHeight:0 makes resultContentRef's resolved height
+  // always converge to the true leftover space (flex-grow fills slack,
+  // flex-shrink absorbs a deficit, all the way to 0) regardless of the
+  // image's own size, ResizeObserver-measuring that element directly is
+  // exact where a CSS formula could only ever approximate. Null until the
+  // first observation fires (one frame, typically before first paint) --
+  // the CSS formula below is used as the fallback for that instant only.
+  const [availableImageHeightPx, setAvailableImageHeightPx] = useState<number | null>(null);
+  const resultContentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = resultContentRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (entry) {
+        setAvailableImageHeightPx(entry.contentRect.height);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
@@ -135,8 +179,21 @@ export function RoomVisualizationFlow({
   // of calling setState after unmount.
   const isMountedRef = useRef(true);
   useEffect(() => {
+    // Both entrypoints (main.tsx, shadow-entry.tsx) mount under
+    // React.StrictMode, which in dev replays this effect as
+    // setup -> cleanup -> setup to surface missing cleanup bugs. Without
+    // this assignment, the first (simulated) cleanup would leave the ref
+    // false forever, permanently no-oping every isMountedRef.current-gated
+    // setState -- including the feedback/download timers below -- in dev.
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+      }
+      if (downloadStatusTimerRef.current) {
+        clearTimeout(downloadStatusTimerRef.current);
+      }
     };
   }, []);
 
@@ -399,8 +456,21 @@ export function RoomVisualizationFlow({
     setUploadedImage(null);
     setResultImage(null);
     setGenerationId(null);
-    setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
+
+    // Reset both feedback and download-status timers so a pending one from
+    // the previous result can't fire after this reset and clear state that
+    // belongs to the next photo's own feedback row.
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current);
+      feedbackTimerRef.current = null;
+    }
+    setFeedbackState('open');
+    if (downloadStatusTimerRef.current) {
+      clearTimeout(downloadStatusTimerRef.current);
+      downloadStatusTimerRef.current = null;
+    }
+    setDownloadStatusVisible(false);
   };
 
   const handleOpenTerms = () => {
@@ -1019,11 +1089,25 @@ export function RoomVisualizationFlow({
     );
   };
 
+  // Shared by handleLike/handleDislike: shows the thank-you message for
+  // 2200ms, then clears it, leaving an empty (height-preserving) row.
+  const thankForFeedback = () => {
+    setFeedbackState('thanks');
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current);
+    }
+    feedbackTimerRef.current = window.setTimeout(() => {
+      if (isMountedRef.current) {
+        setFeedbackState('gone');
+      }
+    }, 2200);
+  };
+
   const handleLike = () => {
-    if (hasSubmittedFeedback) {
+    if (feedbackState !== 'open') {
       return;
     }
-    setHasSubmittedFeedback(true);
+    thankForFeedback();
 
     config?.callbacks?.onLike?.(resultImage || '', productId);
 
@@ -1043,10 +1127,10 @@ export function RoomVisualizationFlow({
   };
 
   const handleDislike = () => {
-    if (hasSubmittedFeedback) {
+    if (feedbackState !== 'open') {
       return;
     }
-    setHasSubmittedFeedback(true);
+    thankForFeedback();
 
     config?.callbacks?.onDislike?.(resultImage || '', productId);
 
@@ -1115,6 +1199,16 @@ export function RoomVisualizationFlow({
       link.href = imageToDownload;
       link.click();
     }
+
+    setDownloadStatusVisible(true);
+    if (downloadStatusTimerRef.current) {
+      clearTimeout(downloadStatusTimerRef.current);
+    }
+    downloadStatusTimerRef.current = window.setTimeout(() => {
+      if (isMountedRef.current) {
+        setDownloadStatusVisible(false);
+      }
+    }, 2400);
   };
 
   const handleShareWithFriends = async () => {
@@ -1194,11 +1288,19 @@ export function RoomVisualizationFlow({
               style={{
                 display: 'block',
                 maxWidth: '100%',
-                // 55dvh (dynamic viewport height) auto-adjusts as iOS Safari's
-                // browser chrome shows/hides. Leaves ~45dvh for header + action
-                // buttons. Percentage max-height on inline-block wrapper
-                // collapses to zero — dvh sidesteps the cascade issue.
-                maxHeight: '55dvh',
+                // Exact available space, measured off resultContentRef via
+                // ResizeObserver (see its declaration) -- correct regardless
+                // of header/footer height, which varies by language and by
+                // which optional footer rows are currently showing. A static
+                // dvh-based CSS formula was tried first and found to
+                // sometimes still leave the image taller than the wrapper's
+                // real shrunk box (Puppeteer measured ~39px of clipping at a
+                // 375x568 viewport), since the wrapper's overflow:hidden +
+                // minHeight:0 lets it shrink independently of any fixed
+                // guess. `150` is only the fallback for the brief instant
+                // before the first ResizeObserver callback fires (typically
+                // before first paint) or if ResizeObserver is unsupported.
+                maxHeight: `${availableImageHeightPx ?? 150}px`,
                 width: 'auto',
                 height: 'auto',
                 transform: `scale(${imageScale})`,
@@ -1280,16 +1382,11 @@ export function RoomVisualizationFlow({
                 // render a well far narrower than this pill's natural
                 // content width. Without a cap, the well's overflow:hidden
                 // would silently clip the pill's right side instead of
-                // wrapping it. When the feedback thumbs are also showing
-                // (bottom-right, ~72px footprint, same z-index, rendered
-                // after this pill so they'd paint on top of it), reserve
-                // that space too -- otherwise on a narrow well the two
-                // overlays can collide, with feedback covering part of the
-                // pill and making a toggle button unclickable.
-                maxWidth:
-                  showFeedback && !hasSubmittedFeedback
-                    ? 'calc(100% - 28px - 80px)'
-                    : 'calc(100% - 28px)',
+                // wrapping it. (The feedback thumbs used to also overlay
+                // this well and needed their own width reservation here --
+                // they've since moved into the control stack below the
+                // image, so that collision can't happen anymore.)
+                maxWidth: 'calc(100% - 28px)',
                 // Without this, the default content-box sizing adds this
                 // element's own padding on top of maxWidth instead of
                 // inside it, so the rendered pill is wider than the
@@ -1340,111 +1437,6 @@ export function RoomVisualizationFlow({
               </button>
             </div>
           )}
-
-          {/* Favorite Button */}
-          {showFavorite && (
-            <button
-              onClick={handleFavorite}
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                height: '44px',
-                width: '44px',
-                borderRadius: '6px',
-                background: 'white',
-                border: '1px solid #e5e7eb',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                zIndex: 10,
-                transition: 'all 200ms ease',
-              }}
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill={isFavorited ? 'var(--getroomly-primary)' : 'none'}
-                stroke={isFavorited ? 'var(--getroomly-primary)' : 'currentColor'}
-                strokeWidth="2"
-              >
-                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-              </svg>
-            </button>
-          )}
-
-          {/* Like/Dislike Feedback */}
-          {showFeedback && !hasSubmittedFeedback && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '16px',
-                right: '16px',
-                display: 'flex',
-                gap: '8px',
-                zIndex: 10,
-              }}
-            >
-              <button
-                onClick={handleLike}
-                aria-label="Like this result"
-                style={{
-                  height: '32px',
-                  width: '32px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  color: '#16a34a',
-                }}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M7 10v12" />
-                  <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
-                </svg>
-              </button>
-              <button
-                onClick={handleDislike}
-                aria-label="Dislike this result"
-                style={{
-                  height: '32px',
-                  width: '32px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  color: '#dc2626',
-                }}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M17 14V2" />
-                  <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
-                </svg>
-              </button>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -1481,40 +1473,184 @@ export function RoomVisualizationFlow({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: '12px',
         width: '100%',
         margin: '0 auto',
       }}
     >
-      {/* Before/After switching moved onto the image itself (the toggle
-          pill in renderResultStep) to match the design -- no longer a
-          footer button, so this is a single full-width action now instead
-          of a two-column grid. */}
-      {showAddToBasket && (
-        <button
-          onClick={handleAddToBasket}
-          style={{
-            width: '100%',
-            gap: '8px',
-            justifyContent: 'center',
-            textAlign: 'center',
-            fontWeight: '700',
-            height: '44px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            border: 'none',
-            fontSize: '14px',
-            padding: '10px 16px',
-            background: 'var(--getroomly-primary-deep)',
-            color: 'white',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-          }}
-        >
-          {t.addToBasket}
-        </button>
+      {/* Feedback row -- moved here from an overlay on the image itself, so
+          it no longer needs to compete for space with the Before/After
+          toggle pill on narrow image wells (see git history on this file
+          for that now-retired collision). */}
+      {showFeedback && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: '38px' }}>
+          <span
+            role="status"
+            aria-live="polite"
+            style={{ flex: 1, fontSize: '12px', lineHeight: 1.35, color: '#605d5d' }}
+          >
+            {feedbackState === 'open'
+              ? t.feedbackQuestion
+              : feedbackState === 'thanks'
+                ? t.feedbackThanks
+                : ''}
+          </span>
+          {feedbackState === 'open' && (
+            <>
+              <button
+                onClick={handleLike}
+                aria-label={t.feedbackLikeLabel}
+                style={{
+                  height: '38px',
+                  width: '38px',
+                  borderRadius: '50%',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  background: '#f8f4f4',
+                  color: '#201e1d',
+                  flexShrink: 0,
+                }}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M7 10v12" />
+                  <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+                </svg>
+              </button>
+              <button
+                onClick={handleDislike}
+                aria-label={t.feedbackDislikeLabel}
+                style={{
+                  height: '38px',
+                  width: '38px',
+                  borderRadius: '50%',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  background: '#f8f4f4',
+                  color: '#201e1d',
+                  flexShrink: 0,
+                }}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M17 14V2" />
+                  <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
+                </svg>
+              </button>
+            </>
+          )}
+        </div>
       )}
+
+      {/* Action row -- favorite moved here from an overlay on the image,
+          next to the cart button, matching the design's action row. */}
+      {(showFavorite || showAddToBasket) && (
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {showFavorite && (
+            <button
+              onClick={handleFavorite}
+              aria-label={isFavorited ? t.favoriteLabelActive : t.favoriteLabel}
+              aria-pressed={isFavorited}
+              style={{
+                flexShrink: 0,
+                width: '54px',
+                height: '54px',
+                borderRadius: '999px',
+                border: `1.5px solid ${isFavorited ? 'var(--getroomly-primary-deep)' : '#7d7979'}`,
+                background: isFavorited ? 'var(--getroomly-primary-tint)' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill={isFavorited ? 'var(--getroomly-primary-deep)' : 'none'}
+                stroke={isFavorited ? 'var(--getroomly-primary-deep)' : '#201e1d'}
+                strokeWidth="2"
+              >
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+              </svg>
+            </button>
+          )}
+          {showAddToBasket && (
+            <button
+              onClick={handleAddToBasket}
+              style={{
+                flex: 1,
+                gap: '8px',
+                justifyContent: 'center',
+                textAlign: 'center',
+                fontWeight: '700',
+                height: '54px',
+                borderRadius: '999px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                border: 'none',
+                fontSize: '14px',
+                padding: '10px 16px',
+                background: 'var(--getroomly-primary-deep)',
+                color: 'white',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+              }}
+            >
+              {t.addToBasket}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Permanent measurement-accuracy disclaimer -- never replaced by a
+          transient message, and never moved on top of the photo. */}
+      <p
+        style={{
+          margin: 0,
+          textAlign: 'center',
+          fontSize: '12px',
+          lineHeight: 1.45,
+          color: '#444141',
+        }}
+      >
+        {t.disclaimer}
+      </p>
+      {/* Its own element, not shared with the disclaimer above, so a
+          download confirmation can never hide the permanent text. */}
+      <p
+        role="status"
+        aria-live="polite"
+        style={{
+          margin: 0,
+          minHeight: '15px',
+          textAlign: 'center',
+          fontSize: '12px',
+          fontWeight: '600',
+          color: 'var(--getroomly-primary-deep)',
+        }}
+      >
+        {downloadStatusVisible ? t.downloadedStatus : ''}
+      </p>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px' }}>
         {showSaveShare && (
@@ -1867,6 +2003,7 @@ export function RoomVisualizationFlow({
 
       {/* Content - Like original content structure */}
       <div
+        ref={resultContentRef}
         style={{
           flex: '1 1 auto',
           width: '100%',

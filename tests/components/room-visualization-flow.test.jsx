@@ -265,6 +265,22 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  test('shows the permanent measurement-accuracy disclaimer at the result step', async () => {
+    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+
+    render(<RoomVisualizationFlow {...defaultProps} />);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('The image is an estimate. Measure at home before you buy.')
+      ).toBeInTheDocument();
+    });
+  });
+
   test('calls onComplete with the result image URL', async () => {
     generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
     const onComplete = jest.fn();
@@ -1072,6 +1088,129 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  // ─── Favorite button ───────────────────────────────────────────────────────
+
+  describe('favorite button', () => {
+    const renderAtResult = async (generationResult, props = {}) => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    test('starts unfavorited, labeled "Save to favourites", aria-pressed false', async () => {
+      await renderAtResult({ imageUrl: 'blob:result' });
+
+      const button = screen.getByRole('button', { name: 'Save to favourites' });
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    test('starts favorited when config.isFavorite is true, labeled "Saved to favourites", aria-pressed true', async () => {
+      await renderAtResult({ imageUrl: 'blob:result' }, { config: { isFavorite: true } });
+
+      const button = screen.getByRole('button', { name: 'Saved to favourites' });
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    test('clicking toggles the label, aria-pressed, and calls onFavorite with the result image', async () => {
+      const onFavorite = jest.fn();
+      await renderAtResult({ imageUrl: 'blob:result' }, { config: { callbacks: { onFavorite } } });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save to favourites' }));
+
+      const button = screen.getByRole('button', { name: 'Saved to favourites' });
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveAttribute('aria-pressed', 'true');
+      expect(onFavorite).toHaveBeenCalledWith('blob:result', 'rug-001');
+    });
+
+    test('is not rendered when config.buttons.favorite is false', async () => {
+      await renderAtResult(
+        { imageUrl: 'blob:result' },
+        { config: { buttons: { favorite: false } } }
+      );
+
+      expect(screen.queryByRole('button', { name: 'Save to favourites' })).not.toBeInTheDocument();
+    });
+  });
+
+  // ─── Result image maxHeight (ResizeObserver wiring) ────────────────────────
+  //
+  // jsdom has no real layout engine, so these can't verify pixel geometry --
+  // that's tests/visual/overflow.test.js's job, via faithful CSS
+  // reproductions in a real browser. What that Puppeteer suite can't cover
+  // is whether resultContentRef's actual useEffect in
+  // RoomVisualizationFlow.tsx really wires up a ResizeObserver on the real
+  // content wrapper and really feeds its measurement into the real image's
+  // maxHeight -- a regression there (wrong ref, effect not re-running,
+  // reading the wrong entry property) would be invisible to a suite that
+  // only re-implements the same idea in a hand-authored fixture. This
+  // exercises the actual hook, using a controllable ResizeObserver mock so
+  // its callback can be fired manually (jsdom doesn't implement a real one,
+  // which is also why RoomVisualizationFlow.tsx's own `typeof
+  // ResizeObserver === 'undefined'` guard silently no-ops in every other
+  // test in this file).
+  describe('result image maxHeight (ResizeObserver wiring)', () => {
+    class MockResizeObserver {
+      constructor(callback) {
+        this.callback = callback;
+        MockResizeObserver.instances.push(this);
+      }
+      observe(element) {
+        this.element = element;
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    MockResizeObserver.instances = [];
+
+    let originalResizeObserver;
+    beforeEach(() => {
+      originalResizeObserver = global.ResizeObserver;
+      MockResizeObserver.instances = [];
+      global.ResizeObserver = MockResizeObserver;
+    });
+    afterEach(() => {
+      global.ResizeObserver = originalResizeObserver;
+    });
+
+    const renderAtResult = async generationResult => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    test('starts at the 150px fallback before any ResizeObserver measurement arrives', async () => {
+      await renderAtResult({ imageUrl: 'blob:result' });
+
+      const img = screen.getByAltText('New Design');
+      expect(img.style.maxHeight).toBe('150px');
+    });
+
+    test("observes the image's content-wrapper ancestor and applies its measured height as maxHeight", async () => {
+      await renderAtResult({ imageUrl: 'blob:result' });
+
+      const img = screen.getByAltText('New Design');
+      expect(MockResizeObserver.instances).toHaveLength(1);
+      const observer = MockResizeObserver.instances[0];
+      expect(observer.element).not.toBeNull();
+      expect(observer.element.contains(img)).toBe(true);
+
+      act(() => {
+        observer.callback([{ contentRect: { height: 234 } }]);
+      });
+
+      expect(img.style.maxHeight).toBe('234px');
+    });
+  });
+
   // ─── Like/Dislike feedback ─────────────────────────────────────────────────
 
   describe('feedback buttons', () => {
@@ -1087,7 +1226,7 @@ describe('RoomVisualizationFlow', () => {
     test('Like button submits "up" feedback for the generationId with the partner API key', async () => {
       await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Like this result' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
 
       expect(submitFeedback).toHaveBeenCalledWith('gen-1', 'up', 'partner-abc');
     });
@@ -1095,7 +1234,7 @@ describe('RoomVisualizationFlow', () => {
     test('Dislike button submits "down" feedback for the generationId', async () => {
       await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Dislike this result' }));
+      fireEvent.click(screen.getByRole('button', { name: "No, it doesn't look realistic" }));
 
       expect(submitFeedback).toHaveBeenCalledWith('gen-1', 'down', 'partner-abc');
     });
@@ -1103,20 +1242,46 @@ describe('RoomVisualizationFlow', () => {
     test('does not call submitFeedback when the result has no generationId', async () => {
       await renderAtResult({ imageUrl: 'blob:result' });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Like this result' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
 
       expect(submitFeedback).not.toHaveBeenCalled();
     });
 
-    test('a second click on the same button is a no-op (feedback already submitted)', async () => {
+    test('after one click, both feedback buttons unmount and are replaced by a thank-you message', async () => {
       await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
 
-      const likeButton = screen.getByRole('button', { name: 'Like this result' });
-      fireEvent.click(likeButton);
-      // Buttons unmount once feedback is submitted (guarded by hasSubmittedFeedback),
-      // so a stale reference can't be clicked twice — this asserts that guard.
-      expect(screen.queryByRole('button', { name: 'Dislike this result' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
+
+      // Both buttons unmount once feedbackState leaves 'open' — a second click
+      // is impossible in real usage because there's no button left to click,
+      // not because a handler guards against it. Confirmed by their absence.
+      expect(
+        screen.queryByRole('button', { name: 'Yes, it looks realistic' })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: "No, it doesn't look realistic" })
+      ).not.toBeInTheDocument();
       expect(submitFeedback).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Thanks for your feedback.')).toBeInTheDocument();
+    });
+
+    test('the thank-you message clears after 2200ms, leaving an empty (height-preserving) row', async () => {
+      jest.useFakeTimers();
+      try {
+        await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
+        expect(screen.getByText('Thanks for your feedback.')).toBeInTheDocument();
+
+        act(() => {
+          jest.advanceTimersByTime(2200);
+        });
+
+        expect(screen.queryByText('Thanks for your feedback.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Does it look realistic?')).not.toBeInTheDocument();
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     test('a rejected submitFeedback call does not throw or crash the component', async () => {
@@ -1124,7 +1289,7 @@ describe('RoomVisualizationFlow', () => {
       await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
 
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Like this result' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
       });
 
       // Still renders the result step — a failed feedback PATCH must never break the UI.
@@ -1195,6 +1360,30 @@ describe('RoomVisualizationFlow', () => {
       );
 
       clickSpy.mockRestore();
+    });
+
+    test('shows "Image downloaded." for 2400ms after a download, then clears it', async () => {
+      jest.useFakeTimers();
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      try {
+        await renderAtResult({ imageUrl: RESULT_DATA_URL });
+        expect(screen.queryByText('Image downloaded.')).not.toBeInTheDocument();
+
+        await user.click(screen.getByText('Download Image'));
+        expect(screen.getByText('Image downloaded.')).toBeInTheDocument();
+
+        act(() => {
+          jest.advanceTimersByTime(2400);
+        });
+        expect(screen.queryByText('Image downloaded.')).not.toBeInTheDocument();
+      } finally {
+        jest.useRealTimers();
+        clickSpy.mockRestore();
+      }
     });
 
     test('names the file "...-original.jpg" and downloads the uploaded photo when showing the original image', async () => {
