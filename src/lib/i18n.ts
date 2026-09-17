@@ -59,6 +59,18 @@ export interface TranslationStrings {
   toggleBefore: string;
   toggleAfter: string;
   toggleGroupLabel: string;
+  /** Visible question next to the like/dislike buttons in the control stack's feedback row (not just an aria-label). */
+  feedbackQuestion: string;
+  /** Replaces feedbackQuestion for 2200ms after either feedback button is clicked, then clears -- see the feedback-row timing note in RoomVisualizationFlow.tsx. */
+  feedbackThanks: string;
+  feedbackLikeLabel: string;
+  feedbackDislikeLabel: string;
+  favoriteLabel: string;
+  favoriteLabelActive: string;
+  /** Permanent measurement-accuracy disclaimer under the action row -- never replaced by a transient message. */
+  disclaimer: string;
+  /** Transient status line shown for 2400ms after a successful download, in its own element below the disclaimer so it never hides it. */
+  downloadedStatus: string;
   downloadToDevice: string;
   shareWithFriends: string;
   newPhoto: string;
