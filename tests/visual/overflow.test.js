@@ -313,3 +313,85 @@ describe('Cross-language button overflow', () => {
     console.log(`\n=== OVERFLOW SUMMARY: ${failures.length} case(s) ===\n\n${report}\n`);
   });
 });
+
+/**
+ * The per-button checks above measure each tertiary button in isolation at
+ * an assumed per-item width budget (a third of the row). That doesn't
+ * actually match the real layout: tertiaryButtonStyle
+ * (RoomVisualizationFlow.tsx:1295-1310) gives each button no explicit
+ * width at all — they're auto-width flex items sharing one row
+ * (renderResultFooter, ~line 1370-1390) with `flexWrap: 'wrap'`, so a
+ * button doesn't get squeezed into a third of the row; the ROW wraps to a
+ * second line instead if all three don't fit on one. This renders the
+ * real three-button row together, at the same 488px/328px content widths
+ * as the per-button checks above (520px modal / 360px mobile embed minus
+ * 16px padding each side), and checks the ROW never overflows
+ * horizontally — flexWrap should make that structurally impossible short
+ * of a single button's own text exceeding the full row width, so this is
+ * a regression guard for `flexWrap: 'wrap'` itself as much as a layout
+ * check.
+ */
+describe('Cross-language tertiary row overflow (combined row, not per-button)', () => {
+  let browser;
+
+  const ROW_STYLE = `
+    display:flex; flex-wrap:wrap; justify-content:center; gap:6px; width:100%;
+    box-sizing:border-box;
+  `;
+  const BUTTON_STYLE = `
+    box-sizing:border-box; gap:8px; justify-content:center; align-items:center;
+    text-align:center; min-height:44px; border-radius:999px; display:flex;
+    font-size:14px; padding:10px 16px; background:none; color:#6b7280;
+    font-weight:500; border:none; font-family:${FONT_STACK};
+  `;
+
+  beforeAll(async () => {
+    browser = await puppeteer.launch({
+      headless: process.env.CI !== 'false',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    if (browser) await browser.close();
+  });
+
+  for (const lang of ALL_LANGUAGES) {
+    for (const width of [488, 328]) {
+      it(`tertiary row — "${lang}" at ${width}px never overflows horizontally`, async () => {
+        const t = translations[lang];
+        const texts = [t.downloadToDevice, t.newPhoto, t.shareWithFriends];
+        for (const text of texts) {
+          expect(typeof text).toBe('string');
+          expect(text.length).toBeGreaterThan(0);
+        }
+
+        const page = await browser.newPage();
+        try {
+          await page.setViewport({ width: width + 40, height: 300 });
+          const buttons = texts
+            .map(
+              text => `<button class="target" style="${BUTTON_STYLE}">${escapeHtml(text)}</button>`
+            )
+            .join('');
+          await page.setContent(
+            `<!DOCTYPE html><html><body style="margin:0; padding:20px;">
+              <div style="width:${width}px; box-sizing:border-box;">
+                <div style="${ROW_STYLE}">${buttons}</div>
+              </div>
+            </body></html>`
+          );
+
+          const box = await page.evaluate(() => {
+            const row = document.querySelector('.target').parentElement;
+            return { scrollWidth: row.scrollWidth, clientWidth: row.clientWidth };
+          });
+
+          expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 1);
+        } finally {
+          await page.close();
+        }
+      }, 15000);
+    }
+  }
+});

@@ -1298,7 +1298,7 @@ export function RoomVisualizationFlow({
     alignItems: 'center',
     textAlign: 'center',
     // minHeight, not a fixed height: at the narrow per-item widths these
-    // three buttons share a row at on mobile, several languages' longer
+    // three buttons share a row on mobile, several languages' longer
     // translations ("Partager avec des amis", "Descargar imagen", ...) wrap
     // to two lines — a fixed height would clip that text. Letting the pill
     // grow keeps the ≥44px touch target (WCAG 2.5.8) without ever clipping.
@@ -1384,7 +1384,7 @@ export function RoomVisualizationFlow({
         )}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px' }}>
         {showSaveShare && (
           <>
             <button onClick={handleDownloadToDevice} style={tertiaryButtonStyle}>
