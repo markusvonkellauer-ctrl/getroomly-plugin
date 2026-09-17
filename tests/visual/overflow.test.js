@@ -65,7 +65,11 @@ const SPACE_SM = '16px';
 const SPACE_LG = '32px';
 const FONT_BASE = '14px';
 const TRANSITION_SLOW = '0.3s ease';
-const PRIMARY = 'hsl(176, 51%, 36%)';
+// --getroomly-primary-deep, not --getroomly-primary: both fixtures below use
+// this as text on white or white text on a filled background, which needs
+// the AA-safe deep tone (5.64:1 against white) -- the lighter
+// --getroomly-primary (4.02:1) is for decorative/non-text use only.
+const PRIMARY = '#2f7267';
 const FONT_STACK = "system-ui, 'Segoe UI', Roboto, sans-serif";
 
 /**
