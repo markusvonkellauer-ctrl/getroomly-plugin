@@ -1473,7 +1473,7 @@ export function RoomVisualizationFlow({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
+        gap: '8px',
         width: '100%',
         margin: '0 auto',
       }}
@@ -1636,13 +1636,20 @@ export function RoomVisualizationFlow({
         {t.disclaimer}
       </p>
       {/* Its own element, not shared with the disclaimer above, so a
-          download confirmation can never hide the permanent text. */}
+          download confirmation can never hide the permanent text. No
+          minHeight -- collapses to 0 when empty instead of permanently
+          reserving space that's only actually used for 2400ms after a
+          download, so the image gets that space back the rest of the
+          time. Stays mounted (not conditionally rendered) rather than
+          appearing/disappearing from the DOM: an aria-live region needs
+          to already exist before its text changes for assistive tech to
+          reliably announce it -- a region that mounts with its text
+          already set is not guaranteed to be announced. */}
       <p
         role="status"
         aria-live="polite"
         style={{
           margin: 0,
-          minHeight: '15px',
           textAlign: 'center',
           fontSize: '12px',
           fontWeight: '600',

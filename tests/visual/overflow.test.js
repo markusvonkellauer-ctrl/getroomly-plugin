@@ -569,7 +569,7 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
 
           const footerHtml = `
             <div style="padding:8px 16px 16px; background-color:#ffffff; flex-shrink:0;">
-              <div style="display:flex; flex-direction:column; gap:12px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
+              <div style="display:flex; flex-direction:column; gap:8px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
                 <div style="display:flex; align-items:center; gap:8px; min-height:38px;">
                   <span style="flex:1; font-size:12px; line-height:1.35; color:#605d5d;">${escapeHtml(t.feedbackQuestion)}</span>
                   <button style="${FEEDBACK_ICON_BUTTON_STYLE}"></button>
@@ -580,7 +580,7 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
                   <button style="flex:1; gap:8px; justify-content:center; text-align:center; font-weight:700; height:54px; border-radius:999px; display:flex; align-items:center; border:none; font-size:14px; padding:10px 16px; background:${PRIMARY}; color:white;">${escapeHtml(t.addToBasket)}</button>
                 </div>
                 <p style="margin:0; text-align:center; font-size:12px; line-height:1.45; color:#444141;">${escapeHtml(t.disclaimer)}</p>
-                <p style="margin:0; min-height:15px; text-align:center; font-size:12px; font-weight:600; color:${PRIMARY};">${escapeHtml(t.downloadedStatus)}</p>
+                <p style="margin:0; text-align:center; font-size:12px; font-weight:600; color:${PRIMARY};">${escapeHtml(t.downloadedStatus)}</p>
                 <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px;">
                   <button style="${tertiaryButtonStyle}">${escapeHtml(t.downloadToDevice)}</button>
                   <button style="${tertiaryButtonStyle}">${escapeHtml(t.shareWithFriends)}</button>
