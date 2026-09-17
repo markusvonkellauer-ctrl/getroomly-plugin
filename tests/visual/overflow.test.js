@@ -658,3 +658,147 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
     }
   }
 });
+
+/**
+ * The download-status <p> (RoomVisualizationFlow.tsx, in renderResultFooter)
+ * used to permanently reserve 15px via minHeight, even though it's empty
+ * except for the 2400ms after a download. That reservation was removed so
+ * the line collapses to 0 when idle and only takes real space while the
+ * confirmation message is actually showing -- reclaiming height for the
+ * image the rest of the time. Neither of this file's other suites actually
+ * exercises the idle (empty) case in a real browser: the jsdom component
+ * test only checks the text is absent (not computed height), and the
+ * "Result-step modal height" suite above always fills the status line with
+ * real text -- so a regression that reintroduced minHeight would pass both
+ * unnoticed. This isolates exactly that: same footer fixture, idle vs.
+ * filled, in a real browser.
+ */
+describe('Result footer: idle download-status line collapses instead of reserving space', () => {
+  let browser;
+
+  const FEEDBACK_ICON_BUTTON_STYLE = `
+    height:38px; width:38px; border-radius:50%; border:none; flex-shrink:0;
+  `;
+
+  beforeAll(async () => {
+    browser = await puppeteer.launch({
+      headless: process.env.CI !== 'false',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    if (browser) await browser.close();
+  });
+
+  // English only -- this is a CSS-structural check (does the empty <p>
+  // collapse), not a translated-text-length one, so it doesn't need every
+  // language the way the pill/button overflow suites above do.
+  const t = translations.en;
+  const width = 375;
+  const viewportHeight = 568;
+
+  const buildFooterHtml = statusText => `
+    <div id="result-footer" style="padding:8px 16px 16px; background-color:#ffffff; flex-shrink:0;">
+      <div style="display:flex; flex-direction:column; gap:8px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
+        <div style="display:flex; align-items:center; gap:8px; min-height:38px;">
+          <span style="flex:1; font-size:12px; line-height:1.35; color:#605d5d;">${escapeHtml(t.feedbackQuestion)}</span>
+          <button style="${FEEDBACK_ICON_BUTTON_STYLE}"></button>
+          <button style="${FEEDBACK_ICON_BUTTON_STYLE}"></button>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button style="flex-shrink:0; width:54px; height:54px; border-radius:999px; border:1.5px solid #7d7979;"></button>
+          <button style="flex:1; gap:8px; justify-content:center; text-align:center; font-weight:700; height:54px; border-radius:999px; display:flex; align-items:center; border:none; font-size:14px; padding:10px 16px; background:${PRIMARY}; color:white;">${escapeHtml(t.addToBasket)}</button>
+        </div>
+        <p style="margin:0; text-align:center; font-size:12px; line-height:1.45; color:#444141;">${escapeHtml(t.disclaimer)}</p>
+        <p id="status-line" style="margin:0; text-align:center; font-size:12px; font-weight:600; color:${PRIMARY};">${escapeHtml(statusText)}</p>
+        <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px;">
+          <button style="${tertiaryButtonStyleFixture}">${escapeHtml(t.downloadToDevice)}</button>
+          <button style="${tertiaryButtonStyleFixture}">${escapeHtml(t.shareWithFriends)}</button>
+          <button style="${tertiaryButtonStyleFixture}">${escapeHtml(t.newPhoto)}</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const tertiaryButtonStyleFixture = `
+    gap:8px; justify-content:center; align-items:center; text-align:center;
+    min-height:44px; border-radius:999px; display:flex; font-size:14px;
+    padding:10px 16px; background:none; color:#6b7280; font-weight:500;
+    border:none; font-family:${FONT_STACK};
+  `;
+
+  const headerHtml = `
+    <div style="display:flex; flex-direction:row; align-items:center; padding:4px 16px; flex-shrink:0; gap:4px; font-family:${FONT_STACK};">
+      <div style="width:28px; flex-shrink:0;"></div>
+      <h2 style="flex:1; text-align:center; font-size:18px; font-weight:bold; letter-spacing:-0.025em; margin:0;">${escapeHtml(t.stepResult)}</h2>
+      <button style="flex-shrink:0; width:28px; height:28px; border-radius:50%; border:none;"></button>
+    </div>
+  `;
+
+  // Mirrors the real component's ResizeObserver-driven image sizing (see
+  // the "Result-step modal height" suite above for the full rationale) so
+  // the geometry comparison below reflects genuine available space, not an
+  // artifact of a fixed image size.
+  const measure = async statusText => {
+    const page = await browser.newPage();
+    try {
+      await page.setViewport({ width, height: viewportHeight });
+      await page.setContent(
+        `<!DOCTYPE html><html><body style="margin:0;">
+          <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; width:${width}px; box-sizing:border-box;">
+            ${headerHtml}
+            <div id="content-wrapper" style="flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
+              <img id="result-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3C/svg%3E" style="display:block; max-width:100%; max-height:150px; width:auto; height:auto;" />
+            </div>
+            ${buildFooterHtml(statusText)}
+          </div>
+          <script>
+            const wrapper = document.getElementById('content-wrapper');
+            const img = document.getElementById('result-image');
+            const ro = new ResizeObserver(entries => {
+              const h = entries[0].contentRect.height;
+              img.style.maxHeight = h + 'px';
+              window.__lastMeasuredHeight = h;
+            });
+            ro.observe(wrapper);
+          </script>
+        </body></html>`
+      );
+      await page.waitForFunction(() => window.__lastMeasuredHeight !== undefined);
+      return page.evaluate(() => ({
+        statusLineHeight: document.getElementById('status-line').getBoundingClientRect().height,
+        wrapperHeight: document.getElementById('content-wrapper').getBoundingClientRect().height,
+        footerHeight: document.getElementById('result-footer').getBoundingClientRect().height,
+      }));
+    } finally {
+      await page.close();
+    }
+  };
+
+  it('the empty status line renders at 0 height in a real browser (not the old 15px minHeight)', async () => {
+    const idle = await measure('');
+    expect(idle.statusLineHeight).toBe(0);
+  }, 15000);
+
+  it('the filled status line renders at its real text height, not 0', async () => {
+    const filled = await measure(t.downloadedStatus);
+    expect(filled.statusLineHeight).toBeGreaterThan(0);
+  }, 15000);
+
+  // Compares the footer's own rendered height, not the image well's --
+  // whether the wrapper (and therefore the image) actually gets taller
+  // depends on the modal's 80dvh cap being engaged in the first place,
+  // which varies by viewport/footer-content combination (below the cap,
+  // flex-grow has no established container size to expand into, so the
+  // footer shrinking doesn't hand the image anything). The footer's own
+  // height shrinking is the direct, viewport-independent consequence of
+  // removing minHeight -- it's what makes more room possible whenever the
+  // cap IS engaged, which the "Result-step modal height" suite above
+  // covers across 16 languages x 4 viewport heights.
+  it('the footer itself renders shorter when idle than when the status message is showing', async () => {
+    const idle = await measure('');
+    const filled = await measure(t.downloadedStatus);
+    expect(idle.footerHeight).toBeLessThan(filled.footerHeight);
+  }, 20000);
+});
