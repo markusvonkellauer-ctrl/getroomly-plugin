@@ -9,30 +9,8 @@ import {
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
+import { dataUrlToBlob } from '@/lib/data-url';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-
-// Decodes a base64 `data:` URI into a Blob synchronously — no `fetch`/
-// `await` involved. Used so a download triggered from a click handler can
-// call link.click() within the same synchronous task as the user gesture:
-// awaiting `fetch()` first resumes in a later task on iOS Safari, which can
-// lose the transient user activation a download needs, on exactly the
-// platform this is meant to fix. Returns null for anything that isn't a
-// base64 data: URI (this app's own images always are one — see
-// ai-generation.ts — so this only returns null for a future/unexpected URL
-// shape, which falls back to the async fetch-based path instead).
-export function dataUrlToBlob(dataUrl: string): Blob | null {
-  const match = dataUrl.match(/^data:([^;,]+);base64,(.*)$/s);
-  if (!match) {
-    return null;
-  }
-  const [, mimeType, base64] = match;
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return new Blob([bytes], { type: mimeType });
-}
 
 interface RoomVisualizationFlowProps {
   productImages: string[];
@@ -1067,7 +1045,7 @@ export function RoomVisualizationFlow({
     config?.callbacks?.onShowOriginal?.(imageToShow || '', productId);
   };
 
-  const handleDownloadToDevice = async () => {
+  const handleDownloadToDevice = () => {
     const imageToDownload = showOriginalImage ? uploadedImage : resultImage;
     config?.callbacks?.onSaveShare?.(imageToDownload || '', productId);
     if (!imageToDownload) {
@@ -1076,33 +1054,8 @@ export function RoomVisualizationFlow({
     }
 
     const filename = `${productName}-${showOriginalImage ? 'original' : 'visualization'}.jpg`;
-
-    const downloadBlob = (blob: Blob) => {
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.download = filename;
-      link.href = blobUrl;
-      link.click();
-      // Revoking synchronously can race Safari's actual (async) download
-      // start and invalidate the blob before it's read — the exact failure
-      // this fix targets. Deferring to the next macrotask lets the browser
-      // begin consuming the blob URL first.
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
-    };
-
-    const downloadDirect = (error: unknown) => {
-      // Last-resort fallback for the rare case blob conversion itself fails
-      // — same behavior as before this fix, better than nothing on browsers
-      // where the direct link does work.
-      console.warn(
-        '[Plugin] Failed to build a blob for download, falling back to direct link:',
-        error
-      );
-      const link = document.createElement('a');
-      link.download = filename;
-      link.href = imageToDownload;
-      link.click();
-    };
+    const link = document.createElement('a');
+    link.download = filename;
 
     // imageToDownload is a `data:` URI (generateRoomVisualization returns
     // the image inline as base64 — see ai-generation.ts), and iOS Safari
@@ -1110,26 +1063,28 @@ export function RoomVisualizationFlow({
     // `data:` URI — it just navigates to/opens the image instead of
     // downloading it, with no error thrown. Converting to a blob: URL
     // fixes that (Safari honors `download` reliably for blob: URLs), but
-    // it must happen synchronously, in the same click handler, with no
-    // `await` first — resuming after an `await fetch(...)` runs in a later
-    // task on iOS Safari, which can lose the transient user activation the
-    // download needs, on the very platform this is fixing. dataUrlToBlob
-    // does the base64 -> Blob conversion synchronously for exactly that
-    // reason, instead of the async fetch()-based conversion used below for
-    // the (currently unreachable in production) case of a non-data: URL.
-    try {
-      const blob = dataUrlToBlob(imageToDownload);
-      if (blob) {
-        downloadBlob(blob);
-      } else {
-        const response = await fetch(imageToDownload);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch image for download: ${response.status}`);
-        }
-        downloadBlob(await response.blob());
-      }
-    } catch (error) {
-      downloadDirect(error);
+    // the conversion and the click() must both happen synchronously, with
+    // no `await` in between — resuming after an awaited fetch()/blob()
+    // runs in a later task on iOS Safari, which can lose the transient
+    // user activation the download needs, on the very platform this is
+    // fixing. dataUrlToBlob decodes the base64 payload synchronously for
+    // exactly that reason. There's deliberately no async fetch-based
+    // fallback for a non-data: URL: our own images are always data: URIs,
+    // never a real cross-origin URL, and an async conversion would
+    // reintroduce the same activation-loss risk for a case that can't
+    // currently happen.
+    const blob = dataUrlToBlob(imageToDownload);
+    if (blob) {
+      const blobUrl = URL.createObjectURL(blob);
+      link.href = blobUrl;
+      link.click();
+      // Revoking synchronously can race Safari's actual (async) download
+      // start and invalidate the blob before it's read. Deferring to the
+      // next macrotask lets the browser begin consuming the blob URL first.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+    } else {
+      link.href = imageToDownload;
+      link.click();
     }
 
     setSaveShareDropdownOpen(false);

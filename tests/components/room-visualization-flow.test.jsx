@@ -6,7 +6,7 @@
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { RoomVisualizationFlow, dataUrlToBlob } from '../../src/components/RoomVisualizationFlow';
+import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlow';
 import { translations } from '../../src/lib/i18n';
 
 jest.mock('../../src/services/ai-generation', () => ({
@@ -946,30 +946,14 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
-  describe('dataUrlToBlob', () => {
-    test('decodes a base64 data: URI into a Blob of the right type and size', () => {
-      const blob = dataUrlToBlob('data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=');
-      expect(blob).not.toBeNull();
-      expect(blob.type).toBe('image/jpeg');
-      expect(blob.size).toBe('fake-result-image'.length);
-    });
-
-    test('returns null for a plain http(s) URL', () => {
-      expect(dataUrlToBlob('https://cdn.example.com/result.jpg')).toBeNull();
-    });
-
-    test('returns null for a non-base64 data: URI', () => {
-      expect(dataUrlToBlob('data:image/svg+xml,<svg></svg>')).toBeNull();
-    });
-  });
-
   describe('download to device (Safari data: URI download fix)', () => {
     // generateRoomVisualization always resolves imageUrl as a base64 data:
     // URI (see ai-generation.ts) — real production traffic never hands
     // handleDownloadToDevice a plain http(s) CDN URL, so fixtures use the
     // same shape to actually exercise the synchronous decode path this fix
     // targets. A plain https: fixture is used separately below to exercise
-    // the (currently production-unreachable) async fetch-based fallback.
+    // the (currently production-unreachable) non-data: URL branch, which
+    // downloads directly with no blob conversion at all.
     const RESULT_DATA_URL = 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=';
 
     const renderAtResult = async (generationResult, props = {}) => {
@@ -1051,16 +1035,9 @@ describe('RoomVisualizationFlow', () => {
       clickSpy.mockRestore();
     });
 
-    test('falls back to fetch-based blob conversion for a non-data: URL', async () => {
+    test('downloads directly (no blob conversion) for a non-data: URL, so no await ever comes between the click and link.click()', async () => {
       const user = userEvent.setup();
       const nonDataUrl = 'https://cdn.example.com/result.jpg';
-      const fakeBlob = new Blob(['fake-image-bytes']);
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        blob: jest.fn().mockResolvedValue(fakeBlob),
-      });
-      global.URL.createObjectURL.mockReturnValueOnce('blob:mock-download-url');
       const clickSpy = jest
         .spyOn(HTMLAnchorElement.prototype, 'click')
         .mockImplementation(() => {});
@@ -1069,53 +1046,15 @@ describe('RoomVisualizationFlow', () => {
       await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
-      expect(global.fetch).toHaveBeenCalledWith(nonDataUrl);
-      expect(global.URL.createObjectURL).toHaveBeenCalledWith(fakeBlob);
-      const clickedLink = clickSpy.mock.instances[0];
-      expect(clickedLink.href).toBe('blob:mock-download-url');
-
-      clickSpy.mockRestore();
-    });
-
-    test('falls back to a direct (non-blob) download link if the fetch fallback itself fails', async () => {
-      const user = userEvent.setup();
-      const nonDataUrl = 'https://cdn.example.com/result.jpg';
-      global.fetch = jest.fn().mockRejectedValue(new Error('network error'));
-      const clickSpy = jest
-        .spyOn(HTMLAnchorElement.prototype, 'click')
-        .mockImplementation(() => {});
-
-      await renderAtResult({ imageUrl: nonDataUrl });
-      await openSaveShareMenu(user);
-      await user.click(screen.getByText('Download to Device'));
-
+      // Deliberately no fetch-based conversion for a non-data: URL (our own
+      // images are always data: URIs, never a real one) — an async
+      // conversion here would reintroduce the same user-activation loss on
+      // iOS Safari that this fix targets, for a case that can't happen.
+      expect(global.fetch).not.toHaveBeenCalled();
       expect(global.URL.createObjectURL).not.toHaveBeenCalled();
       const clickedLink = clickSpy.mock.instances[0];
       expect(clickedLink.href).toBe(nonDataUrl);
       expect(clickedLink.download).toBe('Test Rug-visualization.jpg');
-
-      clickSpy.mockRestore();
-    });
-
-    test('falls back to a direct download link when the fetch fallback resolves with a non-2xx status', async () => {
-      const user = userEvent.setup();
-      const nonDataUrl = 'https://cdn.example.com/result.jpg';
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: false,
-        status: 404,
-        blob: jest.fn().mockResolvedValue(new Blob(['not found'])),
-      });
-      const clickSpy = jest
-        .spyOn(HTMLAnchorElement.prototype, 'click')
-        .mockImplementation(() => {});
-
-      await renderAtResult({ imageUrl: nonDataUrl });
-      await openSaveShareMenu(user);
-      await user.click(screen.getByText('Download to Device'));
-
-      expect(global.URL.createObjectURL).not.toHaveBeenCalled();
-      const clickedLink = clickSpy.mock.instances[0];
-      expect(clickedLink.href).toBe(nonDataUrl);
 
       clickSpy.mockRestore();
     });
