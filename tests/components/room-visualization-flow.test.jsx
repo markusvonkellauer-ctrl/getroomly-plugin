@@ -998,6 +998,77 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  // ─── Image top band (5b): status badge removed, toggle + thumbs share it ──
+  //
+  // ANDRING-5b-bildkontroller.md moved the Before/After toggle and the
+  // feedback thumbs into a single band on the image itself, and removed the
+  // status badge entirely (it duplicated what the toggle's own fill/text/
+  // aria-pressed already say). These read the real rendered DOM's inline
+  // styles/ancestry directly, the same way the ResizeObserver-wiring and
+  // footer-spacing tests above do, so a regression is caught even if it
+  // never touches the Puppeteer fixtures in tests/visual/overflow.test.js.
+  describe('image top band (5b: badge removed, toggle + thumbs share one band)', () => {
+    const renderAtResult = async (generationResult, props = {}) => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    // Walks up from an element looking for the band -- identified by its
+    // real inline styles (top/left/right all '14px'), not a selector or
+    // test id, since the component has none. No other element in this
+    // component sets all three of those together: the old badge (removed)
+    // used top+left only, and the toggle pill on its own used left+bottom.
+    const findBandAncestor = el => {
+      let node = el.parentElement;
+      while (node) {
+        if (
+          node.style.top === '14px' &&
+          node.style.left === '14px' &&
+          node.style.right === '14px'
+        ) {
+          return node;
+        }
+        node = node.parentElement;
+      }
+      return null;
+    };
+
+    test('the status badge no longer renders, though the image alt text still conveys the same information', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+
+      expect(screen.queryByText('New Design')).not.toBeInTheDocument();
+      expect(screen.queryByText('Original Room')).not.toBeInTheDocument();
+      // alt text isn't matched by getByText (it's an attribute, not
+      // rendered text) -- confirms the accessible description survives
+      // the badge's removal rather than this test being a false negative.
+      expect(screen.getByAltText('New Design')).toBeInTheDocument();
+    });
+
+    test('the toggle buttons and the feedback thumb buttons are siblings inside the same real band', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result', generationId: 'gen-1' });
+
+      const beforeButton = screen.getByRole('button', { name: 'Before' });
+      const likeButton = screen.getByRole('button', { name: 'Yes, it looks realistic' });
+
+      const toggleBand = findBandAncestor(beforeButton);
+      const thumbsBand = findBandAncestor(likeButton);
+
+      expect(toggleBand).not.toBeNull();
+      expect(toggleBand).toBe(thumbsBand);
+    });
+
+    test('the favorite button (still in the footer) is not inside the image band', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+
+      const favoriteButton = screen.getByRole('button', { name: 'Save to favourites' });
+      expect(findBandAncestor(favoriteButton)).toBeNull();
+    });
+  });
+
   // ─── Double-tap-to-reset-zoom must ignore taps on overlay controls ────────
 
   describe('double-tap zoom vs. the Before/After toggle', () => {
@@ -1286,7 +1357,7 @@ describe('RoomVisualizationFlow', () => {
       expect(submitFeedback).not.toHaveBeenCalled();
     });
 
-    test('after one click, both feedback buttons unmount and are replaced by a thank-you message', async () => {
+    test('after one click, both feedback circle buttons unmount and a confirmation pill appears on the image', async () => {
       await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
 
       fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
@@ -1301,23 +1372,33 @@ describe('RoomVisualizationFlow', () => {
         screen.queryByRole('button', { name: "No, it doesn't look realistic" })
       ).not.toBeInTheDocument();
       expect(submitFeedback).toHaveBeenCalledTimes(1);
-      expect(screen.getByText('Thanks for your feedback.')).toBeInTheDocument();
+
+      // Two elements now carry this text: the visible confirmation pill on
+      // the image, and a visually-hidden aria-live region carrying the same
+      // string so screen readers get an announcement too (a region that
+      // only appears once its text is already set isn't reliably announced
+      // — this one instead stays mounted the whole time and only its text
+      // content changes, see the comment in RoomVisualizationFlow.tsx).
+      expect(screen.getAllByText('Thanks for your feedback.')).toHaveLength(2);
     });
 
-    test('the thank-you message clears after 2200ms, leaving an empty (height-preserving) row', async () => {
+    test('the confirmation pill and its live-region announcement both clear after 2200ms', async () => {
       jest.useFakeTimers();
       try {
         await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
 
         fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
-        expect(screen.getByText('Thanks for your feedback.')).toBeInTheDocument();
+        expect(screen.getAllByText('Thanks for your feedback.')).toHaveLength(2);
 
         act(() => {
           jest.advanceTimersByTime(2200);
         });
 
+        // Spec: "Inget visas på platsen därefter" -- nothing shown there
+        // afterwards, not an empty placeholder (there's no footer row left
+        // to preserve height for; this now lives on the image, where a
+        // vanished element doesn't shift anything else).
         expect(screen.queryByText('Thanks for your feedback.')).not.toBeInTheDocument();
-        expect(screen.queryByText('Does it look realistic?')).not.toBeInTheDocument();
       } finally {
         jest.useRealTimers();
       }

@@ -390,40 +390,53 @@ describe('Cross-language tertiary row overflow (combined row, not per-button)', 
 });
 
 /**
- * The Before/After toggle pill (RoomVisualizationFlow.tsx, the pill inside
- * renderResultStep) has auto-width buttons with no column to squeeze into,
- * so a per-button isolated-width check (like the specs at the top of this
- * file) can't actually fail regardless of how wide the button renders --
- * an earlier version of this fixture did exactly that and was a no-op.
- * The real risk here is that the image well has `overflow:hidden` and the
- * pill has `maxWidth` + `flexWrap:wrap` (not a fixed width) so it can't be
- * pushed past the well's own edge -- wrapping to a second line instead.
- * This renders both toggle buttons together inside a mock image well and
- * checks the pill never crosses the well's right edge, at 488px/328px
- * (matching the widths used above) AND at a genuinely narrow width
- * simulating a portrait-photo well: the well is sized to the uploaded
- * photo's own aspect ratio, not the modal width, so a tall/narrow upload
- * can render a well far narrower than the modal itself -- this is the case
- * the fix specifically targets.
+ * The top band (RoomVisualizationFlow.tsx, renderResultStep) holds the
+ * Before/After toggle pill (left) and the feedback thumb group (right) as
+ * siblings in one `flex-wrap` row -- see ANDRING-5b-bildkontroller.md,
+ * "Ändring 6". "Före"/"Efter" is short in Swedish/English but much wider in
+ * German ("Vorher"/"Nachher") and Finnish ("Ennen"/"Jälkeen"); on a narrow
+ * or landscape-cropped photo the pill can grow enough to reach the thumbs'
+ * corner. The fix is layout (flex-wrap + marginLeft:auto on the thumb
+ * group), not per-language measurement -- deliberately, per the same
+ * document: a pixel reservation needs per-locale upkeep and can still be
+ * wrong at 200% zoom or a substituted system font.
  *
- * (An earlier version of this fixture also simulated the feedback thumbs
- * colliding with this pill, back when they were an overlay on the same
- * image well. They've since moved into the control stack below the image,
- * so that collision can no longer happen and the mock feedback group was
- * removed.)
+ * This renders the real band structure (toggle pill + thumb group,
+ * matching the production inline styles) inside a mock image well and
+ * checks two things: neither element is clipped by the well's
+ * overflow:hidden, and -- the actual point of this suite -- the pill and
+ * the thumb group never overlap, wrapping onto separate lines instead when
+ * the well is too narrow for both on one line.
  */
-describe("Before/After toggle pill overflow (image well's overflow:hidden clipping)", () => {
+describe('Top band: Before/After toggle + feedback thumbs never overlap or clip', () => {
   let browser;
 
-  const PILL_STYLE = `
-    position:absolute; left:14px; bottom:14px; display:flex; flex-wrap:wrap;
-    max-width:calc(100% - 28px); gap:4px; padding:4px;
-    border-radius:999px; background:rgba(255,255,255,.94); box-sizing:border-box;
+  const BAND_STYLE = `
+    position:absolute; top:14px; left:14px; right:14px; display:flex;
+    flex-wrap:wrap; align-items:flex-start; justify-content:space-between;
+    gap:10px;
   `;
-  const BUTTON_STYLE = `
+  const PILL_STYLE = `
+    display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%;
+    box-sizing:border-box; gap:4px; padding:4px; border-radius:999px;
+    background:rgba(255,255,255,.94); box-sizing:border-box;
+  `;
+  const PILL_BUTTON_STYLE = `
     box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
     font-size:12px; font-weight:600; font-family:${FONT_STACK};
     background:${PRIMARY}; color:white;
+  `;
+  const THUMB_GROUP_STYLE = `
+    display:flex; flex-shrink:0; gap:8px; margin-left:auto;
+  `;
+  const THUMB_HIT_TARGET_STYLE = `
+    width:44px; height:44px; display:flex; align-items:center;
+    justify-content:center; border:0; background:transparent; padding:0;
+  `;
+  const THUMB_CIRCLE_STYLE = `
+    width:40px; height:40px; border-radius:50%; display:flex;
+    align-items:center; justify-content:center;
+    background:rgba(255,255,255,.94); box-sizing:border-box;
   `;
 
   beforeAll(async () => {
@@ -437,6 +450,44 @@ describe("Before/After toggle pill overflow (image well's overflow:hidden clippi
     if (browser) await browser.close();
   });
 
+  const buildBandHtml = (before, after) => `
+    <div class="band" style="${BAND_STYLE}">
+      <div class="pill" style="${PILL_STYLE}">
+        <button style="${PILL_BUTTON_STYLE}">${escapeHtml(before)}</button>
+        <button style="${PILL_BUTTON_STYLE}">${escapeHtml(after)}</button>
+      </div>
+      <div class="thumb-group" style="${THUMB_GROUP_STYLE}">
+        <button style="${THUMB_HIT_TARGET_STYLE}"><span style="${THUMB_CIRCLE_STYLE}"></span></button>
+        <button style="${THUMB_HIT_TARGET_STYLE}"><span style="${THUMB_CIRCLE_STYLE}"></span></button>
+      </div>
+    </div>
+  `;
+
+  const measure = async (page, width, before, after) => {
+    await page.setViewport({ width: width + 40, height: 250 });
+    await page.setContent(
+      `<!DOCTYPE html><html><body style="margin:0; padding:20px;">
+        <div id="well" style="
+          position:relative; width:${width}px; height:150px;
+          overflow:hidden; box-sizing:border-box; background:#221a17;
+        ">
+          ${buildBandHtml(before, after)}
+        </div>
+      </body></html>`
+    );
+    return page.evaluate(() => {
+      const toPlain = r => ({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+      const well = document.getElementById('well');
+      const pill = document.querySelector('.pill');
+      const thumbs = document.querySelector('.thumb-group');
+      return {
+        wellRect: toPlain(well.getBoundingClientRect()),
+        pillRect: toPlain(pill.getBoundingClientRect()),
+        thumbsRect: toPlain(thumbs.getBoundingClientRect()),
+      };
+    });
+  };
+
   for (const lang of ALL_LANGUAGES) {
     // 140px simulates a narrow/portrait-photo well -- far narrower than
     // the 488px/328px figures elsewhere in this file, which assume a well
@@ -444,51 +495,68 @@ describe("Before/After toggle pill overflow (image well's overflow:hidden clippi
     // the uploaded photo's own aspect ratio, not the modal, so it can be
     // much narrower in practice.
     for (const width of [488, 328, 140]) {
-      it(`toggle pill — "${lang}" at ${width}px image well width is not clipped by overflow:hidden`, async () => {
+      it(`"${lang}" at ${width}px: toggle pill and thumb group don't overlap or clip`, async () => {
         const t = translations[lang];
-        const texts = [t.toggleBefore, t.toggleAfter];
-        for (const text of texts) {
-          expect(typeof text).toBe('string');
-          expect(text.length).toBeGreaterThan(0);
-        }
-
         const page = await browser.newPage();
         try {
-          await page.setViewport({ width: width + 40, height: 250 });
-          const buttons = texts
-            .map(
-              text =>
-                `<button class="pill-btn" style="${BUTTON_STYLE}">${escapeHtml(text)}</button>`
-            )
-            .join('');
-          await page.setContent(
-            `<!DOCTYPE html><html><body style="margin:0; padding:20px;">
-              <div id="well" style="
-                position:relative; width:${width}px; height:150px;
-                overflow:hidden; box-sizing:border-box; background:#221a17;
-              ">
-                <div class="pill" style="${PILL_STYLE}">${buttons}</div>
-              </div>
-            </body></html>`
+          const { wellRect, pillRect, thumbsRect } = await measure(
+            page,
+            width,
+            t.toggleBefore,
+            t.toggleAfter
           );
 
-          const box = await page.evaluate(() => {
-            const well = document.getElementById('well');
-            const pill = document.querySelector('.pill');
-            return {
-              wellRight: well.getBoundingClientRect().right,
-              pillRight: pill.getBoundingClientRect().right,
-            };
-          });
-
           // The well has overflow:hidden in the real component -- anything
-          // past its right edge is silently clipped, not wrapped or shrunk.
-          expect(box.pillRight).toBeLessThanOrEqual(box.wellRight + 1);
+          // past its edges is silently clipped, not wrapped or shrunk.
+          expect(pillRect.right).toBeLessThanOrEqual(wellRect.right + 1);
+          expect(thumbsRect.right).toBeLessThanOrEqual(wellRect.right + 1);
+
+          // Real flex layout can't produce overlapping siblings by
+          // construction, but that guarantee only holds as long as
+          // flex-wrap is actually in effect -- this is the regression net
+          // for someone later removing it (or flexShrink:0) from either
+          // element. Overlap means: NOT (side by side without crossing)
+          // AND NOT (stacked on separate lines without crossing).
+          const sideBySide = pillRect.right <= thumbsRect.left + 1;
+          const stacked = pillRect.bottom <= thumbsRect.top + 1;
+          expect(sideBySide || stacked).toBe(true);
         } finally {
           await page.close();
         }
       }, 15000);
     }
+  }
+
+  // Acceptance criterion from ANDRING-5b-bildkontroller.md: verify wrapping
+  // specifically with the two longest real translation pairs, at the
+  // narrowest well width in the matrix above.
+  for (const [lang, label] of [
+    ['de', 'Vorher/Nachher'],
+    ['fi', 'Ennen/Jälkeen'],
+  ]) {
+    it(`"${lang}" (${label}) at 140px: the thumb group actually wraps to its own line, staying right-aligned`, async () => {
+      const t = translations[lang];
+      const page = await browser.newPage();
+      try {
+        const { wellRect, pillRect, thumbsRect } = await measure(
+          page,
+          140,
+          t.toggleBefore,
+          t.toggleAfter
+        );
+
+        // Wrapped, not squeezed onto the same line: the thumb group's top
+        // is at or below the pill's bottom.
+        expect(thumbsRect.top).toBeGreaterThanOrEqual(pillRect.bottom - 1);
+
+        // marginLeft:auto still pushes the thumb group to the right edge
+        // even when it's alone on its own line, not just when sharing a
+        // line with justify-content:space-between.
+        expect(thumbsRect.right).toBeGreaterThan(wellRect.right - 20);
+      } finally {
+        await page.close();
+      }
+    }, 15000);
   }
 });
 
@@ -518,10 +586,6 @@ describe("Before/After toggle pill overflow (image well's overflow:hidden clippi
  */
 describe('Result-step modal height: image is never clipped by the footer', () => {
   let browser;
-
-  const FEEDBACK_ICON_BUTTON_STYLE = `
-    height:38px; width:38px; border-radius:50%; border:none; flex-shrink:0;
-  `;
 
   beforeAll(async () => {
     browser = await puppeteer.launch({
@@ -570,11 +634,6 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
           const footerHtml = `
             <div style="padding:8px 16px 16px; background-color:#ffffff; flex-shrink:0;">
               <div style="display:flex; flex-direction:column; gap:8px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
-                <div style="display:flex; align-items:center; gap:8px; min-height:38px;">
-                  <span style="flex:1; font-size:12px; line-height:1.35; color:#605d5d;">${escapeHtml(t.feedbackQuestion)}</span>
-                  <button style="${FEEDBACK_ICON_BUTTON_STYLE}"></button>
-                  <button style="${FEEDBACK_ICON_BUTTON_STYLE}"></button>
-                </div>
                 <div style="display:flex; gap:10px;">
                   <button style="flex-shrink:0; width:54px; height:54px; border-radius:999px; border:1.5px solid #7d7979;"></button>
                   <button style="flex:1; gap:8px; justify-content:center; text-align:center; font-weight:700; height:54px; border-radius:999px; display:flex; align-items:center; border:none; font-size:14px; padding:10px 16px; background:${PRIMARY}; color:white;">${escapeHtml(t.addToBasket)}</button>
@@ -676,10 +735,6 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
 describe('Result footer: idle download-status line collapses instead of reserving space', () => {
   let browser;
 
-  const FEEDBACK_ICON_BUTTON_STYLE = `
-    height:38px; width:38px; border-radius:50%; border:none; flex-shrink:0;
-  `;
-
   beforeAll(async () => {
     browser = await puppeteer.launch({
       headless: process.env.CI !== 'false',
@@ -701,11 +756,6 @@ describe('Result footer: idle download-status line collapses instead of reservin
   const buildFooterHtml = statusText => `
     <div id="result-footer" style="padding:8px 16px 16px; background-color:#ffffff; flex-shrink:0;">
       <div style="display:flex; flex-direction:column; gap:8px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
-        <div style="display:flex; align-items:center; gap:8px; min-height:38px;">
-          <span style="flex:1; font-size:12px; line-height:1.35; color:#605d5d;">${escapeHtml(t.feedbackQuestion)}</span>
-          <button style="${FEEDBACK_ICON_BUTTON_STYLE}"></button>
-          <button style="${FEEDBACK_ICON_BUTTON_STYLE}"></button>
-        </div>
         <div style="display:flex; gap:10px;">
           <button style="flex-shrink:0; width:54px; height:54px; border-radius:999px; border:1.5px solid #7d7979;"></button>
           <button style="flex:1; gap:8px; justify-content:center; text-align:center; font-weight:700; height:54px; border-radius:999px; display:flex; align-items:center; border:none; font-size:14px; padding:10px 16px; background:${PRIMARY}; color:white;">${escapeHtml(t.addToBasket)}</button>

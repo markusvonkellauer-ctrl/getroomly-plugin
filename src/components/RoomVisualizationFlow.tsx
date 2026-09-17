@@ -1345,96 +1345,263 @@ export function RoomVisualizationFlow({
             />
           )}
 
-          {/* Status badge */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '14px',
-              left: '14px',
-              background: 'rgba(0, 0, 0, 0.58)',
-              color: 'white',
-              padding: '8px 13px',
-              borderRadius: '999px',
-              fontSize: '10.5px',
-              fontWeight: '600',
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              backdropFilter: 'blur(10px)',
-              zIndex: 10,
-            }}
-          >
-            {showOriginalImage ? t.labelOriginal : t.labelNew}
-          </div>
+          {/* Top band -- Före/Efter toggle (left) + feedback thumbs /
+              confirmation (right). Replaces the old status badge: the
+              badge duplicated what the toggle's own fill + text +
+              aria-pressed already say, so it's removed rather than moved
+              to another corner -- a deliberate content decision (see
+              ANDRING-5b-bildkontroller.md), not an accident of the toggle
+              moving here.
 
-          {/* Före/Efter toggle pill */}
-          {showOriginal && resultImage && uploadedImage && (
+              One flex-wrap row, not two independently-positioned corners:
+              "Före"/"Efter" is much wider in German/Finnish/French/
+              Portuguese than in Swedish/English, and on a narrow or
+              landscape-cropped photo the toggle can grow into the thumbs'
+              corner. flex-wrap means the thumb group (or the confirmation
+              pill that replaces it) drops to its own line, staying
+              right-aligned via marginLeft:auto, instead of overlapping --
+              handled by layout, not by measuring translated text per
+              language (that needs per-locale upkeep and can still be
+              wrong at 200% zoom or a substituted system font). Both
+              direct children are flexShrink:0 -- wrapping, not shrinking,
+              is the mechanism; shrinking would compress the toggle
+              buttons' padding, which must stay identical in both states
+              so the control doesn't shift geometry every time it's
+              pressed. */}
+          {(showOriginal || showFeedback) && (resultImage || uploadedImage) && (
             <div
-              role="group"
-              aria-label={t.toggleGroupLabel}
               style={{
                 position: 'absolute',
+                top: '14px',
                 left: '14px',
-                bottom: '14px',
+                right: '14px',
                 display: 'flex',
                 flexWrap: 'wrap',
-                // The well is sized to the uploaded photo's own aspect
-                // ratio, not the modal width -- a narrow/portrait photo can
-                // render a well far narrower than this pill's natural
-                // content width. Without a cap, the well's overflow:hidden
-                // would silently clip the pill's right side instead of
-                // wrapping it. (The feedback thumbs used to also overlay
-                // this well and needed their own width reservation here --
-                // they've since moved into the control stack below the
-                // image, so that collision can't happen anymore.)
-                maxWidth: 'calc(100% - 28px)',
-                // Without this, the default content-box sizing adds this
-                // element's own padding on top of maxWidth instead of
-                // inside it, so the rendered pill is wider than the
-                // reservation above accounts for.
-                boxSizing: 'border-box',
-                gap: '4px',
-                padding: '4px',
-                borderRadius: '999px',
-                background: 'rgba(255, 255, 255, 0.94)',
-                backdropFilter: 'blur(12px)',
-                boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: '10px',
                 zIndex: 10,
               }}
             >
-              <button
-                aria-pressed={showOriginalImage}
-                onClick={() => handleSetShowOriginal(true)}
-                style={{
-                  border: 0,
-                  borderRadius: '999px',
-                  padding: '9px 16px',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  background: showOriginalImage ? 'var(--getroomly-primary-deep)' : 'transparent',
-                  color: showOriginalImage ? '#fff' : '#605d5d',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {t.toggleBefore}
-              </button>
-              <button
-                aria-pressed={!showOriginalImage}
-                onClick={() => handleSetShowOriginal(false)}
-                style={{
-                  border: 0,
-                  borderRadius: '999px',
-                  padding: '9px 16px',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  background: !showOriginalImage ? 'var(--getroomly-primary-deep)' : 'transparent',
-                  color: !showOriginalImage ? '#fff' : '#605d5d',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {t.toggleAfter}
-              </button>
+              {showOriginal && resultImage && uploadedImage && (
+                <div
+                  role="group"
+                  aria-label={t.toggleGroupLabel}
+                  style={{
+                    display: 'flex',
+                    flexShrink: 0,
+                    flexWrap: 'wrap',
+                    // The well is sized to the uploaded photo's own aspect
+                    // ratio, not the modal width -- a narrow/portrait photo
+                    // can render a well far narrower than this pill's
+                    // natural content width. Without a cap, the well's
+                    // overflow:hidden would silently clip the pill's right
+                    // side instead of wrapping it within the band above.
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    gap: '4px',
+                    padding: '4px',
+                    borderRadius: '999px',
+                    background: 'rgba(255, 255, 255, 0.94)',
+                    backdropFilter: 'blur(12px)',
+                    boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                  }}
+                >
+                  <button
+                    aria-pressed={showOriginalImage}
+                    onClick={() => handleSetShowOriginal(true)}
+                    style={{
+                      border: 0,
+                      borderRadius: '999px',
+                      padding: '9px 16px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      background: showOriginalImage
+                        ? 'var(--getroomly-primary-deep)'
+                        : 'transparent',
+                      color: showOriginalImage ? '#fff' : '#605d5d',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {t.toggleBefore}
+                  </button>
+                  <button
+                    aria-pressed={!showOriginalImage}
+                    onClick={() => handleSetShowOriginal(false)}
+                    style={{
+                      border: 0,
+                      borderRadius: '999px',
+                      padding: '9px 16px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      background: !showOriginalImage
+                        ? 'var(--getroomly-primary-deep)'
+                        : 'transparent',
+                      color: !showOriginalImage ? '#fff' : '#605d5d',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {t.toggleAfter}
+                  </button>
+                </div>
+              )}
+
+              {showFeedback && feedbackState === 'open' && (
+                <div
+                  role="group"
+                  aria-label={t.feedbackQuestion}
+                  style={{ display: 'flex', flexShrink: 0, gap: '8px', marginLeft: 'auto' }}
+                >
+                  {/* Two independent circles, not a segmented pill like the
+                      toggle above -- the pill shape signals "a choice
+                      between two states, one always active" (the toggle);
+                      thumbs are two independent one-shot actions, and
+                      reusing the toggle's shape for a different kind of
+                      control would teach the wrong affordance. The visible
+                      circle is 40px (below the 44px touch-target minimum,
+                      with no room to grow on the image without the
+                      controls starting to dominate the photo) -- each
+                      button's own box is 44px so the real hit target meets
+                      WCAG 2.5.8 without enlarging what's actually drawn. */}
+                  <button
+                    onClick={handleLike}
+                    aria-label={t.feedbackLikeLabel}
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      padding: 0,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'rgba(255, 255, 255, 0.94)',
+                        backdropFilter: 'blur(12px)',
+                        boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                        color: '#201e1d',
+                      }}
+                    >
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M7 10v12" />
+                        <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+                      </svg>
+                    </span>
+                  </button>
+                  <button
+                    onClick={handleDislike}
+                    aria-label={t.feedbackDislikeLabel}
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      padding: 0,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'rgba(255, 255, 255, 0.94)',
+                        backdropFilter: 'blur(12px)',
+                        boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                        color: '#201e1d',
+                      }}
+                    >
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M17 14V2" />
+                        <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
+                      </svg>
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {showFeedback && feedbackState === 'thanks' && (
+                <div
+                  style={{
+                    marginLeft: 'auto',
+                    flexShrink: 0,
+                    fontWeight: 600,
+                    fontSize: '11.5px',
+                    lineHeight: 1.25,
+                    color: '#201e1d',
+                    padding: '11px 14px',
+                    borderRadius: '999px',
+                    background: 'rgba(255, 255, 255, 0.94)',
+                    backdropFilter: 'blur(12px)',
+                    boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                  }}
+                >
+                  {t.feedbackThanks}
+                </div>
+              )}
+
+              {/* The thank-you pill above replaces the two circle buttons
+                  in the DOM rather than updating their text, so unlike a
+                  persistent status line, there's nothing for assistive
+                  tech to already be listening to when that swap happens.
+                  This stays mounted the whole time (text only, visually
+                  hidden) specifically so the transition gets announced --
+                  a live region that appears already containing its text
+                  isn't reliably announced by screen readers, only one
+                  that already existed and then changed. */}
+              {showFeedback && (
+                <span
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    position: 'absolute',
+                    width: '1px',
+                    height: '1px',
+                    margin: '-1px',
+                    padding: 0,
+                    overflow: 'hidden',
+                    clip: 'rect(0 0 0 0)',
+                    whiteSpace: 'nowrap',
+                    border: 0,
+                  }}
+                >
+                  {feedbackState === 'thanks' ? t.feedbackThanks : ''}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -1478,87 +1645,12 @@ export function RoomVisualizationFlow({
         margin: '0 auto',
       }}
     >
-      {/* Feedback row -- moved here from an overlay on the image itself, so
-          it no longer needs to compete for space with the Before/After
-          toggle pill on narrow image wells (see git history on this file
-          for that now-retired collision). */}
-      {showFeedback && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: '38px' }}>
-          <span
-            role="status"
-            aria-live="polite"
-            style={{ flex: 1, fontSize: '12px', lineHeight: 1.35, color: '#605d5d' }}
-          >
-            {feedbackState === 'open'
-              ? t.feedbackQuestion
-              : feedbackState === 'thanks'
-                ? t.feedbackThanks
-                : ''}
-          </span>
-          {feedbackState === 'open' && (
-            <>
-              <button
-                onClick={handleLike}
-                aria-label={t.feedbackLikeLabel}
-                style={{
-                  height: '38px',
-                  width: '38px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  background: '#f8f4f4',
-                  color: '#201e1d',
-                  flexShrink: 0,
-                }}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M7 10v12" />
-                  <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
-                </svg>
-              </button>
-              <button
-                onClick={handleDislike}
-                aria-label={t.feedbackDislikeLabel}
-                style={{
-                  height: '38px',
-                  width: '38px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  background: '#f8f4f4',
-                  color: '#201e1d',
-                  flexShrink: 0,
-                }}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M17 14V2" />
-                  <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
-                </svg>
-              </button>
-            </>
-          )}
-        </div>
-      )}
+      {/* The feedback question + thumbs now live in a band on the image
+          itself, not here -- see renderResultStep and
+          ANDRING-5b-bildkontroller.md. Removing this row entirely (not
+          just its visible content) is what gives the image its extra
+          height; leaving an empty reserved row here would cancel that
+          out. */}
 
       {/* Action row -- favorite moved here from an overlay on the image,
           next to the cart button, matching the design's action row. */}
