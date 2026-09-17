@@ -146,6 +146,13 @@ export function RoomVisualizationFlow({
   // of calling setState after unmount.
   const isMountedRef = useRef(true);
   useEffect(() => {
+    // Both entrypoints (main.tsx, shadow-entry.tsx) mount under
+    // React.StrictMode, which in dev replays this effect as
+    // setup -> cleanup -> setup to surface missing cleanup bugs. Without
+    // this assignment, the first (simulated) cleanup would leave the ref
+    // false forever, permanently no-oping every isMountedRef.current-gated
+    // setState -- including the feedback/download timers below -- in dev.
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       if (feedbackTimerRef.current) {

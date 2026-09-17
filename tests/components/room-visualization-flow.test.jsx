@@ -1284,7 +1284,9 @@ describe('RoomVisualizationFlow', () => {
     test('shows "Image downloaded." for 2400ms after a download, then clears it', async () => {
       jest.useFakeTimers();
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-      jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
 
       try {
         await renderAtResult({ imageUrl: RESULT_DATA_URL });
@@ -1299,6 +1301,7 @@ describe('RoomVisualizationFlow', () => {
         expect(screen.queryByText('Image downloaded.')).not.toBeInTheDocument();
       } finally {
         jest.useRealTimers();
+        clickSpy.mockRestore();
       }
     });
 
