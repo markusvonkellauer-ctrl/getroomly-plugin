@@ -55,8 +55,10 @@ export interface TranslationStrings {
   labelOriginal: string;
   labelNew: string;
   addToBasket: string;
-  showNew: string;
-  showOriginal: string;
+  /** Before/After toggle pill on the result image (short, e.g. "Före"/"Efter") -- distinct from labelOriginal/labelNew, which label the floating badge and need to work as full sentence fragments in alt text too. */
+  toggleBefore: string;
+  toggleAfter: string;
+  toggleGroupLabel: string;
   downloadToDevice: string;
   shareWithFriends: string;
   newPhoto: string;

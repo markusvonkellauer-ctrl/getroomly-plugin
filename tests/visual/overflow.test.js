@@ -132,17 +132,33 @@ const BUTTON_SPECS = [
       </div>`,
   },
   {
-    name: 'Show Original (RoomVisualizationFlow.tsx:1075-1096)',
-    translationKey: 'showOriginal',
-    containerWidths: [240, 160],
+    // Before/After toggle pill button (RoomVisualizationFlow.tsx, the pill
+    // inside renderResultStep). Auto-width, not squeezed to a column -- the
+    // pill sits on the image, well short of the modal's own width, so this
+    // is a generous-but-reasonable per-button budget rather than a figure
+    // derived from the modal width like the specs above.
+    name: 'Before/After toggle: Before',
+    translationKey: 'toggleBefore',
+    containerWidths: [100, 70],
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">
         <button id="target" style="
-          width:100%; box-sizing:border-box; gap:8px; justify-content:center;
-          text-align:center; height:44px; border-radius:6px; display:flex;
-          align-items:center; font-size:14px; padding:10px 16px;
-          border:1px solid rgba(176,143,106,0.3); color:${PRIMARY};
-          background:white; font-weight:700; font-family:${FONT_STACK};
+          box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
+          font-size:12px; font-weight:600; font-family:${FONT_STACK};
+          background:${PRIMARY}; color:white;
+        ">${text}</button>
+      </div>`,
+  },
+  {
+    name: 'Before/After toggle: After',
+    translationKey: 'toggleAfter',
+    containerWidths: [100, 70],
+    render: (text, width) => `
+      <div style="width:${width}px; box-sizing:border-box;">
+        <button id="target" style="
+          box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
+          font-size:12px; font-weight:600; font-family:${FONT_STACK};
+          background:${PRIMARY}; color:white;
         ">${text}</button>
       </div>`,
   },

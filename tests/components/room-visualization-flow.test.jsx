@@ -676,10 +676,11 @@ describe('RoomVisualizationFlow', () => {
   // ─── Original image survives as a data: URL (not blob:) ──────────────────
   // Regression test: blob: URLs are backed by browser memory and can be
   // silently reclaimed under memory pressure (observed with a concurrent
-  // Google Meet screen share), which broke "Show Original" with a broken
-  // image and no error. The fix reads the file as a data: URL instead.
+  // Google Meet screen share), which broke the Before/After toggle with a
+  // broken image and no error. The fix reads the file as a data: URL
+  // instead.
 
-  test('"Show Original" displays the uploaded photo as a data: URL, not blob:', async () => {
+  test('the Before/After toggle displays the uploaded photo as a data: URL, not blob:', async () => {
     generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'data:image/webp;base64,result' });
 
     render(<RoomVisualizationFlow {...defaultProps} />);
@@ -691,7 +692,7 @@ describe('RoomVisualizationFlow', () => {
     await waitFor(() => screen.getByText('Review Your New Room'));
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Show Original' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Before' }));
     });
 
     const originalImg = await screen.findByAltText('Original Room');
@@ -886,6 +887,86 @@ describe('RoomVisualizationFlow', () => {
     expect(input.value).toBe('');
   });
 
+  // ─── Before/After toggle pill ───────────────────────────────────────────
+
+  describe('Before/After toggle pill', () => {
+    const renderAtResult = async (generationResult, props = {}) => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    test('starts on "After" (aria-pressed), and switches when "Before" is clicked', async () => {
+      const user = userEvent.setup();
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+
+      expect(screen.getByRole('button', { name: 'Before' })).toHaveAttribute(
+        'aria-pressed',
+        'false'
+      );
+      expect(screen.getByRole('button', { name: 'After' })).toHaveAttribute('aria-pressed', 'true');
+
+      await user.click(screen.getByRole('button', { name: 'Before' }));
+
+      expect(screen.getByRole('button', { name: 'Before' })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
+      expect(screen.getByRole('button', { name: 'After' })).toHaveAttribute(
+        'aria-pressed',
+        'false'
+      );
+    });
+
+    test('calls onShowOriginal with the uploaded photo when switching to Before, and the result image when switching back to After', async () => {
+      const user = userEvent.setup();
+      const onShowOriginal = jest.fn();
+
+      await renderAtResult(
+        { imageUrl: 'data:image/jpeg;base64,result' },
+        { config: { callbacks: { onShowOriginal } } }
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Before' }));
+      expect(onShowOriginal).toHaveBeenLastCalledWith(
+        'data:image/jpeg;base64,mockedBase64',
+        'rug-001'
+      );
+
+      await user.click(screen.getByRole('button', { name: 'After' }));
+      expect(onShowOriginal).toHaveBeenLastCalledWith('data:image/jpeg;base64,result', 'rug-001');
+
+      expect(onShowOriginal).toHaveBeenCalledTimes(2);
+    });
+
+    test('a repeat click on the already-active side is a no-op (does not re-fire onShowOriginal)', async () => {
+      const user = userEvent.setup();
+      const onShowOriginal = jest.fn();
+
+      await renderAtResult(
+        { imageUrl: 'data:image/jpeg;base64,result' },
+        { config: { callbacks: { onShowOriginal } } }
+      );
+
+      await user.click(screen.getByRole('button', { name: 'After' }));
+
+      expect(onShowOriginal).not.toHaveBeenCalled();
+    });
+
+    test('does not render the toggle when config.buttons.showOriginal is false', async () => {
+      await renderAtResult(
+        { imageUrl: 'data:image/jpeg;base64,result' },
+        { config: { buttons: { showOriginal: false } } }
+      );
+
+      expect(screen.queryByRole('button', { name: 'Before' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'After' })).not.toBeInTheDocument();
+    });
+  });
+
   // ─── Like/Dislike feedback ─────────────────────────────────────────────────
 
   describe('feedback buttons', () => {
@@ -1018,7 +1099,7 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await user.click(screen.getByRole('button', { name: 'Show Original' }));
+      await user.click(screen.getByRole('button', { name: 'Before' }));
       await user.click(screen.getByText('Download Image'));
 
       expect(global.fetch).not.toHaveBeenCalled();

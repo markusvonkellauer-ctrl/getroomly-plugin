@@ -1037,9 +1037,15 @@ export function RoomVisualizationFlow({
     }
   };
 
-  const handleShowOriginal = () => {
-    setShowOriginalImage(!showOriginalImage);
-    const imageToShow = !showOriginalImage ? uploadedImage : resultImage;
+  // Före/Efter toggle pill sets a specific side directly (not a blind
+  // toggle) -- it's two buttons, not one, so a no-op guard on the already-
+  // active side avoids firing onShowOriginal redundantly on a repeat click.
+  const handleSetShowOriginal = (showOriginal: boolean) => {
+    if (showOriginal === showOriginalImage) {
+      return;
+    }
+    setShowOriginalImage(showOriginal);
+    const imageToShow = showOriginal ? uploadedImage : resultImage;
     config?.callbacks?.onShowOriginal?.(imageToShow || '', productId);
   };
 
@@ -1122,26 +1128,43 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Wrapper is display:inline-block so it shrinks to the image's actual
-            rendered dimensions. Overlays (label, favorite, thumbs) positioned
-            absolute against this wrapper are guaranteed to sit on the image
-            regardless of viewport size or image aspect ratio — no JS dimension
-            computation needed. */}
+        {/* Wrapper is display:inline-block so it shrinks to the base image's
+            actual rendered dimensions -- deliberately NOT switched to a
+            fixed-aspect flex:1 well with objectFit:cover to match the
+            design literally: this codebase has a long, hard-won history of
+            image-cropping regressions (see git log for
+            "objectFit:contain"/"no cropping"/reverts of exactly this kind
+            of change), so the sizing mechanism here is intentionally
+            unchanged. Overlays (badge, favorite, thumbs, toggle pill)
+            positioned absolute against this wrapper are guaranteed to sit
+            on the image regardless of viewport size or image aspect ratio
+            — no JS dimension computation needed. */}
         <div
           ref={imageContainerRef}
           style={{
             position: 'relative',
             display: 'inline-block',
             maxWidth: '100%',
-            borderRadius: '8px',
+            borderRadius: '18px',
             overflow: 'hidden',
+            // Design's dark image-well background -- visible in any gap
+            // between the image's actual rendered box and its container
+            // (there normally isn't one, since the wrapper sizes to the
+            // image), and behind the cross-fade transition between layers.
+            background: '#221a17',
             cursor: imageScale > 1 ? 'grab' : 'default',
           }}
         >
+          {/* Base layer = the AI visualisation ("Efter"). Defines the
+              wrapper's actual size via normal flow -- the overlay below is
+              absolutely positioned against this box, not the other way
+              around, so this is the one layer whose sizing must stay
+              exactly as before. */}
           {(resultImage || uploadedImage) && (
             <img
-              src={showOriginalImage ? uploadedImage || '' : resultImage || ''}
-              alt={showOriginalImage ? t.labelOriginal : t.labelNew}
+              src={resultImage || uploadedImage || ''}
+              alt={t.labelNew}
+              aria-hidden={showOriginalImage}
               style={{
                 display: 'block',
                 maxWidth: '100%',
@@ -1160,24 +1183,107 @@ export function RoomVisualizationFlow({
             />
           )}
 
-          {/* Design Label */}
+          {/* Overlay layer = the shopper's original photo ("Före"),
+              cross-faded on top of the base layer. objectFit:contain (not
+              cover, matching the base layer's own never-crop behavior)
+              fills exactly the box the base image established above --
+              uploaded photo and AI result share the same aspect ratio in
+              practice (the generation preserves input dimensions), so this
+              is normally an exact fit, not a letterboxed one. */}
+          {resultImage && uploadedImage && (
+            <img
+              src={uploadedImage}
+              alt={t.labelOriginal}
+              aria-hidden={!showOriginalImage}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'block',
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                opacity: showOriginalImage ? 1 : 0,
+                transition: 'opacity 0.3s ease',
+              }}
+            />
+          )}
+
+          {/* Status badge */}
           <div
             style={{
               position: 'absolute',
-              top: '16px',
-              left: '16px',
-              background: 'rgba(0, 0, 0, 0.5)',
+              top: '14px',
+              left: '14px',
+              background: 'rgba(0, 0, 0, 0.58)',
               color: 'white',
-              padding: '8px 12px',
-              borderRadius: '16px',
-              fontSize: '12px',
-              fontWeight: '500',
-              backdropFilter: 'blur(4px)',
+              padding: '8px 13px',
+              borderRadius: '999px',
+              fontSize: '10.5px',
+              fontWeight: '600',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              backdropFilter: 'blur(10px)',
               zIndex: 10,
             }}
           >
             {showOriginalImage ? t.labelOriginal : t.labelNew}
           </div>
+
+          {/* Före/Efter toggle pill */}
+          {showOriginal && resultImage && uploadedImage && (
+            <div
+              role="group"
+              aria-label={t.toggleGroupLabel}
+              style={{
+                position: 'absolute',
+                left: '14px',
+                bottom: '14px',
+                display: 'flex',
+                gap: '4px',
+                padding: '4px',
+                borderRadius: '999px',
+                background: 'rgba(255, 255, 255, 0.94)',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                zIndex: 10,
+              }}
+            >
+              <button
+                aria-pressed={showOriginalImage}
+                onClick={() => handleSetShowOriginal(true)}
+                style={{
+                  border: 0,
+                  borderRadius: '999px',
+                  padding: '9px 16px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  background: showOriginalImage ? 'var(--getroomly-primary-deep)' : 'transparent',
+                  color: showOriginalImage ? '#fff' : '#605d5d',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {t.toggleBefore}
+              </button>
+              <button
+                aria-pressed={!showOriginalImage}
+                onClick={() => handleSetShowOriginal(false)}
+                style={{
+                  border: 0,
+                  borderRadius: '999px',
+                  padding: '9px 16px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  background: !showOriginalImage ? 'var(--getroomly-primary-deep)' : 'transparent',
+                  color: !showOriginalImage ? '#fff' : '#605d5d',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {t.toggleAfter}
+              </button>
+            </div>
+          )}
 
           {/* Favorite Button */}
           {showFavorite && (
@@ -1324,65 +1430,35 @@ export function RoomVisualizationFlow({
         margin: '0 auto',
       }}
     >
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '8px',
-          width: '100%',
-        }}
-      >
-        {showAddToBasket && (
-          <button
-            onClick={handleAddToBasket}
-            style={{
-              width: '100%',
-              gap: '8px',
-              justifyContent: 'center',
-              textAlign: 'center',
-              fontWeight: '700',
-              height: '44px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              border: 'none',
-              fontSize: '14px',
-              padding: '10px 16px',
-              background: 'var(--getroomly-primary-deep)',
-              color: 'white',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-            }}
-          >
-            {t.addToBasket}
-          </button>
-        )}
-
-        {showOriginal && (
-          <button
-            onClick={handleShowOriginal}
-            style={{
-              width: '100%',
-              gap: '8px',
-              justifyContent: 'center',
-              textAlign: 'center',
-              height: '44px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              fontSize: '14px',
-              padding: '10px 16px',
-              border: '1px solid rgba(176, 143, 106, 0.3)',
-              color: 'var(--getroomly-primary-deep)',
-              background: 'white',
-              fontWeight: '700',
-            }}
-          >
-            {showOriginalImage ? t.showNew : t.showOriginal}
-          </button>
-        )}
-      </div>
+      {/* Before/After switching moved onto the image itself (the toggle
+          pill in renderResultStep) to match the design -- no longer a
+          footer button, so this is a single full-width action now instead
+          of a two-column grid. */}
+      {showAddToBasket && (
+        <button
+          onClick={handleAddToBasket}
+          style={{
+            width: '100%',
+            gap: '8px',
+            justifyContent: 'center',
+            textAlign: 'center',
+            fontWeight: '700',
+            height: '44px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            border: 'none',
+            fontSize: '14px',
+            padding: '10px 16px',
+            background: 'var(--getroomly-primary-deep)',
+            color: 'white',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          {t.addToBasket}
+        </button>
+      )}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px' }}>
         {showSaveShare && (
