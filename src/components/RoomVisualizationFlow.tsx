@@ -1248,6 +1248,14 @@ export function RoomVisualizationFlow({
                 left: '14px',
                 bottom: '14px',
                 display: 'flex',
+                flexWrap: 'wrap',
+                // The well is sized to the uploaded photo's own aspect
+                // ratio, not the modal width -- a narrow/portrait photo can
+                // render a well far narrower than this pill's natural
+                // content width. Without a cap, the well's overflow:hidden
+                // would silently clip the pill's right side instead of
+                // wrapping it.
+                maxWidth: 'calc(100% - 28px)',
                 gap: '4px',
                 padding: '4px',
                 borderRadius: '999px',

@@ -392,17 +392,22 @@ describe('Cross-language tertiary row overflow (combined row, not per-button)', 
  * file) can't actually fail regardless of how wide the button renders --
  * an earlier version of this fixture did exactly that and was a no-op.
  * The real risk here is different: the image well has `overflow:hidden`
- * and the pill is `position:absolute` with only a left inset (no right
- * constraint), so a sufficiently wide pill is silently clipped by the
- * well's own edge, not wrapped. This renders both toggle buttons together
- * inside a mock image well at the same 488px/328px widths used above, and
- * checks the pill's right edge against the well's own right edge.
+ * and the pill has `maxWidth:calc(100% - 28px)` + `flexWrap:wrap` (not a
+ * fixed width) so it can't be pushed past the well's own edge -- wrapping
+ * to a second line instead. This renders both toggle buttons together
+ * inside a mock image well and checks the pill's right edge against the
+ * well's own right edge, at 488px/328px (matching the widths used above)
+ * AND at a genuinely narrow width simulating a portrait-photo well: the
+ * well is sized to the uploaded photo's own aspect ratio, not the modal
+ * width, so a tall/narrow upload can render a well far narrower than the
+ * modal itself -- this is the case the fix specifically targets.
  */
 describe("Before/After toggle pill overflow (image well's overflow:hidden clipping)", () => {
   let browser;
 
   const PILL_STYLE = `
-    position:absolute; left:14px; bottom:14px; display:flex; gap:4px; padding:4px;
+    position:absolute; left:14px; bottom:14px; display:flex; flex-wrap:wrap;
+    max-width:calc(100% - 28px); gap:4px; padding:4px;
     border-radius:999px; background:rgba(255,255,255,.94); box-sizing:border-box;
   `;
   const BUTTON_STYLE = `
@@ -423,7 +428,12 @@ describe("Before/After toggle pill overflow (image well's overflow:hidden clippi
   });
 
   for (const lang of ALL_LANGUAGES) {
-    for (const width of [488, 328]) {
+    // 140px simulates a narrow/portrait-photo well -- far narrower than
+    // the 488px/328px figures elsewhere in this file, which assume a well
+    // roughly as wide as the modal itself. This well's width is driven by
+    // the uploaded photo's own aspect ratio, not the modal, so it can be
+    // much narrower in practice.
+    for (const width of [488, 328, 140]) {
       it(`toggle pill — "${lang}" at ${width}px image well width is not clipped by overflow:hidden`, async () => {
         const t = translations[lang];
         const texts = [t.toggleBefore, t.toggleAfter];
