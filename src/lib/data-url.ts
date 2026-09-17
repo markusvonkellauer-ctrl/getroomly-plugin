@@ -10,7 +10,7 @@
 // using the original URL directly instead of the exception escaping into
 // the click handler and skipping its own fallback/cleanup logic.
 export function dataUrlToBlob(dataUrl: string): Blob | null {
-  const match = dataUrl.match(/^data:([^;,]+);base64,(.*)$/s);
+  const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/s);
   if (!match) {
     return null;
   }

@@ -23,4 +23,8 @@ describe('dataUrlToBlob', () => {
   test('returns null (not throw) for a malformed/truncated base64 payload', () => {
     expect(dataUrlToBlob('data:image/jpeg;base64,not-valid-base64!!!')).toBeNull();
   });
+
+  test('returns null for an empty base64 payload, instead of a bogus zero-byte Blob', () => {
+    expect(dataUrlToBlob('data:image/jpeg;base64,')).toBeNull();
+  });
 });
