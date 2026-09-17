@@ -1254,8 +1254,16 @@ export function RoomVisualizationFlow({
                 // render a well far narrower than this pill's natural
                 // content width. Without a cap, the well's overflow:hidden
                 // would silently clip the pill's right side instead of
-                // wrapping it.
-                maxWidth: 'calc(100% - 28px)',
+                // wrapping it. When the feedback thumbs are also showing
+                // (bottom-right, ~72px footprint, same z-index, rendered
+                // after this pill so they'd paint on top of it), reserve
+                // that space too -- otherwise on a narrow well the two
+                // overlays can collide, with feedback covering part of the
+                // pill and making a toggle button unclickable.
+                maxWidth:
+                  showFeedback && !hasSubmittedFeedback
+                    ? 'calc(100% - 28px - 80px)'
+                    : 'calc(100% - 28px)',
                 gap: '4px',
                 padding: '4px',
                 borderRadius: '999px',

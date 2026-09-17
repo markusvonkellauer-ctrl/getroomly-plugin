@@ -909,6 +909,18 @@ describe('RoomVisualizationFlow', () => {
       );
       expect(screen.getByRole('button', { name: 'After' })).toHaveAttribute('aria-pressed', 'true');
 
+      // The actual cross-fading images, not just the pill's own state --
+      // both layers are always mounted, so what matters is which one is
+      // visible/hidden, not which exists.
+      const afterImg = screen.getByAltText('New Design');
+      const beforeImg = screen.getByAltText('Original Room');
+      expect(afterImg.src).toBe('data:image/jpeg;base64,result');
+      expect(beforeImg.src).toBe('data:image/jpeg;base64,mockedBase64');
+      expect(afterImg.style.opacity).toBe('');
+      expect(beforeImg.style.opacity).toBe('0');
+      expect(afterImg).toHaveAttribute('aria-hidden', 'false');
+      expect(beforeImg).toHaveAttribute('aria-hidden', 'true');
+
       await user.click(screen.getByRole('button', { name: 'Before' }));
 
       expect(screen.getByRole('button', { name: 'Before' })).toHaveAttribute(
@@ -919,6 +931,9 @@ describe('RoomVisualizationFlow', () => {
         'aria-pressed',
         'false'
       );
+      expect(beforeImg.style.opacity).toBe('1');
+      expect(afterImg).toHaveAttribute('aria-hidden', 'true');
+      expect(beforeImg).toHaveAttribute('aria-hidden', 'false');
     });
 
     test('calls onShowOriginal with the uploaded photo when switching to Before, and the result image when switching back to After', async () => {
