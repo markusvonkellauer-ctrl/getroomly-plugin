@@ -5,6 +5,7 @@
  */
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlow';
 import { translations } from '../../src/lib/i18n';
 
@@ -942,6 +943,136 @@ describe('RoomVisualizationFlow', () => {
 
       // Still renders the result step — a failed feedback PATCH must never break the UI.
       expect(screen.getByText('Review Your New Room')).toBeInTheDocument();
+    });
+  });
+
+  describe('download to device (Safari data: URI download fix)', () => {
+    // generateRoomVisualization always resolves imageUrl as a base64 data:
+    // URI (see ai-generation.ts) — real production traffic never hands
+    // handleDownloadToDevice a plain http(s) CDN URL, so fixtures use the
+    // same shape to actually exercise the synchronous decode path this fix
+    // targets. A plain https: fixture is used separately below to exercise
+    // the (currently production-unreachable) non-data: URL branch, which
+    // downloads directly with no blob conversion at all.
+    const RESULT_DATA_URL = 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=';
+
+    const renderAtResult = async (generationResult, props = {}) => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    const openSaveShareMenu = async user => {
+      await user.click(screen.getByRole('button', { name: 'Save / Share' }));
+      await waitFor(() => screen.getByText('Download to Device'));
+    };
+
+    // jsdom doesn't implement real navigation, so clicking the <a download>
+    // element logs an unimplemented "not implemented" navigation error to
+    // stderr — expected noise from exercising the real download link, not a
+    // sign that anything is broken.
+    let originalConsoleError;
+    beforeEach(() => {
+      originalConsoleError = console.error;
+      console.error = jest.fn();
+    });
+    afterEach(() => {
+      console.error = originalConsoleError;
+    });
+
+    test('downloads the data: URI as a blob: URL synchronously, without ever calling fetch', async () => {
+      const user = userEvent.setup();
+      global.URL.createObjectURL.mockReturnValueOnce('blob:mock-download-url');
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await openSaveShareMenu(user);
+      await user.click(screen.getByText('Download to Device'));
+
+      // No fetch at all for the data: URL path — the whole point of the
+      // fix in this round is that decoding happens synchronously so
+      // link.click() fires in the same task as the user gesture, instead
+      // of after an awaited fetch() resumes in a later task (which can
+      // lose iOS Safari's transient user activation for the download).
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(global.URL.createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      const clickedLink = clickSpy.mock.instances[0];
+      expect(clickedLink.href).toBe('blob:mock-download-url');
+      expect(clickedLink.download).toBe('Test Rug-visualization.jpg');
+
+      // Revocation is deliberately deferred a macrotask (not fired
+      // synchronously in the same tick as click()) so it doesn't race
+      // Safari's async download start — see the comment in
+      // handleDownloadToDevice.
+      await waitFor(() =>
+        expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-download-url')
+      );
+
+      clickSpy.mockRestore();
+    });
+
+    test('names the file "...-original.jpg" and downloads the uploaded photo when showing the original image', async () => {
+      const user = userEvent.setup();
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await user.click(screen.getByRole('button', { name: 'Show Original' }));
+      await openSaveShareMenu(user);
+      await user.click(screen.getByText('Download to Device'));
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      const clickedLink = clickSpy.mock.instances[0];
+      expect(clickedLink.download).toBe('Test Rug-original.jpg');
+
+      clickSpy.mockRestore();
+    });
+
+    test('downloads directly (no blob conversion) for a non-data: URL, so no await ever comes between the click and link.click()', async () => {
+      const user = userEvent.setup();
+      const nonDataUrl = 'https://cdn.example.com/result.jpg';
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: nonDataUrl });
+      await openSaveShareMenu(user);
+      await user.click(screen.getByText('Download to Device'));
+
+      // Deliberately no fetch-based conversion for a non-data: URL (our own
+      // images are always data: URIs, never a real one) — an async
+      // conversion here would reintroduce the same user-activation loss on
+      // iOS Safari that this fix targets, for a case that can't happen.
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(global.URL.createObjectURL).not.toHaveBeenCalled();
+      const clickedLink = clickSpy.mock.instances[0];
+      expect(clickedLink.href).toBe(nonDataUrl);
+      expect(clickedLink.download).toBe('Test Rug-visualization.jpg');
+
+      clickSpy.mockRestore();
+    });
+
+    test('calls onSaveShare with the image being downloaded and closes the dropdown', async () => {
+      const user = userEvent.setup();
+      jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      const onSaveShare = jest.fn();
+
+      await renderAtResult(
+        { imageUrl: RESULT_DATA_URL },
+        { config: { callbacks: { onSaveShare } } }
+      );
+      await openSaveShareMenu(user);
+      await user.click(screen.getByText('Download to Device'));
+
+      expect(onSaveShare).toHaveBeenCalledWith(RESULT_DATA_URL, 'rug-001');
+      await waitFor(() => expect(screen.queryByText('Download to Device')).not.toBeInTheDocument());
     });
   });
 });

@@ -9,6 +9,7 @@ import {
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
+import { dataUrlToBlob } from '@/lib/data-url';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 interface RoomVisualizationFlowProps {
@@ -1047,10 +1048,45 @@ export function RoomVisualizationFlow({
   const handleDownloadToDevice = () => {
     const imageToDownload = showOriginalImage ? uploadedImage : resultImage;
     config?.callbacks?.onSaveShare?.(imageToDownload || '', productId);
+    if (!imageToDownload) {
+      setSaveShareDropdownOpen(false);
+      return;
+    }
+
+    const filename = `${productName}-${showOriginalImage ? 'original' : 'visualization'}.jpg`;
     const link = document.createElement('a');
-    link.download = `${productName}-${showOriginalImage ? 'original' : 'visualization'}.jpg`;
-    link.href = imageToDownload || '';
-    link.click();
+    link.download = filename;
+
+    // imageToDownload is a `data:` URI (generateRoomVisualization returns
+    // the image inline as base64 — see ai-generation.ts), and iOS Safari
+    // frequently ignores the `download` attribute on a link pointing at a
+    // `data:` URI — it just navigates to/opens the image instead of
+    // downloading it, with no error thrown. Converting to a blob: URL
+    // fixes that (Safari honors `download` reliably for blob: URLs), but
+    // the conversion and the click() must both happen synchronously, with
+    // no `await` in between — resuming after an awaited fetch()/blob()
+    // runs in a later task on iOS Safari, which can lose the transient
+    // user activation the download needs, on the very platform this is
+    // fixing. dataUrlToBlob decodes the base64 payload synchronously for
+    // exactly that reason. There's deliberately no async fetch-based
+    // fallback for a non-data: URL: our own images are always data: URIs,
+    // never a real cross-origin URL, and an async conversion would
+    // reintroduce the same activation-loss risk for a case that can't
+    // currently happen.
+    const blob = dataUrlToBlob(imageToDownload);
+    if (blob) {
+      const blobUrl = URL.createObjectURL(blob);
+      link.href = blobUrl;
+      link.click();
+      // Revoking synchronously can race Safari's actual (async) download
+      // start and invalidate the blob before it's read. Deferring to the
+      // next macrotask lets the browser begin consuming the blob URL first.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+    } else {
+      link.href = imageToDownload;
+      link.click();
+    }
+
     setSaveShareDropdownOpen(false);
   };
 
@@ -1073,10 +1109,10 @@ export function RoomVisualizationFlow({
         setSaveShareDropdownOpen(false);
         return;
       }
-      handleDownloadToDevice();
+      await handleDownloadToDevice();
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
-        handleDownloadToDevice();
+        await handleDownloadToDevice();
       }
     }
     setSaveShareDropdownOpen(false);
