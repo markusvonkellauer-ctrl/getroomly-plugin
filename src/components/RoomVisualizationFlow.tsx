@@ -1290,6 +1290,11 @@ export function RoomVisualizationFlow({
                   showFeedback && !hasSubmittedFeedback
                     ? 'calc(100% - 28px - 80px)'
                     : 'calc(100% - 28px)',
+                // Without this, the default content-box sizing adds this
+                // element's own padding on top of maxWidth instead of
+                // inside it, so the rendered pill is wider than the
+                // reservation above accounts for.
+                boxSizing: 'border-box',
                 gap: '4px',
                 padding: '4px',
                 borderRadius: '999px',
