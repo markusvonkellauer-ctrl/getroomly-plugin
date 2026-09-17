@@ -19,4 +19,8 @@ describe('dataUrlToBlob', () => {
   test('returns null for a non-base64 data: URI', () => {
     expect(dataUrlToBlob('data:image/svg+xml,<svg></svg>')).toBeNull();
   });
+
+  test('returns null (not throw) for a malformed/truncated base64 payload', () => {
+    expect(dataUrlToBlob('data:image/jpeg;base64,not-valid-base64!!!')).toBeNull();
+  });
 });
