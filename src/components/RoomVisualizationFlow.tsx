@@ -414,50 +414,76 @@ export function RoomVisualizationFlow({
     []
   );
 
-  useEffect(() => {
-    const el = imageContainerRef.current;
-    if (!el) {
-      return;
-    }
+  // Callback ref, not useEffect + a plain useRef: the image well
+  // (imageContainerRef's element) only exists in the DOM during the
+  // 'result' step, but a useEffect with a fixed dependency array only
+  // runs once, on the component's first mount -- while still in the
+  // 'upload' step, before this div exists at all. That meant these
+  // listeners were being attached to `null` and never re-attached once
+  // the real element mounted: pinch-zoom and double-tap-to-reset-zoom
+  // never actually worked. A callback ref runs every time the DOM node
+  // itself mounts/unmounts, which is what this needs -- confirmed via
+  // debug logging that a plain useRef effect here only ever saw `el` as
+  // null. React 19 supports returning a cleanup function directly from a
+  // ref callback, mirroring a useEffect's own attach/cleanup shape.
+  const attachImageContainerRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      imageContainerRef.current = el;
+      if (!el) {
+        return;
+      }
 
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        pinchRef.current = {
-          startDist: getDistance(e.touches[0], e.touches[1]),
-          startScale: imageScaleRef.current,
-        };
-      } else if (e.touches.length === 1) {
-        const now = Date.now();
-        if (now - lastTapRef.current < 300) {
-          setImageScale(1);
+      const onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length === 2) {
+          pinchRef.current = {
+            startDist: getDistance(e.touches[0], e.touches[1]),
+            startScale: imageScaleRef.current,
+          };
+        } else if (e.touches.length === 1) {
+          // Ignore taps landing on an interactive control (favorite,
+          // feedback, Before/After toggle) -- they're all descendants of
+          // this container, so without this a tap on one of them would
+          // otherwise register as a double-tap-to-reset-zoom gesture on
+          // the image itself. E.g. quickly switching Before -> After
+          // could reset an already-zoomed image as an unintended side
+          // effect of using the toggle.
+          const target = e.touches[0].target;
+          if (target instanceof Element && target.closest('button')) {
+            return;
+          }
+          const now = Date.now();
+          if (now - lastTapRef.current < 300) {
+            setImageScale(1);
+          }
+          lastTapRef.current = now;
         }
-        lastTapRef.current = now;
-      }
-    };
+      };
 
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 2 && pinchRef.current) {
-        e.preventDefault();
-        const newDist = getDistance(e.touches[0], e.touches[1]);
-        const ratio = newDist / pinchRef.current.startDist;
-        const next = Math.min(Math.max(pinchRef.current.startScale * ratio, 1), 4);
-        setImageScale(next);
-      }
-    };
+      const onTouchMove = (e: TouchEvent) => {
+        if (e.touches.length === 2 && pinchRef.current) {
+          e.preventDefault();
+          const newDist = getDistance(e.touches[0], e.touches[1]);
+          const ratio = newDist / pinchRef.current.startDist;
+          const next = Math.min(Math.max(pinchRef.current.startScale * ratio, 1), 4);
+          setImageScale(next);
+        }
+      };
 
-    const onTouchEnd = () => {
-      pinchRef.current = null;
-    };
+      const onTouchEnd = () => {
+        pinchRef.current = null;
+      };
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
-    return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
-    };
-  }, [getDistance, setImageScale]);
+      el.addEventListener('touchstart', onTouchStart, { passive: true });
+      el.addEventListener('touchmove', onTouchMove, { passive: false });
+      el.addEventListener('touchend', onTouchEnd, { passive: true });
+      return () => {
+        el.removeEventListener('touchstart', onTouchStart);
+        el.removeEventListener('touchmove', onTouchMove);
+        el.removeEventListener('touchend', onTouchEnd);
+      };
+    },
+    [getDistance, setImageScale]
+  );
 
   const renderStepIndicator = (currentStep: 'upload' | 'processing' | 'result') => {
     const steps = [
@@ -1140,7 +1166,7 @@ export function RoomVisualizationFlow({
             on the image regardless of viewport size or image aspect ratio
             — no JS dimension computation needed. */}
         <div
-          ref={imageContainerRef}
+          ref={attachImageContainerRef}
           style={{
             position: 'relative',
             display: 'inline-block',

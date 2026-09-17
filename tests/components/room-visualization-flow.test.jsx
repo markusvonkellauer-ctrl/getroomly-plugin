@@ -982,6 +982,96 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  // ─── Double-tap-to-reset-zoom must ignore taps on overlay controls ────────
+
+  describe('double-tap zoom vs. the Before/After toggle', () => {
+    const renderAtResult = async generationResult => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    // jsdom implements the TouchEvent constructor but not the Touch
+    // constructor -- a plain object with target/clientX/clientY/identifier
+    // works fine as a touch list entry (verified: e.touches[0].target
+    // correctly resolves to the real element).
+    const touch = (target, x = 0, y = 0) => ({ target, clientX: x, clientY: y, identifier: 0 });
+    const dispatchTouchStart = (el, touches) => {
+      el.dispatchEvent(new TouchEvent('touchstart', { touches, bubbles: true }));
+    };
+
+    test('a rapid double-tap directly on the image still resets zoom (the feature itself still works)', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+
+      // Pinch-zoom in first, via a real two-finger touchstart + touchmove,
+      // so there's something for the double-tap to reset.
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', {
+            touches: [touch(img, 0, 0), touch(img, 100, 0)],
+            bubbles: true,
+          })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(img, 0, 0), touch(img, 200, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+      expect(img.style.transform).toBe('scale(2)');
+
+      await act(async () => {
+        dispatchTouchStart(container, [touch(img)]);
+        dispatchTouchStart(container, [touch(img)]);
+      });
+
+      expect(img.style.transform).toBe('scale(1)');
+    });
+
+    test('rapidly switching Before -> After via the toggle does not reset an already-zoomed image', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      const beforeButton = screen.getByRole('button', { name: 'Before' });
+      const afterButton = screen.getByRole('button', { name: 'After' });
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', {
+            touches: [touch(img, 0, 0), touch(img, 100, 0)],
+            bubbles: true,
+          })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(img, 0, 0), touch(img, 200, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+      expect(img.style.transform).toBe('scale(2)');
+
+      // Two taps on two DIFFERENT buttons, both within the 300ms
+      // double-tap window -- would have reset zoom before this fix, since
+      // both are touchstart events with touches.length === 1 inside the
+      // same imageContainerRef.
+      await act(async () => {
+        dispatchTouchStart(container, [touch(beforeButton)]);
+        dispatchTouchStart(container, [touch(afterButton)]);
+      });
+
+      expect(img.style.transform).toBe('scale(2)');
+    });
+  });
+
   // ─── Like/Dislike feedback ─────────────────────────────────────────────────
 
   describe('feedback buttons', () => {
