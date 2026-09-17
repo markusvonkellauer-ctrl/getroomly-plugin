@@ -79,6 +79,39 @@ export function RoomVisualizationFlow({
   const [downloadStatusVisible, setDownloadStatusVisible] = useState(false);
   const downloadStatusTimerRef = useRef<number | null>(null);
 
+  // The result image's own maxHeight can't be a plain CSS percentage: its
+  // flex ancestor (resultContentRef below) has overflow:hidden + minHeight:0,
+  // so flexbox is free to shrink it below the image's natural size whenever
+  // the header+footer (whose height varies with language/translated string
+  // length and with which optional footer rows are currently showing) leave
+  // less than a fixed CSS guess assumes -- verified with Puppeteer: a static
+  // `max(calc(55dvh - 200px), 150px)` guess left the image up to ~39px taller
+  // than the wrapper's real shrunk box at a 375x568 viewport, and the
+  // wrapper's own overflow:hidden silently clipped the excess. Since
+  // flex:1 1 auto + minHeight:0 makes resultContentRef's resolved height
+  // always converge to the true leftover space (flex-grow fills slack,
+  // flex-shrink absorbs a deficit, all the way to 0) regardless of the
+  // image's own size, ResizeObserver-measuring that element directly is
+  // exact where a CSS formula could only ever approximate. Null until the
+  // first observation fires (one frame, typically before first paint) --
+  // the CSS formula below is used as the fallback for that instant only.
+  const [availableImageHeightPx, setAvailableImageHeightPx] = useState<number | null>(null);
+  const resultContentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = resultContentRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (entry) {
+        setAvailableImageHeightPx(entry.contentRect.height);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
   const [zoomState, setZoomState] = useState<{ scale: number; forImage: string | null }>({
@@ -1255,36 +1288,19 @@ export function RoomVisualizationFlow({
               style={{
                 display: 'block',
                 maxWidth: '100%',
-                // dvh (dynamic viewport height) auto-adjusts as iOS Safari's
-                // browser chrome shows/hides. Percentage max-height on the
-                // inline-block wrapper collapses to zero — dvh sidesteps the
-                // cascade issue, since imageContainerRef's div is deliberately
-                // shrink-to-fit (see its own comment) rather than filling its
-                // flex parent, so a percentage here couldn't resolve anyway.
-                //
-                // The `- 200px` matters: 55dvh alone measures against the
-                // whole viewport, not the actual space left over after the
-                // header and footer (which reserve a roughly constant pixel
-                // amount, not a viewport-relative one). Verified with
-                // Puppeteer at a 375x667 (iPhone SE-class) viewport with the
-                // full control stack (feedback row, action row, disclaimer,
-                // status line, tertiary row) all present: header+footer
-                // measured ~344px, leaving ~190px inside the 80dvh modal cap
-                // (.getroomly-modal-container, index.css) for the image --
-                // plain 55dvh (~367px) overflows that by ~177px, which the
-                // modal's own overflow:hidden then silently clips. This is
-                // not new: the unmodified pre-this-PR footer already
-                // overflowed by ~43px at the same viewport, just less
-                // severely -- widening the control stack made an existing
-                // bug worse rather than introducing a new one, but "not new"
-                // doesn't mean "fine to leave," so this fixes both at once.
-                //
-                // max(..., 150px): a floor for pathologically short
-                // viewports (landscape phones, tiny embedded iframes) where
-                // 55dvh - 200px would otherwise go to zero or negative --
-                // CSS clamps a negative max-height to 0, which would hide
-                // the image outright instead of just shrinking it.
-                maxHeight: 'max(calc(55dvh - 200px), 150px)',
+                // Exact available space, measured off resultContentRef via
+                // ResizeObserver (see its declaration) -- correct regardless
+                // of header/footer height, which varies by language and by
+                // which optional footer rows are currently showing. A static
+                // dvh-based CSS formula was tried first and found to
+                // sometimes still leave the image taller than the wrapper's
+                // real shrunk box (Puppeteer measured ~39px of clipping at a
+                // 375x568 viewport), since the wrapper's overflow:hidden +
+                // minHeight:0 lets it shrink independently of any fixed
+                // guess. `150` is only the fallback for the brief instant
+                // before the first ResizeObserver callback fires (typically
+                // before first paint) or if ResizeObserver is unsupported.
+                maxHeight: `${availableImageHeightPx ?? 150}px`,
                 width: 'auto',
                 height: 'auto',
                 transform: `scale(${imageScale})`,
@@ -1986,6 +2002,7 @@ export function RoomVisualizationFlow({
 
       {/* Content - Like original content structure */}
       <div
+        ref={resultContentRef}
         style={{
           flex: '1 1 auto',
           width: '100%',

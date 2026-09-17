@@ -535,12 +535,16 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
   });
 
   for (const lang of ALL_LANGUAGES) {
-    // 667 = iPhone SE-class; 568 = an older/smaller iPhone still seen in
-    // real traffic. Both are realistic, not pathological -- the fix's
-    // documented floor (150px) deliberately doesn't guarantee a fit at
-    // truly pathological heights (e.g. landscape phones), only at these.
-    for (const viewportHeight of [667, 568]) {
-      it(`"${lang}" at 375x${viewportHeight}: image is not clipped by the modal`, async () => {
+    // 667/640 = iPhone SE/8-class; 600/568 = older/smaller phones still seen
+    // in real traffic -- 600 and 568 are the exact viewport heights that
+    // reproduced a REAL bug in an earlier version of this fix: a static CSS
+    // `max(calc(55dvh - 200px), 150px)` formula on the image's own
+    // max-height left the image up to ~39px taller than #content-wrapper's
+    // actual flex-shrunk box, and the wrapper's own overflow:hidden clipped
+    // the excess even though the outer modal itself wasn't overflowing --
+    // see the assertion against wrapperBottom below, not just modalBottom.
+    for (const viewportHeight of [667, 640, 600, 568]) {
+      it(`"${lang}" at 375x${viewportHeight}: image is not clipped by the modal or the content wrapper`, async () => {
         const t = translations[lang];
         const width = 375;
 
@@ -564,7 +568,7 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
           `;
 
           const footerHtml = `
-            <div style="padding:8px 16px 16px; background-color:#ffffff;">
+            <div style="padding:8px 16px 16px; background-color:#ffffff; flex-shrink:0;">
               <div style="display:flex; flex-direction:column; gap:12px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
                 <div style="display:flex; align-items:center; gap:8px; min-height:38px;">
                   <span style="flex:1; font-size:12px; line-height:1.35; color:#605d5d;">${escapeHtml(t.feedbackQuestion)}</span>
@@ -586,29 +590,54 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
             </div>
           `;
 
+          // Mirrors the real component: the image starts at an arbitrary
+          // (deliberately oversized) height, then a ResizeObserver on
+          // #content-wrapper -- the actual clipping boundary, since it has
+          // overflow:hidden + min-height:0 and can flex-shrink independently
+          // of the image's own size -- sets the image's real height from
+          // the wrapper's measured contentRect, exactly like
+          // resultContentRef's effect in RoomVisualizationFlow.tsx.
           await page.setContent(
             `<!DOCTYPE html><html><body style="margin:0;">
               <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; width:${width}px; box-sizing:border-box;">
                 ${headerHtml}
-                <div style="flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
-                  <img id="result-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7" style="display:block; max-height:max(calc(55dvh - 200px), 150px); width:200px; height:max(calc(55dvh - 200px), 150px);" />
+                <div id="content-wrapper" style="flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
+                  <img id="result-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7" style="display:block; max-height:400px; width:200px; height:400px;" />
                 </div>
                 ${footerHtml}
               </div>
+              <script>
+                const wrapper = document.getElementById('content-wrapper');
+                const img = document.getElementById('result-image');
+                const ro = new ResizeObserver(entries => {
+                  const h = entries[0].contentRect.height;
+                  img.style.maxHeight = h + 'px';
+                  img.style.height = h + 'px';
+                  window.__lastMeasuredHeight = h;
+                });
+                ro.observe(wrapper);
+              </script>
             </body></html>`
           );
 
+          await page.waitForFunction(() => window.__lastMeasuredHeight !== undefined);
+
           const result = await page.evaluate(() => {
             const modal = document.getElementById('modal');
+            const wrapper = document.getElementById('content-wrapper');
             const img = document.getElementById('result-image');
             return {
               modalBottom: modal.getBoundingClientRect().bottom,
+              wrapperBottom: wrapper.getBoundingClientRect().bottom,
               imageBottom: img.getBoundingClientRect().bottom,
             };
           });
 
-          // If the image's bottom edge is past the modal's own bottom edge,
-          // the modal's overflow:hidden is actively clipping it right now.
+          // The wrapper is the real clipping boundary (see comment above) --
+          // checked first since that's the one the earlier static-formula
+          // fix missed. The modal check stays as a second, independent
+          // guard against the outer overflow:hidden.
+          expect(result.imageBottom).toBeLessThanOrEqual(result.wrapperBottom + 1);
           expect(result.imageBottom).toBeLessThanOrEqual(result.modalBottom + 1);
         } finally {
           await page.close();
