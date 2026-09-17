@@ -31,7 +31,6 @@ export const fr: TranslationStrings = {
   addToBasket: 'Ajouter au panier',
   showNew: 'Afficher le nouveau',
   showOriginal: "Afficher l'original",
-  saveShare: 'Enregistrer / Partager',
   downloadToDevice: "Télécharger sur l'appareil",
   shareWithFriends: 'Partager avec des amis',
   newPhoto: 'Nouvelle photo',

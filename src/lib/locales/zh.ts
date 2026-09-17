@@ -31,7 +31,6 @@ export const zh: TranslationStrings = {
   addToBasket: '加入购物车',
   showNew: '显示新效果',
   showOriginal: '显示原图',
-  saveShare: '保存 / 分享',
   downloadToDevice: '下载到设备',
   shareWithFriends: '分享给朋友',
   newPhoto: '新照片',

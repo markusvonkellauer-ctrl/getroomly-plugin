@@ -31,7 +31,6 @@ export const ko: TranslationStrings = {
   addToBasket: '장바구니에 담기',
   showNew: '새 이미지 보기',
   showOriginal: '원본 보기',
-  saveShare: '저장 / 공유',
   downloadToDevice: '기기에 다운로드',
   shareWithFriends: '친구에게 공유',
   newPhoto: '새 사진',

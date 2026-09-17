@@ -30,7 +30,6 @@ export const da: TranslationStrings = {
   addToBasket: 'Læg i kurv',
   showNew: 'Vis ny',
   showOriginal: 'Vis original',
-  saveShare: 'Gem / Del',
   downloadToDevice: 'Download til enhed',
   shareWithFriends: 'Del med venner',
   newPhoto: 'Nyt foto',

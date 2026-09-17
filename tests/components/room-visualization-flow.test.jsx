@@ -965,11 +965,6 @@ describe('RoomVisualizationFlow', () => {
       await waitFor(() => screen.getByText('Review Your New Room'));
     };
 
-    const openSaveShareMenu = async user => {
-      await user.click(screen.getByRole('button', { name: 'Save / Share' }));
-      await waitFor(() => screen.getByText('Download to Device'));
-    };
-
     // jsdom doesn't implement real navigation, so clicking the <a download>
     // element logs an unimplemented "not implemented" navigation error to
     // stderr — expected noise from exercising the real download link, not a
@@ -991,7 +986,6 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       // No fetch at all for the data: URL path — the whole point of the
@@ -1025,7 +1019,6 @@ describe('RoomVisualizationFlow', () => {
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
       await user.click(screen.getByRole('button', { name: 'Show Original' }));
-      await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       expect(global.fetch).not.toHaveBeenCalled();
@@ -1043,7 +1036,6 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: nonDataUrl });
-      await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       // Deliberately no fetch-based conversion for a non-data: URL (our own
@@ -1059,7 +1051,7 @@ describe('RoomVisualizationFlow', () => {
       clickSpy.mockRestore();
     });
 
-    test('calls onSaveShare with the image being downloaded and closes the dropdown', async () => {
+    test('calls onSaveShare with the image being downloaded', async () => {
       const user = userEvent.setup();
       jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
       const onSaveShare = jest.fn();
@@ -1068,11 +1060,122 @@ describe('RoomVisualizationFlow', () => {
         { imageUrl: RESULT_DATA_URL },
         { config: { callbacks: { onSaveShare } } }
       );
-      await openSaveShareMenu(user);
       await user.click(screen.getByText('Download to Device'));
 
       expect(onSaveShare).toHaveBeenCalledWith(RESULT_DATA_URL, 'rug-001');
-      await waitFor(() => expect(screen.queryByText('Download to Device')).not.toBeInTheDocument());
+    });
+  });
+
+  describe('share with friends', () => {
+    const RESULT_DATA_URL = 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=';
+
+    const renderAtResult = async generationResult => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    let originalConsoleError;
+    beforeEach(() => {
+      originalConsoleError = console.error;
+      console.error = jest.fn();
+    });
+    afterEach(() => {
+      console.error = originalConsoleError;
+      delete navigator.share;
+    });
+
+    test('fetches the image and calls navigator.share with a File, when available', async () => {
+      const user = userEvent.setup();
+      const fakeBlob = new Blob(['fake-image-bytes']);
+      global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn().mockResolvedValue(fakeBlob) });
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await user.click(screen.getByText('Share with Friends'));
+
+      expect(global.fetch).toHaveBeenCalledWith(RESULT_DATA_URL);
+      expect(navigator.share).toHaveBeenCalledTimes(1);
+      const shareArg = navigator.share.mock.calls[0][0];
+      expect(shareArg.files).toHaveLength(1);
+      expect(shareArg.files[0]).toBeInstanceOf(File);
+      expect(shareArg.files[0].type).toBe('image/png');
+      expect(shareArg.title).toContain('Test Rug');
+    });
+
+    test('does not fall back to downloading when navigator.share succeeds', async () => {
+      const user = userEvent.setup();
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await user.click(screen.getByText('Share with Friends'));
+
+      expect(clickSpy).not.toHaveBeenCalled();
+      clickSpy.mockRestore();
+    });
+
+    test('falls back to handleDownloadToDevice when navigator.share is unavailable', async () => {
+      const user = userEvent.setup();
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await user.click(screen.getByText('Share with Friends'));
+
+      // The data: URL path (see "download to device" above) decodes
+      // synchronously and never calls fetch — confirms the download
+      // fallback actually ran, not just that a click happened somewhere.
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      expect(clickSpy.mock.instances[0].download).toBe('Test Rug-visualization.jpg');
+
+      clickSpy.mockRestore();
+    });
+
+    test('falls back to handleDownloadToDevice when navigator.share rejects with a real error', async () => {
+      const user = userEvent.setup();
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
+      navigator.share = jest.fn().mockRejectedValue(new Error('share failed'));
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await user.click(screen.getByText('Share with Friends'));
+
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      clickSpy.mockRestore();
+    });
+
+    test('does NOT fall back to downloading when the user cancels the native share sheet (AbortError)', async () => {
+      const user = userEvent.setup();
+      global.fetch = jest
+        .fn()
+        .mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
+      const abortError = new Error('cancelled');
+      abortError.name = 'AbortError';
+      navigator.share = jest.fn().mockRejectedValue(abortError);
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await user.click(screen.getByText('Share with Friends'));
+
+      expect(clickSpy).not.toHaveBeenCalled();
+      clickSpy.mockRestore();
     });
   });
 });

@@ -33,7 +33,6 @@ export const de: TranslationStrings = {
   addToBasket: 'In den Warenkorb',
   showNew: 'Neu anzeigen',
   showOriginal: 'Original anzeigen',
-  saveShare: 'Speichern / Teilen',
   downloadToDevice: 'Auf Gerät herunterladen',
   shareWithFriends: 'Mit Freunden teilen',
   newPhoto: 'Neues Foto',

@@ -10,7 +10,6 @@ import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
 import { dataUrlToBlob } from '@/lib/data-url';
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 interface RoomVisualizationFlowProps {
   productImages: string[];
@@ -66,7 +65,6 @@ export function RoomVisualizationFlow({
 
   // Result step state
   const [showOriginalImage, setShowOriginalImage] = useState(false);
-  const [saveShareDropdownOpen, setSaveShareDropdownOpen] = useState(false);
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
 
@@ -1049,7 +1047,6 @@ export function RoomVisualizationFlow({
     const imageToDownload = showOriginalImage ? uploadedImage : resultImage;
     config?.callbacks?.onSaveShare?.(imageToDownload || '', productId);
     if (!imageToDownload) {
-      setSaveShareDropdownOpen(false);
       return;
     }
 
@@ -1086,8 +1083,6 @@ export function RoomVisualizationFlow({
       link.href = imageToDownload;
       link.click();
     }
-
-    setSaveShareDropdownOpen(false);
   };
 
   const handleShareWithFriends = async () => {
@@ -1106,16 +1101,14 @@ export function RoomVisualizationFlow({
           title: `${productName} Room Visualization`,
           text: `Check out how the ${productName} looks in a room!`,
         });
-        setSaveShareDropdownOpen(false);
         return;
       }
-      await handleDownloadToDevice();
+      handleDownloadToDevice();
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
-        await handleDownloadToDevice();
+        handleDownloadToDevice();
       }
     }
-    setSaveShareDropdownOpen(false);
   };
 
   const renderResultStep = () => {
@@ -1296,155 +1289,116 @@ export function RoomVisualizationFlow({
   };
 
   // Result Footer Component (Step 4)
+  // Tertiary buttons (download/share/new photo) are flat text buttons in one
+  // centred row, not full-width blocks — visually distinct from the primary
+  // row above so they read as secondary actions. Auto width, not width:100%.
+  const tertiaryButtonStyle: React.CSSProperties = {
+    gap: '8px',
+    justifyContent: 'center',
+    alignItems: 'center',
+    textAlign: 'center',
+    // minHeight, not a fixed height: at the narrow per-item widths these
+    // three buttons share a row on mobile, several languages' longer
+    // translations ("Partager avec des amis", "Descargar imagen", ...) wrap
+    // to two lines — a fixed height would clip that text. Letting the pill
+    // grow keeps the ≥44px touch target (WCAG 2.5.8) without ever clipping.
+    minHeight: '44px',
+    borderRadius: '999px',
+    cursor: 'pointer',
+    display: 'flex',
+    fontSize: '14px',
+    padding: '10px 16px',
+    background: 'none',
+    color: '#6b7280',
+    fontWeight: '500',
+    border: 'none',
+  };
+
   const renderResultFooter = () => (
     <div
       style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
+        display: 'flex',
+        flexDirection: 'column',
         gap: '8px',
         width: '100%',
         margin: '0 auto',
       }}
     >
-      {showAddToBasket && (
-        <button
-          onClick={handleAddToBasket}
-          style={{
-            width: '100%',
-            gap: '8px',
-            justifyContent: 'center',
-            textAlign: 'center',
-            fontWeight: '700',
-            height: '44px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            border: 'none',
-            fontSize: '14px',
-            padding: '10px 16px',
-            background: 'var(--getroomly-primary)',
-            color: 'white',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-          }}
-        >
-          {t.addToBasket}
-        </button>
-      )}
-
-      {showOriginal && (
-        <button
-          onClick={handleShowOriginal}
-          style={{
-            width: '100%',
-            gap: '8px',
-            justifyContent: 'center',
-            textAlign: 'center',
-            height: '44px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            fontSize: '14px',
-            padding: '10px 16px',
-            border: '1px solid rgba(176, 143, 106, 0.3)',
-            color: 'var(--getroomly-primary)',
-            background: 'white',
-            fontWeight: '700',
-          }}
-        >
-          {showOriginalImage ? t.showNew : t.showOriginal}
-        </button>
-      )}
-
-      {showSaveShare && (
-        <DropdownMenu.Root open={saveShareDropdownOpen} onOpenChange={setSaveShareDropdownOpen}>
-          <DropdownMenu.Trigger asChild>
-            <button
-              style={{
-                width: '100%',
-                gap: '8px',
-                justifyContent: 'center',
-                alignItems: 'center',
-                textAlign: 'center',
-                height: '44px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                display: 'flex',
-                fontSize: '14px',
-                padding: '10px 16px',
-                background: 'rgba(147, 163, 178, 0.3)',
-                color: '#6b7280',
-                fontWeight: '700',
-                border: '1px solid transparent',
-              }}
-            >
-              {t.saveShare}
-            </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              style={{
-                background: 'white',
-                borderRadius: '6px',
-                padding: '4px',
-                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                border: '1px solid #e5e7eb',
-                minWidth: '180px',
-                zIndex: 999999,
-              }}
-            >
-              <DropdownMenu.Item
-                onSelect={handleDownloadToDevice}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  borderRadius: '4px',
-                  outline: 'none',
-                }}
-              >
-                {t.downloadToDevice}
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                onSelect={handleShareWithFriends}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  borderRadius: '4px',
-                  outline: 'none',
-                }}
-              >
-                {t.shareWithFriends}
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
-      )}
-
-      <button
-        onClick={handleNewPhoto}
+      <div
         style={{
-          width: '100%',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
           gap: '8px',
-          justifyContent: 'center',
-          alignItems: 'center',
-          textAlign: 'center',
-          height: '44px',
-          borderRadius: '6px',
-          cursor: 'pointer',
-          display: 'flex',
-          fontSize: '14px',
-          padding: '10px 16px',
-          background: 'rgba(147, 163, 178, 0.3)',
-          color: '#6b7280',
-          fontWeight: '700',
-          border: '1px solid transparent',
+          width: '100%',
         }}
       >
-        {t.newPhoto}
-      </button>
+        {showAddToBasket && (
+          <button
+            onClick={handleAddToBasket}
+            style={{
+              width: '100%',
+              gap: '8px',
+              justifyContent: 'center',
+              textAlign: 'center',
+              fontWeight: '700',
+              height: '44px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              border: 'none',
+              fontSize: '14px',
+              padding: '10px 16px',
+              background: 'var(--getroomly-primary)',
+              color: 'white',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            }}
+          >
+            {t.addToBasket}
+          </button>
+        )}
+
+        {showOriginal && (
+          <button
+            onClick={handleShowOriginal}
+            style={{
+              width: '100%',
+              gap: '8px',
+              justifyContent: 'center',
+              textAlign: 'center',
+              height: '44px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '14px',
+              padding: '10px 16px',
+              border: '1px solid rgba(176, 143, 106, 0.3)',
+              color: 'var(--getroomly-primary)',
+              background: 'white',
+              fontWeight: '700',
+            }}
+          >
+            {showOriginalImage ? t.showNew : t.showOriginal}
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px' }}>
+        {showSaveShare && (
+          <>
+            <button onClick={handleDownloadToDevice} style={tertiaryButtonStyle}>
+              {t.downloadToDevice}
+            </button>
+            <button onClick={handleShareWithFriends} style={tertiaryButtonStyle}>
+              {t.shareWithFriends}
+            </button>
+          </>
+        )}
+        <button onClick={handleNewPhoto} style={tertiaryButtonStyle}>
+          {t.newPhoto}
+        </button>
+      </div>
     </div>
   );
 

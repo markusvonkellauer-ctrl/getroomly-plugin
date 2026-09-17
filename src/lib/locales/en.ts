@@ -30,7 +30,6 @@ export const en: TranslationStrings = {
   addToBasket: 'Add to Basket',
   showNew: 'Show New',
   showOriginal: 'Show Original',
-  saveShare: 'Save / Share',
   downloadToDevice: 'Download to Device',
   shareWithFriends: 'Share with Friends',
   newPhoto: 'New Photo',
