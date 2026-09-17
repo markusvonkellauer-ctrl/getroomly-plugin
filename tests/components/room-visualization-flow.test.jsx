@@ -1194,7 +1194,7 @@ describe('RoomVisualizationFlow', () => {
       expect(img.style.maxHeight).toBe('150px');
     });
 
-    test('observes the image\'s content-wrapper ancestor and applies its measured height as maxHeight', async () => {
+    test("observes the image's content-wrapper ancestor and applies its measured height as maxHeight", async () => {
       await renderAtResult({ imageUrl: 'blob:result' });
 
       const img = screen.getByAltText('New Design');
@@ -1255,7 +1255,9 @@ describe('RoomVisualizationFlow', () => {
       // Both buttons unmount once feedbackState leaves 'open' — a second click
       // is impossible in real usage because there's no button left to click,
       // not because a handler guards against it. Confirmed by their absence.
-      expect(screen.queryByRole('button', { name: 'Yes, it looks realistic' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Yes, it looks realistic' })
+      ).not.toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: "No, it doesn't look realistic" })
       ).not.toBeInTheDocument();
