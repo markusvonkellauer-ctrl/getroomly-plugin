@@ -488,9 +488,9 @@ export function RoomVisualizationFlow({
                   height: '32px',
                   borderRadius: '50%',
                   backgroundColor: isActive
-                    ? 'var(--getroomly-primary)'
+                    ? 'var(--getroomly-primary-deep)'
                     : isCompleted
-                      ? 'var(--getroomly-primary)'
+                      ? 'var(--getroomly-primary-deep)'
                       : 'var(--getroomly-border-light)',
                   color: isActive || isCompleted ? '#ffffff' : 'var(--getroomly-muted)',
                   display: 'flex',
@@ -507,9 +507,9 @@ export function RoomVisualizationFlow({
                 style={{
                   fontSize: '12px',
                   color: isActive
-                    ? 'var(--getroomly-primary)'
+                    ? 'var(--getroomly-primary-deep)'
                     : isCompleted
-                      ? 'var(--getroomly-primary)'
+                      ? 'var(--getroomly-primary-deep)'
                       : 'var(--getroomly-muted)',
                   fontWeight: isActive ? '600' : '500',
                   transition: 'all 0.3s ease',
@@ -589,7 +589,7 @@ export function RoomVisualizationFlow({
       >
         <div
           style={{
-            backgroundColor: 'hsla(176, 51%, 36%, 0.1)', // bg-primary/10 equivalent
+            backgroundColor: 'var(--getroomly-primary-tint)', // bg-primary/10 equivalent
             padding: '16px',
             borderRadius: '50%',
             marginBottom: '12px',
@@ -625,7 +625,7 @@ export function RoomVisualizationFlow({
             gap: '8px',
             whiteSpace: 'nowrap',
             fontSize: '14px',
-            backgroundColor: 'var(--getroomly-primary)', // bg-primary
+            backgroundColor: 'var(--getroomly-primary-deep)', // bg-primary, white text needs the AA-safe deep tone
             color: '#ffffff', // text-primary-foreground
             border: 'none',
             borderRadius: '6px',
@@ -681,7 +681,7 @@ export function RoomVisualizationFlow({
             textTransform: 'uppercase', // uppercase
             letterSpacing: '0.15em', // tracking-[0.15em]
             textAlign: 'center', // text-center
-            borderBottom: '1px solid hsla(176, 51%, 36%, 0.1)', // border-b border-primary/10
+            borderBottom: '1px solid var(--getroomly-primary-tint)', // border-b border-primary/10
             paddingBottom: '8px', // pb-2
           }}
         >
@@ -704,8 +704,8 @@ export function RoomVisualizationFlow({
                 width: '16px', // w-4
                 height: '16px', // h-4
                 borderRadius: '50%', // rounded-full
-                backgroundColor: 'hsla(176, 51%, 36%, 0.1)', // bg-primary/10
-                color: 'var(--getroomly-primary)', // text-primary
+                backgroundColor: 'var(--getroomly-primary-tint)', // bg-primary/10
+                color: 'var(--getroomly-primary-deep)', // text-primary, small bold text needs the AA-safe deep tone
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -730,8 +730,8 @@ export function RoomVisualizationFlow({
                 width: '16px',
                 height: '16px',
                 borderRadius: '50%',
-                backgroundColor: 'hsla(176, 51%, 36%, 0.1)',
-                color: 'var(--getroomly-primary)',
+                backgroundColor: 'var(--getroomly-primary-tint)',
+                color: 'var(--getroomly-primary-deep)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -756,8 +756,8 @@ export function RoomVisualizationFlow({
                 width: '16px',
                 height: '16px',
                 borderRadius: '50%',
-                backgroundColor: 'hsla(176, 51%, 36%, 0.1)',
-                color: 'var(--getroomly-primary)',
+                backgroundColor: 'var(--getroomly-primary-tint)',
+                color: 'var(--getroomly-primary-deep)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1349,7 +1349,7 @@ export function RoomVisualizationFlow({
               border: 'none',
               fontSize: '14px',
               padding: '10px 16px',
-              background: 'var(--getroomly-primary)',
+              background: 'var(--getroomly-primary-deep)',
               color: 'white',
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
             }}
@@ -1374,7 +1374,7 @@ export function RoomVisualizationFlow({
               fontSize: '14px',
               padding: '10px 16px',
               border: '1px solid rgba(176, 143, 106, 0.3)',
-              color: 'var(--getroomly-primary)',
+              color: 'var(--getroomly-primary-deep)',
               background: 'white',
               fontWeight: '700',
             }}
@@ -1626,7 +1626,7 @@ export function RoomVisualizationFlow({
             <button
               onClick={() => setShowTermsDialog(false)}
               style={{
-                backgroundColor: 'var(--getroomly-primary)',
+                backgroundColor: 'var(--getroomly-primary-deep)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',

@@ -986,7 +986,7 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await user.click(screen.getByText('Download to Device'));
+      await user.click(screen.getByText('Download Image'));
 
       // No fetch at all for the data: URL path — the whole point of the
       // fix in this round is that decoding happens synchronously so
@@ -1019,7 +1019,7 @@ describe('RoomVisualizationFlow', () => {
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
       await user.click(screen.getByRole('button', { name: 'Show Original' }));
-      await user.click(screen.getByText('Download to Device'));
+      await user.click(screen.getByText('Download Image'));
 
       expect(global.fetch).not.toHaveBeenCalled();
       const clickedLink = clickSpy.mock.instances[0];
@@ -1036,7 +1036,7 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: nonDataUrl });
-      await user.click(screen.getByText('Download to Device'));
+      await user.click(screen.getByText('Download Image'));
 
       // Deliberately no fetch-based conversion for a non-data: URL (our own
       // images are always data: URIs, never a real one) — an async
@@ -1060,7 +1060,7 @@ describe('RoomVisualizationFlow', () => {
         { imageUrl: RESULT_DATA_URL },
         { config: { callbacks: { onSaveShare } } }
       );
-      await user.click(screen.getByText('Download to Device'));
+      await user.click(screen.getByText('Download Image'));
 
       expect(onSaveShare).toHaveBeenCalledWith(RESULT_DATA_URL, 'rug-001');
     });
@@ -1095,7 +1095,7 @@ describe('RoomVisualizationFlow', () => {
       navigator.share = jest.fn().mockResolvedValue(undefined);
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await user.click(screen.getByText('Share with Friends'));
+      await user.click(screen.getByText('Share'));
 
       expect(global.fetch).toHaveBeenCalledWith(RESULT_DATA_URL);
       expect(navigator.share).toHaveBeenCalledTimes(1);
@@ -1117,7 +1117,7 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await user.click(screen.getByText('Share with Friends'));
+      await user.click(screen.getByText('Share'));
 
       expect(clickSpy).not.toHaveBeenCalled();
       clickSpy.mockRestore();
@@ -1130,7 +1130,7 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await user.click(screen.getByText('Share with Friends'));
+      await user.click(screen.getByText('Share'));
 
       // The data: URL path (see "download to device" above) decodes
       // synchronously and never calls fetch — confirms the download
@@ -1153,7 +1153,7 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await user.click(screen.getByText('Share with Friends'));
+      await user.click(screen.getByText('Share'));
 
       expect(clickSpy).toHaveBeenCalledTimes(1);
       clickSpy.mockRestore();
@@ -1172,7 +1172,7 @@ describe('RoomVisualizationFlow', () => {
         .mockImplementation(() => {});
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await user.click(screen.getByText('Share with Friends'));
+      await user.click(screen.getByText('Share'));
 
       expect(clickSpy).not.toHaveBeenCalled();
       clickSpy.mockRestore();

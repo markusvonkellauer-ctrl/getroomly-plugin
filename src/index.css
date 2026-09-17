@@ -13,8 +13,19 @@
   --social-bg: rgba(244, 243, 236, 0.5);
   --shadow: rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
-  /* GetRoomly Design System */
-  --getroomly-primary: hsl(176, 51%, 36%);
+  /* GetRoomly Design System
+   * --getroomly-primary is for decorative/non-text use only (icon strokes,
+   * borders, focus rings) -- 4.02:1 against white, which clears the 3:1 AA
+   * minimum for non-text UI components but NOT the 4.5:1 minimum for text.
+   * Any plain text or white-on-filled-background use must use
+   * --getroomly-primary-deep instead (5.64:1 against white, passes AA for
+   * text). Splitting these two roles fixes a real contrast bug: the old
+   * single --getroomly-primary (~4.09:1) was used directly under white
+   * button text in several places, below the 4.5:1 AA text minimum. */
+  --getroomly-primary: #3a8c7d;
+  --getroomly-primary-deep: #2f7267;
+  --getroomly-primary-press: #24594f;
+  --getroomly-primary-tint: #e9f3f0;
   --getroomly-heading: #2a2522cc;
   --getroomly-muted: hsl(20, 8%, 45%);
   --getroomly-border-light: hsl(30, 12%, 88%);
