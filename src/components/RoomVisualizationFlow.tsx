@@ -1203,7 +1203,16 @@ export function RoomVisualizationFlow({
                 height: '100%',
                 objectFit: 'contain',
                 opacity: showOriginalImage ? 1 : 0,
-                transition: 'opacity 0.3s ease',
+                // Same pinch/double-tap zoom transform as the base layer --
+                // without this, zooming while viewing "Before" had no
+                // effect, and switching from a zoomed "After" view briefly
+                // showed an unzoomed original mid cross-fade.
+                transform: `scale(${imageScale})`,
+                transformOrigin: 'center center',
+                transition:
+                  imageScale === 1
+                    ? 'opacity 0.3s ease, transform 0.25s ease'
+                    : 'opacity 0.3s ease',
               }}
             />
           )}

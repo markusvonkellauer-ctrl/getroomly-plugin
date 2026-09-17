@@ -132,37 +132,6 @@ const BUTTON_SPECS = [
       </div>`,
   },
   {
-    // Before/After toggle pill button (RoomVisualizationFlow.tsx, the pill
-    // inside renderResultStep). Auto-width, not squeezed to a column -- the
-    // pill sits on the image, well short of the modal's own width, so this
-    // is a generous-but-reasonable per-button budget rather than a figure
-    // derived from the modal width like the specs above.
-    name: 'Before/After toggle: Before',
-    translationKey: 'toggleBefore',
-    containerWidths: [100, 70],
-    render: (text, width) => `
-      <div style="width:${width}px; box-sizing:border-box;">
-        <button id="target" style="
-          box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
-          font-size:12px; font-weight:600; font-family:${FONT_STACK};
-          background:${PRIMARY}; color:white;
-        ">${text}</button>
-      </div>`,
-  },
-  {
-    name: 'Before/After toggle: After',
-    translationKey: 'toggleAfter',
-    containerWidths: [100, 70],
-    render: (text, width) => `
-      <div style="width:${width}px; box-sizing:border-box;">
-        <button id="target" style="
-          box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
-          font-size:12px; font-weight:600; font-family:${FONT_STACK};
-          background:${PRIMARY}; color:white;
-        ">${text}</button>
-      </div>`,
-  },
-  {
     // tertiaryButtonStyle (RoomVisualizationFlow.tsx:1295-1309) applies to
     // all three tertiary-row buttons below. Not width:100% inside its own
     // grid column anymore — it's an auto-width flex item, one of three
@@ -408,6 +377,93 @@ describe('Cross-language tertiary row overflow (combined row, not per-button)', 
           });
 
           expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 1);
+        } finally {
+          await page.close();
+        }
+      }, 15000);
+    }
+  }
+});
+
+/**
+ * The Before/After toggle pill (RoomVisualizationFlow.tsx, the pill inside
+ * renderResultStep) has auto-width buttons with no column to squeeze into,
+ * so a per-button isolated-width check (like the specs at the top of this
+ * file) can't actually fail regardless of how wide the button renders --
+ * an earlier version of this fixture did exactly that and was a no-op.
+ * The real risk here is different: the image well has `overflow:hidden`
+ * and the pill is `position:absolute` with only a left inset (no right
+ * constraint), so a sufficiently wide pill is silently clipped by the
+ * well's own edge, not wrapped. This renders both toggle buttons together
+ * inside a mock image well at the same 488px/328px widths used above, and
+ * checks the pill's right edge against the well's own right edge.
+ */
+describe("Before/After toggle pill overflow (image well's overflow:hidden clipping)", () => {
+  let browser;
+
+  const PILL_STYLE = `
+    position:absolute; left:14px; bottom:14px; display:flex; gap:4px; padding:4px;
+    border-radius:999px; background:rgba(255,255,255,.94); box-sizing:border-box;
+  `;
+  const BUTTON_STYLE = `
+    box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
+    font-size:12px; font-weight:600; font-family:${FONT_STACK};
+    background:${PRIMARY}; color:white;
+  `;
+
+  beforeAll(async () => {
+    browser = await puppeteer.launch({
+      headless: process.env.CI !== 'false',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    if (browser) await browser.close();
+  });
+
+  for (const lang of ALL_LANGUAGES) {
+    for (const width of [488, 328]) {
+      it(`toggle pill — "${lang}" at ${width}px image well width is not clipped by overflow:hidden`, async () => {
+        const t = translations[lang];
+        const texts = [t.toggleBefore, t.toggleAfter];
+        for (const text of texts) {
+          expect(typeof text).toBe('string');
+          expect(text.length).toBeGreaterThan(0);
+        }
+
+        const page = await browser.newPage();
+        try {
+          await page.setViewport({ width: width + 40, height: 250 });
+          const buttons = texts
+            .map(
+              text =>
+                `<button class="pill-btn" style="${BUTTON_STYLE}">${escapeHtml(text)}</button>`
+            )
+            .join('');
+          await page.setContent(
+            `<!DOCTYPE html><html><body style="margin:0; padding:20px;">
+              <div id="well" style="
+                position:relative; width:${width}px; height:150px;
+                overflow:hidden; box-sizing:border-box; background:#221a17;
+              ">
+                <div class="pill" style="${PILL_STYLE}">${buttons}</div>
+              </div>
+            </body></html>`
+          );
+
+          const box = await page.evaluate(() => {
+            const well = document.getElementById('well');
+            const pill = document.querySelector('.pill');
+            return {
+              wellRight: well.getBoundingClientRect().right,
+              pillRight: pill.getBoundingClientRect().right,
+            };
+          });
+
+          // The well has overflow:hidden in the real component -- anything
+          // past its right edge is silently clipped, not wrapped or shrunk.
+          expect(box.pillRight).toBeLessThanOrEqual(box.wellRight + 1);
         } finally {
           await page.close();
         }
