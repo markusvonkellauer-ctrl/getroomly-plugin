@@ -731,7 +731,7 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
             `<!DOCTYPE html><html><body style="margin:0;">
               <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; width:${width}px; box-sizing:border-box;">
                 ${headerHtml}
-                <div id="content-wrapper" style="flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
+                <div id="content-wrapper" style="position:relative; flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
                   <img id="result-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3C/svg%3E" style="display:block; max-width:100%; max-height:150px; width:auto; height:auto;" />
                 </div>
                 ${footerHtml}
@@ -859,7 +859,7 @@ describe('Top band vs the real clipping hierarchy: rendered outside resultConten
         background:${PRIMARY}; color:white; overflow-wrap:break-word; min-width:0; max-width:100%;
       `;
       const bandHtml = `
-        <div id="band" style="position:absolute; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; z-index:10;">
+        <div id="band" style="position:absolute; overflow:hidden; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; z-index:10;">
           <div style="display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%; box-sizing:border-box; gap:4px; padding:4px; border-radius:999px; background:rgba(255,255,255,.94);">
             <button style="${pillButtonStyle}">${escapeHtml(t.toggleBefore)}</button>
             <button style="${pillButtonStyle}">${escapeHtml(t.toggleAfter)}</button>
@@ -871,28 +871,50 @@ describe('Top band vs the real clipping hierarchy: rendered outside resultConten
         </div>
       `;
 
+      // #content-wrapper is position:relative here, matching
+      // resultContentRef's real style in RoomVisualizationFlow.tsx --
+      // found in review that this fixture previously omitted it, which
+      // meant image-container's offsetParent in the fixture was the
+      // modal, while in the REAL component (resultContentRef genuinely
+      // is position:relative) it's resultContentRef itself. That
+      // mismatch let the old offsetTop/Left-based positioning bug (fixed
+      // below, and in the real component) pass here undetected: the
+      // fixture measured a different coordinate system than production
+      // actually has. The band's own positioning script now mirrors
+      // measureBandAnchor exactly (getBoundingClientRect subtraction
+      // against the band's own offsetParent, not offsetTop/Left) so it's
+      // correct regardless of what content-wrapper's position is.
       await page.setContent(
         `<!DOCTYPE html><html><body style="margin:0;">
           <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; position:relative; width:${width}px; box-sizing:border-box;">
             ${headerHtml}
-            <div id="content-wrapper" style="flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
+            <div id="content-wrapper" style="position:relative; flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
               <div id="image-container" style="position:relative; display:inline-block; overflow:hidden;">
                 <img id="result-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3C/svg%3E" style="display:block; max-width:100%; max-height:150px; width:auto; height:auto;" />
               </div>
             </div>
             ${bandHtml}
-            ${footerHtml}
+            <div id="footer">${footerHtml}</div>
           </div>
           <script>
             const wrapper = document.getElementById('content-wrapper');
             const img = document.getElementById('result-image');
             const imageContainer = document.getElementById('image-container');
             const band = document.getElementById('band');
+            const footer = document.getElementById('footer');
 
             function measureBand() {
-              band.style.top = (imageContainer.offsetTop + 14) + 'px';
-              band.style.left = (imageContainer.offsetLeft + 14) + 'px';
-              band.style.width = Math.max(0, imageContainer.offsetWidth - 28) + 'px';
+              const containingEl = band.offsetParent || document.body;
+              const imageRect = imageContainer.getBoundingClientRect();
+              const containingRect = containingEl.getBoundingClientRect();
+              const top = imageRect.top - containingRect.top;
+              const left = imageRect.left - containingRect.left;
+              const footerTop = footer.getBoundingClientRect().top - containingRect.top;
+              const maxHeightBeforeFooter = Math.max(0, footerTop - (top + 14) - 8);
+              band.style.top = (top + 14) + 'px';
+              band.style.left = (left + 14) + 'px';
+              band.style.width = Math.max(0, imageRect.width - 28) + 'px';
+              band.style.maxHeight = maxHeightBeforeFooter + 'px';
             }
 
             const wrapperObserver = new ResizeObserver(entries => {
@@ -915,9 +937,14 @@ describe('Top band vs the real clipping hierarchy: rendered outside resultConten
       );
 
       return page.evaluate(() => {
-        const toPlain = r => ({ top: r.top, bottom: r.bottom });
+        const toPlain = r => ({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
         return {
           modalRect: toPlain(document.getElementById('modal').getBoundingClientRect()),
+          footerRect: toPlain(document.getElementById('footer').getBoundingClientRect()),
+          imageContainerRect: toPlain(
+            document.getElementById('image-container').getBoundingClientRect()
+          ),
+          bandRect: toPlain(document.getElementById('band').getBoundingClientRect()),
           thumbGroupRect: toPlain(document.getElementById('thumb-group').getBoundingClientRect()),
         };
       });
@@ -944,21 +971,40 @@ describe('Top band vs the real clipping hierarchy: rendered outside resultConten
   // this fix (against the tighter resultContentRef boundary) -- real,
   // substantial progress, not a full guarantee at the most extreme
   // viewport in this matrix.
-  for (const viewportHeight of [667, 640, 600, 568, 520, 480, 450]) {
-    it(`at 375x${viewportHeight}: the band is fully visible, bounded only by the modal's own cap`, async () => {
-      const { modalRect, thumbGroupRect } = await measure(viewportHeight);
-      expect(thumbGroupRect.bottom).toBeLessThanOrEqual(modalRect.bottom + 1);
+  // The full previous matrix (667 down to 400), all of it now genuinely
+  // clean: with the footer-safe cap (maxHeightBeforeFooter), the band's
+  // own overflow:hidden always clips before reaching either the footer or
+  // the modal's edge, by construction -- verified this holds uniformly
+  // rather than needing a separate, weaker bound for the extreme case the
+  // way the pre-footer-cap version of this suite did. The trade-off,
+  // reported honestly: at the single most extreme viewport in this matrix
+  // (400px), the footer-safe cap is much tighter than the modal's own cap
+  // was (~31px of visible room vs. the ~143-65px of overlap a version
+  // without this cap would have had) -- more of the band's content is
+  // invisible there than before, not less. That's intentional: a control
+  // that's cleanly clipped (this codebase's existing, already-accepted
+  // degradation for pathological viewports) is a known, safe failure mode;
+  // a control that visually overlaps the footer's cart button/disclaimer
+  // is a new and worse one (found in review) -- this suite verifies the
+  // worse one is now impossible, not that the existing one is eliminated.
+  for (const viewportHeight of [667, 640, 600, 568, 520, 480, 450, 400]) {
+    it(`at 375x${viewportHeight}: the band aligns with the image and never overlaps the footer or the modal edge`, async () => {
+      const { modalRect, footerRect, imageContainerRect, bandRect } = await measure(viewportHeight);
+
+      // The actual bug this round: the band used to measure its anchor
+      // via offsetTop/Left, which (since resultContentRef is genuinely
+      // position:relative) silently resolved relative to
+      // resultContentRef rather than the band's own containing block,
+      // landing it near the header instead of over the image. Confirms
+      // it now lands in the right place, regardless of what's
+      // position:relative in between.
+      expect(bandRect.top).toBeCloseTo(imageContainerRect.top + 14, 0);
+      expect(bandRect.left).toBeCloseTo(imageContainerRect.left + 14, 0);
+
+      expect(bandRect.bottom).toBeLessThanOrEqual(footerRect.top + 1);
+      expect(bandRect.bottom).toBeLessThanOrEqual(modalRect.bottom + 1);
     }, 15000);
   }
-
-  it('at 375x400 (the most extreme case in this matrix): remaining clipping is far smaller than before this fix', async () => {
-    const { modalRect, thumbGroupRect } = await measure(400);
-    const clippedBy = Math.max(0, thumbGroupRect.bottom - modalRect.bottom);
-    // Bounded generously (100px, comfortably above the ~65px measured
-    // when this was written) as a regression net against this specific
-    // residual gap getting dramatically worse.
-    expect(clippedBy).toBeLessThanOrEqual(100);
-  }, 15000);
 });
 
 /**
@@ -1041,7 +1087,7 @@ describe('Result footer: idle download-status line collapses instead of reservin
         `<!DOCTYPE html><html><body style="margin:0;">
           <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; width:${width}px; box-sizing:border-box;">
             ${headerHtml}
-            <div id="content-wrapper" style="flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
+            <div id="content-wrapper" style="position:relative; flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
               <img id="result-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3C/svg%3E" style="display:block; max-width:100%; max-height:150px; width:auto; height:auto;" />
             </div>
             ${buildFooterHtml(statusText)}

@@ -133,36 +133,85 @@ export function RoomVisualizationFlow({
   // regardless of the image's own size, making the only feedback/Before-
   // After controls genuinely inaccessible. Fixed by rendering the band as
   // a sibling of the header/content/footer stack instead (see the JSX
-  // below, outside imageContainerRef entirely) -- since that's a direct
-  // child of .getroomly-modal-container (App.tsx), whose own
-  // position:fixed + transform makes it the containing block for this
-  // band's position:absolute, it's now only bounded by the MODAL's own
-  // 80dvh budget, not by whatever's left over after the header and footer
-  // specifically. bandAnchor is imageContainerRef's own on-screen box
-  // (offsetTop/Left/Width/Height are relative to the nearest positioned
-  // ancestor, which -- since nothing between imageContainerRef and the
-  // modal has its own position set -- resolves directly to the modal, no
-  // getBoundingClientRect subtraction needed), read fresh whenever it
-  // might have changed.
+  // below, outside imageContainerRef entirely).
+  //
+  // bandAnchor is imageContainerRef's on-screen box, in the SAME
+  // coordinate system the band's own position:absolute resolves against
+  // -- found in review that resultContentRef is itself position:relative
+  // (its own div, further down), so it's imageContainerRef's real
+  // offsetParent; reading offsetTop/Left directly (an earlier version of
+  // this did) silently returns coordinates relative to resultContentRef,
+  // not the band's own containing block, landing the band near the
+  // header instead of over the image. getBoundingClientRect gives both
+  // elements' positions in the same (viewport) coordinate system
+  // regardless of how many positioned ancestors sit in between either of
+  // them, so subtracting is correct no matter what resultContentRef (or
+  // anything else) does with its own `position`.
+  //
+  // bandRef is the chicken-and-egg piece: the band's own containing block
+  // is only knowable once it has actually mounted (via its own
+  // offsetParent), but it only needs to mount at all once a real anchor
+  // exists. renderTopBand mounts it regardless, visually hidden until the
+  // first real measurement lands, specifically so this has something to
+  // read.
+  const bandRef = useRef<HTMLDivElement | null>(null);
+  // Read in measureBandAnchor to cap the band's own height before it
+  // reaches the footer -- since the band is position:absolute (out of
+  // normal document flow entirely), it doesn't push the footer down the
+  // way an in-flow element would, so a sufficiently wrapped band could
+  // otherwise paint OVER the footer's cart button/disclaimer instead of
+  // just being clipped by the modal. Found in review.
+  const footerRef = useRef<HTMLDivElement | null>(null);
   const [bandAnchor, setBandAnchor] = useState<{
     top: number;
     left: number;
     width: number;
     height: number;
+    maxHeightBeforeFooter: number;
   } | null>(null);
   const measureBandAnchor = useCallback(() => {
-    const el = imageContainerRef.current;
-    if (!el) {
+    const imageEl = imageContainerRef.current;
+    if (!imageEl) {
       setBandAnchor(null);
       return;
     }
+    // document.body is only reached on the very first call, before the
+    // band has ever mounted (bandRef.current is still null) -- imprecise,
+    // but harmless: the band renders visibility:hidden until this first
+    // real measurement completes, so a wrong transient position is never
+    // actually seen.
+    const containingEl = bandRef.current?.offsetParent ?? document.body;
+    const imageRect = imageEl.getBoundingClientRect();
+    const containingRect = containingEl.getBoundingClientRect();
+    const top = imageRect.top - containingRect.top;
+    const left = imageRect.left - containingRect.left;
+    // 8px breathing room before the footer, not flush against it. Falls
+    // back to a generous value (won't realistically bind) if the footer
+    // ref isn't available yet -- the modal's own 80dvh cap still applies
+    // regardless, this is only ever a tighter, additional constraint.
+    const footerTop = footerRef.current
+      ? footerRef.current.getBoundingClientRect().top - containingRect.top
+      : Number.MAX_SAFE_INTEGER;
+    const maxHeightBeforeFooter = Math.max(0, footerTop - (top + 14) - 8);
     setBandAnchor({
-      top: el.offsetTop,
-      left: el.offsetLeft,
-      width: el.offsetWidth,
-      height: el.offsetHeight,
+      top,
+      left,
+      width: imageRect.width,
+      height: imageRect.height,
+      maxHeightBeforeFooter,
     });
   }, []);
+
+  // The ResizeObserver on imageContainerRef (attachImageContainerRef)
+  // only fires when that element's own SIZE changes -- it wouldn't catch
+  // imageContainerRef staying the same size but shifting horizontally
+  // (its own centering position depends on the available width of its
+  // flex row, not its own size), e.g. an actual window/orientation
+  // resize. Cheap enough to just always listen.
+  useEffect(() => {
+    window.addEventListener('resize', measureBandAnchor);
+    return () => window.removeEventListener('resize', measureBandAnchor);
+  }, [measureBandAnchor]);
 
   // Mutable refs so touch handlers can read latest values without being in the
   // effect dep array (avoids re-registering listeners on every scale update).
@@ -1344,6 +1393,15 @@ export function RoomVisualizationFlow({
               src={resultImage || uploadedImage || ''}
               alt={t.labelNew}
               aria-hidden={showOriginalImage}
+              // Belt-and-suspenders alongside the ResizeObserver on
+              // imageContainerRef: that observer only fires once this
+              // image has actually decoded and the wrapper's shrink-to-fit
+              // box changes size to match -- which it always eventually
+              // does, but onLoad re-measures immediately on the load event
+              // itself rather than waiting on the observer's own timing,
+              // and is the only measurement path left at all in browsers
+              // without ResizeObserver support (found in review).
+              onLoad={measureBandAnchor}
               style={{
                 display: 'block',
                 maxWidth: '100%',
@@ -1359,27 +1417,18 @@ export function RoomVisualizationFlow({
                 // guess.
                 //
                 // Deliberately NOT padded with extra headroom for the top
-                // band below (toggle + thumbs) -- a version of this tried
-                // that, but it couldn't have worked: resultContentRef is a
-                // SEPARATE overflow:hidden ancestor with its own
+                // band (toggle + thumbs) -- an earlier version of this
+                // tried that, but it couldn't have worked: resultContentRef
+                // is a SEPARATE overflow:hidden ancestor with its own
                 // independently flex-resolved height, unaffected by
                 // whatever this maxHeight claims, so padding the image
                 // taller than what's actually measured just gets clipped by
-                // resultContentRef itself before it could ever reach the
-                // band inside imageContainerRef's own (also overflow:hidden)
-                // box. There's no way to hand the band more room without
-                // either growing resultContentRef itself (which competes
-                // with the header/footer/80dvh budget this measurement
-                // exists to respect) or rendering the band outside the
-                // clipped hierarchy entirely (a real fix, but a bigger
-                // structural change than this PR's scope). At viewport
-                // heights where the measured value drops below what the
-                // band's worst wrapped case needs (~144px; measured with
-                // Puppeteer, this only happens below ~514px viewport height
-                // with the current footer), part of the band can be
-                // genuinely clipped -- an accepted, documented gap, same
-                // precedent as this codebase's existing acknowledgment of
-                // pathological-viewport overflow elsewhere in this file.
+                // resultContentRef itself. The real fix (renderTopBand,
+                // bandAnchor) renders the band OUTSIDE resultContentRef
+                // entirely, as a sibling positioned via measured
+                // coordinates -- so it no longer depends on this image's
+                // own maxHeight at all. This stays exactly the real
+                // available space, nothing more.
                 maxHeight: `${availableImageHeightPx ?? 150}px`,
                 width: 'auto',
                 height: 'auto',
@@ -1462,16 +1511,25 @@ export function RoomVisualizationFlow({
   // buttons' padding, which must stay identical in both states so the
   // control doesn't shift geometry every time it's pressed.
   const renderTopBand = () => {
-    if (!bandAnchor || !((showOriginal || showFeedback) && (resultImage || uploadedImage))) {
+    if (!((showOriginal || showFeedback) && (resultImage || uploadedImage))) {
       return null;
     }
+    // Always mounts once the conditions above are met, regardless of
+    // whether a real measurement has landed yet -- bandRef needs to exist
+    // for measureBandAnchor's own offsetParent lookup to work at all (see
+    // its comment), and visibility:hidden means a transient wrong/zeroed
+    // position is never actually visible in the meantime.
     return (
       <div
+        ref={bandRef}
         style={{
           position: 'absolute',
-          top: `${bandAnchor.top + 14}px`,
-          left: `${bandAnchor.left + 14}px`,
-          width: `${Math.max(0, bandAnchor.width - 28)}px`,
+          visibility: bandAnchor ? 'visible' : 'hidden',
+          top: `${(bandAnchor?.top ?? 0) + 14}px`,
+          left: `${(bandAnchor?.left ?? 0) + 14}px`,
+          width: `${Math.max(0, (bandAnchor?.width ?? 0) - 28)}px`,
+          maxHeight: bandAnchor ? `${bandAnchor.maxHeightBeforeFooter}px` : undefined,
+          overflow: 'hidden',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'flex-start',
@@ -2264,6 +2322,7 @@ export function RoomVisualizationFlow({
 
       {/* Footer - Dynamic based on step */}
       <div
+        ref={footerRef}
         style={{
           padding: '8px var(--getroomly-space-sm) var(--getroomly-space-sm)',
           backgroundColor: '#ffffff',
