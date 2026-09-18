@@ -906,7 +906,7 @@ describe('Top band vs the real clipping hierarchy: rendered outside resultConten
       `;
       const bandHtml = `
         <div id="band" style="position:absolute; overflow:hidden; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; z-index:10;">
-          <div style="display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%; box-sizing:border-box; gap:4px; padding:4px; border-radius:999px; background:rgba(255,255,255,.94);">
+          <div id="pill" style="display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%; box-sizing:border-box; gap:4px; padding:4px; border-radius:999px; background:rgba(255,255,255,.94);">
             <button style="${pillButtonStyle}">${escapeHtml(t.toggleBefore)}</button>
             <button style="${pillButtonStyle}">${escapeHtml(t.toggleAfter)}</button>
           </div>
@@ -991,6 +991,7 @@ describe('Top band vs the real clipping hierarchy: rendered outside resultConten
             document.getElementById('image-container').getBoundingClientRect()
           ),
           bandRect: toPlain(document.getElementById('band').getBoundingClientRect()),
+          pillRect: toPlain(document.getElementById('pill').getBoundingClientRect()),
           thumbGroupRect: toPlain(document.getElementById('thumb-group').getBoundingClientRect()),
         };
       });
@@ -1015,6 +1016,11 @@ describe('Top band vs the real clipping hierarchy: rendered outside resultConten
   // a control that visually overlaps the footer's cart button/disclaimer
   // is a new and worse one (found in review) -- this suite verifies the
   // worse one is now impossible, not that the existing one is eliminated.
+  // Alignment + structural (band-vs-footer/modal) checks apply at every
+  // viewport in the matrix -- these hold by construction (bandRect is
+  // itself CSS max-height-capped, so of course its own box respects that
+  // cap; this only verifies the CAP'S INPUTS -- footer/modal position --
+  // were read correctly, not that anything inside remains visible).
   for (const viewportHeight of [667, 640, 600, 568, 520, 480, 450, 400]) {
     it(`at 375x${viewportHeight}: the band aligns with the image and never overlaps the footer or the modal edge`, async () => {
       const { modalRect, footerRect, imageContainerRect, bandRect } = await measure(viewportHeight);
@@ -1031,6 +1037,61 @@ describe('Top band vs the real clipping hierarchy: rendered outside resultConten
 
       expect(bandRect.bottom).toBeLessThanOrEqual(footerRect.top + 1);
       expect(bandRect.bottom).toBeLessThanOrEqual(modalRect.bottom + 1);
+    }, 15000);
+  }
+
+  // What the checks above DON'T verify (found in review): bandRect is the
+  // band's own OUTER box, which is CSS max-height + overflow:hidden --
+  // its own bottom edge respecting the cap is mechanical, not evidence
+  // that the CONTROLS inside are still visible. Measured directly (real
+  // pill/thumb-group rects against bandRect's own clipped boundary, not
+  // against the footer/modal) at every viewport in the matrix -- the
+  // honest picture is worse than earlier rounds described: it's not just
+  // the thumb group that can be clipped, the toggle pill itself is too,
+  // starting at 450px, not only the single most extreme case (400px).
+  //
+  //   667-520px: neither the pill nor the thumb group is clipped at all.
+  //   480px:     the pill is NOT clipped; the thumb group is.
+  //   450/400px: BOTH are clipped.
+  //
+  // 667-520px get a real "fully visible" guarantee (the genuine fix this
+  // round provides). 480px gets a real guarantee for the pill specifically
+  // (still usable) plus a bounded (not eliminated) check on the thumb
+  // group. 450/400px get bounded checks on both -- this is the accepted,
+  // documented gap (see the maxHeight comment in RoomVisualizationFlow.tsx
+  // for why "shrink the image to reserve space" doesn't work at these
+  // viewports, and why closing this fully needs a real scroll/reflow
+  // decision this PR deliberately doesn't make unprompted), reported
+  // honestly rather than asserted away.
+  for (const viewportHeight of [667, 640, 600, 568, 520]) {
+    it(`at 375x${viewportHeight}: both the toggle pill and the thumb group remain fully visible, not just non-overlapping`, async () => {
+      const { bandRect, pillRect, thumbGroupRect } = await measure(viewportHeight);
+      expect(pillRect.bottom).toBeLessThanOrEqual(bandRect.bottom + 1);
+      expect(thumbGroupRect.bottom).toBeLessThanOrEqual(bandRect.bottom + 1);
+    }, 15000);
+  }
+
+  it('at 375x480: the toggle pill remains fully visible (the thumb group does not, bounded)', async () => {
+    const { bandRect, pillRect, thumbGroupRect } = await measure(480);
+    expect(pillRect.bottom).toBeLessThanOrEqual(bandRect.bottom + 1);
+    const thumbClippedBy = Math.max(0, thumbGroupRect.bottom - bandRect.bottom);
+    // Bounded generously (60px, comfortably above the ~35px measured when
+    // this was written) as a regression net, not a claim this is fine.
+    expect(thumbClippedBy).toBeLessThanOrEqual(60);
+  }, 15000);
+
+  for (const viewportHeight of [450, 400]) {
+    it(`at 375x${viewportHeight}: clipping of the pill and thumb group is bounded, not catastrophic`, async () => {
+      const { bandRect, pillRect, thumbGroupRect } = await measure(viewportHeight);
+      const pillClippedBy = Math.max(0, pillRect.bottom - bandRect.bottom);
+      const thumbClippedBy = Math.max(0, thumbGroupRect.bottom - bandRect.bottom);
+      // Bounded generously (350px, comfortably above the worst measured
+      // when this was written -- 450px: pill ~5px, thumb group ~59px;
+      // 400px: pill ~199px, thumb group ~305px) as a regression net
+      // against this documented, accepted gap getting dramatically worse,
+      // not a claim that either is fine.
+      expect(pillClippedBy).toBeLessThanOrEqual(350);
+      expect(thumbClippedBy).toBeLessThanOrEqual(350);
     }, 15000);
   }
 });
