@@ -1273,6 +1273,187 @@ describe('Top band formula: never extends past the image bottom, however far the
 });
 
 /**
+ * Found in review: every other suite above tests width-only bounds (the
+ * "Cross-language button overflow" well-width matrix) or a wide/landscape
+ * 400x300 image at various VIEWPORT heights (the "real clipping hierarchy"
+ * suite) -- neither covers a genuinely NARROW image at a comfortable,
+ * un-squeezed viewport, which is a different failure mode: not "the
+ * viewport is short," but "the image itself is narrow enough that both
+ * control groups have to wrap internally, and their combined wrapped
+ * height blows the band's own budget even with plenty of viewport to
+ * spare." 84px wide (a 9:16 portrait crop at this component's 150px
+ * fallback height) isn't a contrived edge case -- it's the exact number
+ * this codebase's own comments already cite elsewhere (see the thumb
+ * group's flexWrap comment in RoomVisualizationFlow.tsx) as the realistic
+ * narrow case this layout is built to support.
+ *
+ * Measured directly: at this width, the toggle pill's own two buttons
+ * wrap onto separate lines (they don't fit "Vorher"/"Nachher" side by
+ * side in 56px), and the thumb group's two 44px circles do too -- and the
+ * combined wrapped height of both groups stacked in the band (~252px)
+ * gets clipped by a budget of ~128px in a comfortable 667px-tall
+ * viewport. This is NOT the same, previously-documented short-viewport
+ * gap (450/400px, both groups partially clipped) -- it's worse in kind,
+ * not just degree: the thumb group's top edge already falls past the
+ * band's own clipped bottom, meaning it is not merely degraded but
+ * entirely invisible, at a comfortable viewport height with nothing else
+ * squeezing it. Reported honestly, with generous bounds as a regression
+ * net (not a claim either is fine), the same way the short-viewport suite
+ * above does.
+ */
+describe('Top band at a narrow (84px) image: the thumb group can be entirely, not just partially, clipped', () => {
+  let browser;
+
+  beforeAll(async () => {
+    browser = await puppeteer.launch({
+      headless: process.env.CI !== 'false',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    if (browser) await browser.close();
+  });
+
+  const t = translations.de; // Vorher/Nachher -- the worst-case toggle text.
+  const width = 375;
+  const viewportHeight = 667; // Comfortable -- isolates width, not a squeeze.
+
+  it('an 84px-wide portrait image at the 150px fallback height clips the thumb group entirely, and the pill partially', async () => {
+    const page = await browser.newPage();
+    try {
+      await page.setViewport({ width, height: viewportHeight });
+
+      const headerHtml = `
+        <div style="display:flex; flex-direction:row; align-items:center; padding:4px 16px; flex-shrink:0; gap:4px; font-family:${FONT_STACK};">
+          <div style="width:28px; flex-shrink:0;"></div>
+          <h2 style="flex:1; text-align:center; font-size:18px; font-weight:bold; letter-spacing:-0.025em; margin:0;">${escapeHtml(t.stepResult)}</h2>
+          <button style="flex-shrink:0; width:28px; height:28px; border-radius:50%; border:none;"></button>
+        </div>
+      `;
+      const tertiaryButtonStyle = `
+        gap:8px; justify-content:center; align-items:center; text-align:center;
+        min-height:44px; border-radius:999px; display:flex; font-size:14px;
+        padding:10px 16px; background:none; color:#6b7280; font-weight:500;
+        border:none; font-family:${FONT_STACK};
+      `;
+      const footerHtml = `
+        <div style="padding:8px 16px 16px; background-color:#ffffff; flex-shrink:0;">
+          <div style="display:flex; flex-direction:column; gap:8px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
+            <div style="display:flex; gap:10px;">
+              <button style="flex-shrink:0; width:54px; height:54px; border-radius:999px; border:1.5px solid #7d7979;"></button>
+              <button style="flex:1; height:54px; border-radius:999px; border:none; font-size:14px; background:${PRIMARY}; color:white;">${escapeHtml(t.addToBasket)}</button>
+            </div>
+            <p style="margin:0; text-align:center; font-size:12px; line-height:1.45; color:#444141;">${escapeHtml(t.disclaimer)}</p>
+            <p style="margin:0; text-align:center; font-size:12px; font-weight:600; color:${PRIMARY};"></p>
+            <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px;">
+              <button style="${tertiaryButtonStyle}">${escapeHtml(t.downloadToDevice)}</button>
+              <button style="${tertiaryButtonStyle}">${escapeHtml(t.shareWithFriends)}</button>
+              <button style="${tertiaryButtonStyle}">${escapeHtml(t.newPhoto)}</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const pillButtonStyle = `
+        box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
+        font-size:12px; font-weight:600; font-family:${FONT_STACK};
+        background:${PRIMARY}; color:white; overflow-wrap:break-word; min-width:0; max-width:100%;
+      `;
+      const bandHtml = `
+        <div id="band" style="position:absolute; overflow:hidden; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; z-index:10;">
+          <div id="pill" style="display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%; box-sizing:border-box; gap:4px; padding:4px; border-radius:999px; background:rgba(255,255,255,.94);">
+            <button style="${pillButtonStyle}">${escapeHtml(t.toggleBefore)}</button>
+            <button style="${pillButtonStyle}">${escapeHtml(t.toggleAfter)}</button>
+          </div>
+          <div id="thumb-group" style="display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%; box-sizing:border-box; gap:8px; margin-left:auto; justify-content:flex-end;">
+            <button style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border:0; background:transparent; padding:0;"><span style="width:40px; height:40px; border-radius:50%; display:flex; background:rgba(255,255,255,.94);"></span></button>
+            <button style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border:0; background:transparent; padding:0;"><span style="width:40px; height:40px; border-radius:50%; display:flex; background:rgba(255,255,255,.94);"></span></button>
+          </div>
+        </div>
+      `;
+
+      // A NATURAL (not synthetic) wrapper -- flex:1 1 auto; min-height:0,
+      // shrink-wrapping to the image exactly like resultContentRef does in
+      // production -- deliberately unlike the "never extends past the
+      // image bottom" suite above, which forces an artificial gap. This
+      // suite's whole point is that the real, organic layout already
+      // fails here without any synthetic setup.
+      await page.setContent(
+        `<!DOCTYPE html><html><body style="margin:0;">
+          <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; position:relative; width:${width}px; box-sizing:border-box;">
+            ${headerHtml}
+            <div id="content-wrapper" style="position:relative; flex:1 1 auto; min-height:0; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:flex-start;">
+              <div id="image-container" style="position:relative; display:inline-block; overflow:hidden;">
+                <img id="result-image" width="84" height="150" style="display:block; width:84px; height:150px;" />
+              </div>
+            </div>
+            ${bandHtml}
+            <div id="footer">${footerHtml}</div>
+          </div>
+          <script>
+            const imageContainer = document.getElementById('image-container');
+            const band = document.getElementById('band');
+            const footer = document.getElementById('footer');
+
+            function measureBand() {
+              const containingEl = band.offsetParent || document.body;
+              const imageRect = imageContainer.getBoundingClientRect();
+              const containingRect = containingEl.getBoundingClientRect();
+              const top = imageRect.top - containingRect.top;
+              const left = imageRect.left - containingRect.left;
+              const footerTop = footer.getBoundingClientRect().top - containingRect.top;
+              const maxHeightWithinImage = Math.max(0, imageRect.height - 14);
+              const maxHeightWithinBounds = Math.max(
+                0,
+                Math.min(footerTop - (top + 14) - 8, maxHeightWithinImage)
+              );
+              band.style.top = (top + 14) + 'px';
+              band.style.left = (left + 14) + 'px';
+              band.style.width = Math.max(0, imageRect.width - 28) + 'px';
+              band.style.maxHeight = maxHeightWithinBounds + 'px';
+            }
+
+            const imageContainerObserver = new ResizeObserver(() => {
+              measureBand();
+              window.__bandMeasured = true;
+            });
+            imageContainerObserver.observe(imageContainer);
+            measureBand();
+            window.__bandMeasured = true;
+          </script>
+        </body></html>`
+      );
+      await page.waitForFunction(() => window.__bandMeasured);
+
+      const { bandRect, pillRect, thumbGroupRect } = await page.evaluate(() => {
+        const toPlain = r => ({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+        return {
+          bandRect: toPlain(document.getElementById('band').getBoundingClientRect()),
+          pillRect: toPlain(document.getElementById('pill').getBoundingClientRect()),
+          thumbGroupRect: toPlain(document.getElementById('thumb-group').getBoundingClientRect()),
+        };
+      });
+
+      const pillClippedBy = Math.max(0, pillRect.bottom - bandRect.bottom);
+      const thumbClippedBy = Math.max(0, thumbGroupRect.bottom - bandRect.bottom);
+      // The thumb group's own TOP already sitting past the band's clipped
+      // bottom is what makes this qualitatively worse than partial
+      // clipping -- it isn't a few pixels cut off the bottom of visible
+      // circles, the circles never enter the visible area at all.
+      expect(thumbGroupRect.top).toBeGreaterThanOrEqual(bandRect.bottom);
+      // Bounded generously (both at 350px, comfortably above the ~18px/
+      // ~124px measured when this was written) as a regression net
+      // against this getting dramatically worse, not a claim that either
+      // is fine -- same convention as the short-viewport suite above.
+      expect(pillClippedBy).toBeLessThanOrEqual(350);
+      expect(thumbClippedBy).toBeLessThanOrEqual(350);
+    } finally {
+      await page.close();
+    }
+  }, 15000);
+});
+
+/**
  * The download-status <p> (RoomVisualizationFlow.tsx, in renderResultFooter)
  * used to permanently reserve 15px via minHeight, even though it's empty
  * except for the 2400ms after a download. That reservation was removed so

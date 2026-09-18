@@ -1259,6 +1259,19 @@ export function RoomVisualizationFlow({
     // dependency rather than relying on some other value happening to
     // change at the same time. Found in review.
     config?.language,
+    // Same class of gap, found in the same review round: these three
+    // don't affect the band's OWN content, but they gate whole rows in
+    // the FOOTER (add-to-basket, favorite, save/share), which changes the
+    // footer's real height and therefore maxHeightWithinBounds. The
+    // dedicated ResizeObserver on footerRef (below) already covers this
+    // in any browser that supports ResizeObserver; this is the fallback
+    // for the one that doesn't, exactly like the config.language case
+    // above -- a host toggling config.buttons via another
+    // 'getroomly-open-modal' call while this instance stays mounted
+    // otherwise has no trigger there at all.
+    showAddToBasket,
+    showFavorite,
+    showSaveShare,
     measureBandAnchor,
   ]);
 
