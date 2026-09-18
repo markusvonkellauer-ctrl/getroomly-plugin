@@ -213,6 +213,29 @@ export function RoomVisualizationFlow({
     return () => window.removeEventListener('resize', measureBandAnchor);
   }, [measureBandAnchor]);
 
+  // maxHeightBeforeFooter depends on the footer's own position, which can
+  // move without imageContainerRef changing size at all -- e.g.
+  // downloadStatusVisible adding/removing the status line in the footer
+  // (see handleDownloadToDevice) grows the footer, pulling its top edge
+  // closer to the image, while the image itself may still fit its own
+  // intrinsic size unchanged. Without this, that leaves a stale (too
+  // generous) cap that could let a wrapped band paint into where the
+  // footer just grew into. footerRef's own div is always mounted (every
+  // step renders into it), so a plain mount-time observe is enough --
+  // no callback-ref dance needed the way imageContainerRef's has, since
+  // this element doesn't unmount/remount across steps. Found in review.
+  useEffect(() => {
+    const el = footerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      measureBandAnchor();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measureBandAnchor]);
+
   // Mutable refs so touch handlers can read latest values without being in the
   // effect dep array (avoids re-registering listeners on every scale update).
   const imageScaleRef = useRef(imageScale);
@@ -1752,7 +1775,20 @@ export function RoomVisualizationFlow({
               // Puppeteer: even English overflowed by ~50px at 140px
               // before this was added). No whiteSpace:nowrap here, so
               // text wraps within the pill once constrained.
+              //
+              // maxWidth alone only caps the pill's own BOX -- it
+              // doesn't make the TEXT inside able to wrap. Without
+              // overflow-wrap + minWidth:0 (found in review, verified
+              // with Puppeteer: scrollWidth exceeded clientWidth at an
+              // 84px well, meaning the text was overflowing the pill's
+              // own box even though the box itself measured within
+              // bounds) the text still overflows the constrained box and
+              // gets clipped by the band's own overflow:hidden one level
+              // up -- same fix already applied to the toggle buttons
+              // above.
               maxWidth: '100%',
+              minWidth: 0,
+              overflowWrap: 'break-word',
               boxSizing: 'border-box',
               fontWeight: 600,
               fontSize: '11.5px',

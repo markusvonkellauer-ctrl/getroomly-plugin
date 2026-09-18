@@ -1440,6 +1440,31 @@ describe('RoomVisualizationFlow', () => {
       }
     });
 
+    test('the confirmation pill can wrap its own text at narrow widths (real inline styles, not a fixture)', async () => {
+      await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
+
+      // maxWidth alone only caps the pill's own box -- it doesn't let the
+      // TEXT inside wrap, so an unbreakable word can still overflow the
+      // box and get clipped by the band's own overflow:hidden one level
+      // up (found in review, verified with Puppeteer in
+      // tests/visual/overflow.test.js, which can't itself read these
+      // real inline styles off the actual component the way this can).
+      // Two elements carry this text (the visible pill and the hidden
+      // live-region span, see the earlier test) -- the pill is the <div>,
+      // the live region is a <span role="status">.
+      const pill = screen
+        .getAllByText('Thanks for your feedback.')
+        .find(el => el.tagName === 'DIV');
+      expect(pill).toBeDefined();
+      // jsdom's CSSOM normalizes the numeric 0 without a unit suffix
+      // (real browsers report '0px') -- '0' either way confirms the
+      // style is actually set, which is what this test is checking.
+      expect(pill.style.minWidth).toBe('0');
+      expect(pill.style.overflowWrap).toBe('break-word');
+    });
+
     test('a rejected submitFeedback call does not throw or crash the component', async () => {
       submitFeedback.mockRejectedValueOnce(new Error('network error'));
       await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });

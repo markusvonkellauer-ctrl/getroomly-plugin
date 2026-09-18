@@ -600,6 +600,52 @@ describe('Top band: Before/After toggle + feedback thumbs never overlap or clip'
       }
     }, 15000);
   }
+
+  // The confirmation pill (feedbackState === 'thanks') replaces the thumb
+  // group in the same slot, but wasn't covered by buildBandHtml above at
+  // all -- found in review: maxWidth:'100%' alone caps the pill's own BOX
+  // width, but doesn't make unbreakable words wrap WITHIN that box.
+  // scrollWidth > clientWidth is the real signal (a box-edge comparison
+  // like the toggle/thumb checks above wouldn't catch this: the box
+  // itself correctly stays within the well, only its TEXT CONTENT
+  // overflows it, invisibly to a check that only looks at the box).
+  const CONFIRMATION_PILL_STYLE = `
+    margin-left:auto; flex-shrink:0; max-width:100%; min-width:0;
+    overflow-wrap:break-word; box-sizing:border-box; font-weight:600;
+    font-size:11.5px; line-height:1.25; color:#201e1d; padding:11px 14px;
+    border-radius:999px; background:rgba(255,255,255,.94); font-family:${FONT_STACK};
+  `;
+  for (const lang of ['ja', 'el', 'pt']) {
+    // ja/el/pt: the three longest feedbackThanks strings by real rendered
+    // width (measured with Puppeteer -- byte/character length is
+    // misleading for CJK and Greek scripts, so this was measured, not
+    // guessed: ja 201px, el 186px, pt 163.5px, vs. en/de mid-pack at
+    // ~149px/136px). All three overflowed their own pill box at this
+    // width before this fix (min-width:0 + overflow-wrap:break-word).
+    it(`"${lang}" confirmation pill at 84px: text wraps within the pill instead of overflowing it`, async () => {
+      const t = translations[lang];
+      const page = await browser.newPage();
+      try {
+        await page.setViewport({ width: 124, height: 250 });
+        await page.setContent(
+          `<!DOCTYPE html><html><body style="margin:0; padding:20px;">
+            <div id="well" style="position:relative; width:84px; box-sizing:border-box; background:#221a17;">
+              <div style="position:absolute; top:14px; left:14px; right:14px; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px;">
+                <div class="confirmation-pill" style="${CONFIRMATION_PILL_STYLE}">${escapeHtml(t.feedbackThanks)}</div>
+              </div>
+            </div>
+          </body></html>`
+        );
+        const result = await page.evaluate(() => {
+          const pill = document.querySelector('.confirmation-pill');
+          return { clientWidth: pill.clientWidth, scrollWidth: pill.scrollWidth };
+        });
+        expect(result.scrollWidth).toBeLessThanOrEqual(result.clientWidth + 1);
+      } finally {
+        await page.close();
+      }
+    }, 15000);
+  }
 });
 
 /**
