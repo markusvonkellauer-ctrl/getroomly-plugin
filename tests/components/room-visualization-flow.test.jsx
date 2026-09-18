@@ -1104,6 +1104,106 @@ describe('RoomVisualizationFlow', () => {
       expect(toggleGroup.style.pointerEvents).toBe('auto');
       expect(thumbGroup.style.pointerEvents).toBe('auto');
     });
+
+    // Found in review: every other test in this describe block checks
+    // WHERE the band sits in the DOM or what its static styles are, not
+    // the actual arithmetic in measureBandAnchor -- and
+    // tests/visual/overflow.test.js's Puppeteer suite re-implements that
+    // arithmetic independently in hand-authored HTML rather than calling
+    // the real component, so a regression in the real getBoundingClientRect
+    // subtraction or maxHeightWithinBounds calculation could pass both
+    // suites. This mocks getBoundingClientRect on the real imageContainerRef
+    // and footerRef elements (jsdom returns all-zero rects by default,
+    // which is why nothing else in this file relies on it) and asserts the
+    // band's own rendered top/left/width/maxHeight against values computed
+    // by hand from the same formula -- if measureBandAnchor's real
+    // implementation changes, this fails independently of the Puppeteer
+    // fixture.
+    test('measureBandAnchor positions the real band from real element rects (mocked, not a fixture)', async () => {
+      class MockResizeObserver {
+        constructor(callback) {
+          this.callback = callback;
+        }
+        observe(element) {
+          this.element = element;
+          MockResizeObserver.instances.push(this);
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      MockResizeObserver.instances = [];
+      const originalResizeObserver = global.ResizeObserver;
+      global.ResizeObserver = MockResizeObserver;
+
+      try {
+        await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result', generationId: 'gen-1' });
+
+        const beforeButton = screen.getByRole('button', { name: 'Before' });
+        const band = findBandAncestor(beforeButton);
+        // renderTopBand() and the footer div are adjacent JSX siblings
+        // (see the call site near the end of the component) with nothing
+        // between them -- neither is wrapped in an element of its own, so
+        // this is footerRef's real element, not a guess.
+        const footerEl = band.nextElementSibling;
+        const imageContainerObserver = MockResizeObserver.instances.find(
+          i => i.element.style.display === 'inline-block'
+        );
+        const imageContainerEl = imageContainerObserver.element;
+
+        jest.spyOn(imageContainerEl, 'getBoundingClientRect').mockReturnValue({
+          top: 100,
+          left: 20,
+          width: 300,
+          height: 150,
+          bottom: 250,
+          right: 320,
+          x: 20,
+          y: 100,
+          toJSON() {},
+        });
+        jest.spyOn(footerEl, 'getBoundingClientRect').mockReturnValue({
+          top: 200,
+          left: 0,
+          width: 375,
+          height: 180,
+          bottom: 380,
+          right: 375,
+          x: 0,
+          y: 200,
+          toJSON() {},
+        });
+
+        // Re-runs measureBandAnchor with the mocked rects now in place --
+        // the observer's callback ignores its own argument and always
+        // re-measures (see attachImageContainerRef), so any value works
+        // here; what matters is that it fires after the mocks above.
+        act(() => {
+          imageContainerObserver.callback([{ contentRect: { height: 150 } }]);
+        });
+
+        // bandEl.offsetParent is always null in jsdom (no real layout
+        // engine), so measureBandAnchor's fallback -- document.body -- is
+        // the real containing element here, and jsdom's own default
+        // getBoundingClientRect for it is {top:0, left:0, ...}, left
+        // unmocked deliberately: this is the same fallback production
+        // takes whenever the band's real offsetParent isn't resolvable.
+        //
+        // top = imageRect.top(100) - containingRect.top(0) = 100
+        // band style.top = (100 + 14) = 114px
+        // band style.left = (20 - 0 + 14) = 34px
+        // band style.width = max(0, 300 - 28) = 272px
+        // footerTop = footerRect.top(200) - containingRect.top(0) = 200
+        // footer-cap = 200 - (100 + 14) - 8 = 78
+        // image-height-cap = max(0, 150 - 14) = 136
+        // maxHeightWithinBounds = min(78, 136) = 78 (footer-cap binds)
+        expect(band.style.top).toBe('114px');
+        expect(band.style.left).toBe('34px');
+        expect(band.style.width).toBe('272px');
+        expect(band.style.maxHeight).toBe('78px');
+      } finally {
+        global.ResizeObserver = originalResizeObserver;
+      }
+    });
   });
 
   // ─── Double-tap-to-reset-zoom must ignore taps on overlay controls ────────

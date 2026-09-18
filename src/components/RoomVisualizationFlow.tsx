@@ -1247,6 +1247,18 @@ export function RoomVisualizationFlow({
     showOriginal,
     showFeedback,
     downloadStatusVisible,
+    // useEmbedConfig re-reads window.GetRoomlyEmbedConfig on every
+    // 'getroomly-open-modal' event without remounting the modal (see its
+    // own comment) -- a host page can call GetRoomly.open() again for a
+    // locale change while this exact component instance stays mounted,
+    // changing config.language without changing step/resultImage/etc.
+    // That both changes the header's rendered text (which can move
+    // imageContainerRef without resizing it, so neither the image
+    // observer nor window.resize necessarily fires) and changes the
+    // band's own translated toggle text, so this needs to be an explicit
+    // dependency rather than relying on some other value happening to
+    // change at the same time. Found in review.
+    config?.language,
     measureBandAnchor,
   ]);
 
