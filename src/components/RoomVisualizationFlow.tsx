@@ -1642,6 +1642,21 @@ export function RoomVisualizationFlow({
           justifyContent: 'space-between',
           gap: '10px',
           zIndex: 10,
+          // This box spans the full band area, including the empty gap
+          // between the toggle and the thumb group (justifyContent:
+          // space-between) -- without this, that empty space still
+          // hit-tests as part of this div (its own box, regardless of
+          // visible content), and since the band is a DOM SIBLING of
+          // imageContainerRef, not a descendant, a touch starting there
+          // can never bubble to the pinch/double-tap handlers attached
+          // directly to imageContainerRef -- silently losing zoom
+          // gestures that start anywhere in the top band's empty space,
+          // not just intentionally excluded taps on the controls
+          // themselves. 'none' here makes the empty area transparent to
+          // hit-testing (falling through to the image beneath); each real
+          // control below restores 'auto' so it stays clickable. Found in
+          // review.
+          pointerEvents: 'none',
         }}
       >
         {showOriginal && resultImage && uploadedImage && (
@@ -1652,6 +1667,7 @@ export function RoomVisualizationFlow({
               display: 'flex',
               flexShrink: 0,
               flexWrap: 'wrap',
+              pointerEvents: 'auto',
               // The well is sized to the uploaded photo's own aspect
               // ratio, not the modal width -- a narrow/portrait photo
               // can render a well far narrower than this pill's
@@ -1742,6 +1758,7 @@ export function RoomVisualizationFlow({
               gap: '8px',
               marginLeft: 'auto',
               justifyContent: 'flex-end',
+              pointerEvents: 'auto',
             }}
           >
             {/* Two independent circles, not a segmented pill like the

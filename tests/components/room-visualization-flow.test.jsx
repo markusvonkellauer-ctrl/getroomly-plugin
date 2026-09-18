@@ -1078,6 +1078,32 @@ describe('RoomVisualizationFlow', () => {
       const favoriteButton = screen.getByRole('button', { name: 'Save to favourites' });
       expect(findBandAncestor(favoriteButton)).toBeNull();
     });
+
+    // Found in review: the band is a DOM sibling of imageContainerRef, not
+    // a descendant -- the pinch/double-tap handlers are attached directly
+    // to imageContainerRef's own element (see attachImageContainerRef), so
+    // an event that lands on the band's own box (including the empty gap
+    // between the toggle and the thumb group -- justifyContent:
+    // space-between leaves real hit-testable space there) can never bubble
+    // to those handlers, regardless of what's visually beneath it. Without
+    // pointerEvents:'none' on the band and 'auto' restored on each real
+    // control, a pinch or double-tap starting in that empty gap area
+    // (visually just "the photo" to the user) would be silently swallowed
+    // instead of reaching the image's own zoom gestures.
+    test('the band itself ignores pointer events so empty space falls through to the image; the real controls do not', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result', generationId: 'gen-1' });
+
+      const beforeButton = screen.getByRole('button', { name: 'Before' });
+      const likeButton = screen.getByRole('button', { name: 'Yes, it looks realistic' });
+
+      const band = findBandAncestor(beforeButton);
+      expect(band.style.pointerEvents).toBe('none');
+
+      const toggleGroup = beforeButton.closest('[role="group"]');
+      const thumbGroup = likeButton.closest('[role="group"]');
+      expect(toggleGroup.style.pointerEvents).toBe('auto');
+      expect(thumbGroup.style.pointerEvents).toBe('auto');
+    });
   });
 
   // ─── Double-tap-to-reset-zoom must ignore taps on overlay controls ────────
