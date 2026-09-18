@@ -956,11 +956,15 @@ describe('Top band vs the real clipping hierarchy: rendered outside resultConten
               const top = imageRect.top - containingRect.top;
               const left = imageRect.left - containingRect.left;
               const footerTop = footer.getBoundingClientRect().top - containingRect.top;
-              const maxHeightBeforeFooter = Math.max(0, footerTop - (top + 14) - 8);
+              const maxHeightWithinImage = Math.max(0, imageRect.height - 14);
+              const maxHeightWithinBounds = Math.max(
+                0,
+                Math.min(footerTop - (top + 14) - 8, maxHeightWithinImage)
+              );
               band.style.top = (top + 14) + 'px';
               band.style.left = (left + 14) + 'px';
               band.style.width = Math.max(0, imageRect.width - 28) + 'px';
-              band.style.maxHeight = maxHeightBeforeFooter + 'px';
+              band.style.maxHeight = maxHeightWithinBounds + 'px';
             }
 
             const wrapperObserver = new ResizeObserver(entries => {
@@ -1094,6 +1098,178 @@ describe('Top band vs the real clipping hierarchy: rendered outside resultConten
       expect(thumbClippedBy).toBeLessThanOrEqual(350);
     }, 15000);
   }
+});
+
+/**
+ * Found in review: maxHeightWithinBounds (production) previously tracked
+ * ONLY the footer's distance -- nothing related it to the image's own
+ * height at all. In TODAY's architecture that's hard to actually exploit:
+ * resultContentRef is flex:1 1 auto with min-height:0 and no explicit
+ * height on the modal, so it shrink-wraps tightly to the image
+ * (availableImageHeightPx's own comment documents this convergence), which
+ * means footerTop ends up close to the image's bottom edge regardless of
+ * aspect ratio -- confirmed empirically: reproducing an 84x150 narrow
+ * portrait image inside the REAL flex/observer structure from the suite
+ * above (not shown here) did NOT expose daylight between image bottom and
+ * footer top.
+ *
+ * That's an INCIDENTAL invariant of today's shrink-wrap layout, not
+ * something the old formula guaranteed on its own -- a future change
+ * (extra content in resultContentRef, a layout tweak) could silently
+ * reopen the gap the old formula had no defense against. This suite makes
+ * the invariant explicit instead of relying on it being incidentally true:
+ * #content-wrapper below is given a hardcoded height, decoupled from the
+ * image, purely to feed the formula an input where footerTop sits well
+ * past the image's bottom edge -- a synthetic precondition, not a claim
+ * that today's real component can organically produce this gap -- and
+ * verifies the band still respects the image's own bottom edge as a hard
+ * boundary under that input, independent of how far away the footer is.
+ */
+describe('Top band formula: never extends past the image bottom, however far the footer is', () => {
+  let browser;
+
+  beforeAll(async () => {
+    browser = await puppeteer.launch({
+      headless: process.env.CI !== 'false',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    if (browser) await browser.close();
+  });
+
+  const t = translations.de; // Vorher/Nachher -- the worst-case toggle text.
+  const width = 375;
+
+  it('with a synthetic 400px gap between the image and the footer, the band still stops at the image bottom', async () => {
+    {
+      const page = await browser.newPage();
+      try {
+        await page.setViewport({ width, height: 800 });
+
+        const headerHtml = `
+          <div style="display:flex; flex-direction:row; align-items:center; padding:4px 16px; flex-shrink:0; gap:4px; font-family:${FONT_STACK};">
+            <div style="width:28px; flex-shrink:0;"></div>
+            <h2 style="flex:1; text-align:center; font-size:18px; font-weight:bold; letter-spacing:-0.025em; margin:0;">${escapeHtml(t.stepResult)}</h2>
+            <button style="flex-shrink:0; width:28px; height:28px; border-radius:50%; border:none;"></button>
+          </div>
+        `;
+        const tertiaryButtonStyle = `
+          gap:8px; justify-content:center; align-items:center; text-align:center;
+          min-height:44px; border-radius:999px; display:flex; font-size:14px;
+          padding:10px 16px; background:none; color:#6b7280; font-weight:500;
+          border:none; font-family:${FONT_STACK};
+        `;
+        const footerHtml = `
+          <div style="padding:8px 16px 16px; background-color:#ffffff; flex-shrink:0;">
+            <div style="display:flex; flex-direction:column; gap:8px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
+              <div style="display:flex; gap:10px;">
+                <button style="flex-shrink:0; width:54px; height:54px; border-radius:999px; border:1.5px solid #7d7979;"></button>
+                <button style="flex:1; height:54px; border-radius:999px; border:none; font-size:14px; background:${PRIMARY}; color:white;">${escapeHtml(t.addToBasket)}</button>
+              </div>
+              <p style="margin:0; text-align:center; font-size:12px; line-height:1.45; color:#444141;">${escapeHtml(t.disclaimer)}</p>
+              <p style="margin:0; text-align:center; font-size:12px; font-weight:600; color:${PRIMARY};"></p>
+              <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px;">
+                <button style="${tertiaryButtonStyle}">${escapeHtml(t.downloadToDevice)}</button>
+                <button style="${tertiaryButtonStyle}">${escapeHtml(t.shareWithFriends)}</button>
+                <button style="${tertiaryButtonStyle}">${escapeHtml(t.newPhoto)}</button>
+              </div>
+            </div>
+          </div>
+        `;
+        const pillButtonStyle = `
+          box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
+          font-size:12px; font-weight:600; font-family:${FONT_STACK};
+          background:${PRIMARY}; color:white; overflow-wrap:break-word; min-width:0; max-width:100%;
+        `;
+        const bandHtml = `
+          <div id="band" style="position:absolute; overflow:hidden; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; z-index:10;">
+            <div id="pill" style="display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%; box-sizing:border-box; gap:4px; padding:4px; border-radius:999px; background:rgba(255,255,255,.94);">
+              <button style="${pillButtonStyle}">${escapeHtml(t.toggleBefore)}</button>
+              <button style="${pillButtonStyle}">${escapeHtml(t.toggleAfter)}</button>
+            </div>
+            <div id="thumb-group" style="display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%; box-sizing:border-box; gap:8px; margin-left:auto; justify-content:flex-end;">
+              <button style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border:0; background:transparent; padding:0;"><span style="width:40px; height:40px; border-radius:50%; display:flex; background:rgba(255,255,255,.94);"></span></button>
+              <button style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border:0; background:transparent; padding:0;"><span style="width:40px; height:40px; border-radius:50%; display:flex; background:rgba(255,255,255,.94);"></span></button>
+            </div>
+          </div>
+        `;
+
+        // #content-wrapper is given a hardcoded height (500px), decoupled
+        // entirely from flex/image sizing -- an explicit synthetic gap
+        // between the (84px-wide, narrow) image's bottom edge and the
+        // footer, feeding the formula the exact input shape it needs to be
+        // tested against (see the describe block's own comment for why
+        // this is synthetic rather than an organic reproduction).
+        await page.setContent(
+          `<!DOCTYPE html><html><body style="margin:0;">
+            <div id="modal" style="overflow:hidden; display:flex; flex-direction:column; position:relative; width:${width}px; box-sizing:border-box;">
+              ${headerHtml}
+              <div id="content-wrapper" style="position:relative; height:500px; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:flex-start;">
+                <div id="image-container" style="position:relative; display:inline-block; overflow:hidden;">
+                  <img id="result-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='84' height='150'%3E%3C/svg%3E" width="84" height="150" style="display:block; width:84px; height:150px;" />
+                </div>
+              </div>
+              ${bandHtml}
+              <div id="footer">${footerHtml}</div>
+            </div>
+            <script>
+              const imageContainer = document.getElementById('image-container');
+              const band = document.getElementById('band');
+              const footer = document.getElementById('footer');
+
+              function measureBand() {
+                const containingEl = band.offsetParent || document.body;
+                const imageRect = imageContainer.getBoundingClientRect();
+                const containingRect = containingEl.getBoundingClientRect();
+                const top = imageRect.top - containingRect.top;
+                const left = imageRect.left - containingRect.left;
+                const footerTop = footer.getBoundingClientRect().top - containingRect.top;
+                const maxHeightWithinImage = Math.max(0, imageRect.height - 14);
+                const maxHeightWithinBounds = Math.max(
+                  0,
+                  Math.min(footerTop - (top + 14) - 8, maxHeightWithinImage)
+                );
+                band.style.top = (top + 14) + 'px';
+                band.style.left = (left + 14) + 'px';
+                band.style.width = Math.max(0, imageRect.width - 28) + 'px';
+                band.style.maxHeight = maxHeightWithinBounds + 'px';
+              }
+
+              const imageContainerObserver = new ResizeObserver(() => {
+                measureBand();
+                window.__bandMeasured = true;
+              });
+              imageContainerObserver.observe(imageContainer);
+              measureBand();
+              window.__bandMeasured = true;
+            </script>
+          </body></html>`
+        );
+        await page.waitForFunction(() => window.__bandMeasured);
+
+        const { imageContainerRect, footerRect, bandRect } = await page.evaluate(() => {
+          const toPlain = r => ({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+          return {
+            imageContainerRect: toPlain(
+              document.getElementById('image-container').getBoundingClientRect()
+            ),
+            footerRect: toPlain(document.getElementById('footer').getBoundingClientRect()),
+            bandRect: toPlain(document.getElementById('band').getBoundingClientRect()),
+          };
+        });
+
+        // Sanity-check the synthetic precondition actually landed (a wide
+        // gap genuinely exists between the image and the footer) before
+        // trusting the assertion below to mean anything.
+        expect(footerRect.top - imageContainerRect.bottom).toBeGreaterThan(300);
+        expect(bandRect.bottom).toBeLessThanOrEqual(imageContainerRect.bottom + 1);
+      } finally {
+        await page.close();
+      }
+    }
+  });
 });
 
 /**

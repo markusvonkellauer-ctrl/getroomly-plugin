@@ -167,7 +167,7 @@ export function RoomVisualizationFlow({
     left: number;
     width: number;
     height: number;
-    maxHeightBeforeFooter: number;
+    maxHeightWithinBounds: number;
   } | null>(null);
   const measureBandAnchor = useCallback(() => {
     const imageEl = imageContainerRef.current;
@@ -207,13 +207,32 @@ export function RoomVisualizationFlow({
     const footerTop = footerRef.current
       ? footerRef.current.getBoundingClientRect().top - containingRect.top
       : Number.MAX_SAFE_INTEGER;
-    const maxHeightBeforeFooter = Math.max(0, footerTop - (top + 14) - 8);
+    // Also cap by the image's OWN height, independent of the footer --
+    // found in review. resultContentRef is flex:1 1 auto with
+    // justifyContent:'flex-start' and the image itself only sizes to
+    // display:inline-block, so a narrow/short image (e.g. an 84px-wide,
+    // 150px-tall portrait crop -- narrower photos render shorter, since
+    // height comes from the image's own aspect ratio once width is the
+    // constraining dimension) can leave a lot of empty flex space below
+    // it before the footer. Without this, maxHeightWithinBounds tracked
+    // ONLY the footer's distance, so a sufficiently wrapped band could
+    // clip cleanly by its own overflow:hidden yet still extend well past
+    // the photo's bottom edge into that empty space -- floating below
+    // the photo instead of clipping within it. No extra bottom inset
+    // here (unlike the footer's 8px): touching the image's own edge is
+    // fine, this is a photo overlay, not adjacent UI that needs breathing
+    // room from another element.
+    const maxHeightWithinImage = Math.max(0, imageRect.height - 14);
+    const maxHeightWithinBounds = Math.max(
+      0,
+      Math.min(footerTop - (top + 14) - 8, maxHeightWithinImage)
+    );
     setBandAnchor({
       top,
       left,
       width: imageRect.width,
       height: imageRect.height,
-      maxHeightBeforeFooter,
+      maxHeightWithinBounds,
     });
   }, []);
 
@@ -228,7 +247,7 @@ export function RoomVisualizationFlow({
     return () => window.removeEventListener('resize', measureBandAnchor);
   }, [measureBandAnchor]);
 
-  // maxHeightBeforeFooter depends on the footer's own position, which can
+  // maxHeightWithinBounds depends on the footer's own position, which can
   // move without imageContainerRef changing size at all -- e.g.
   // downloadStatusVisible adding/removing the status line in the footer
   // (see handleDownloadToDevice) grows the footer, pulling its top edge
@@ -1208,7 +1227,7 @@ export function RoomVisualizationFlow({
   // can race ahead of the band's own (later, plain) ref -- measureBandAnchor
   // now bails out rather than falling back to a wrong body-relative
   // measurement, so something has to guarantee a real one happens once
-  // refs settle; (2) maxHeightBeforeFooter depends on the footer's own
+  // refs settle; (2) maxHeightWithinBounds depends on the footer's own
   // position, which moves when downloadStatusVisible adds/removes the
   // status line, but that doesn't necessarily change imageContainerRef's
   // own size at all (its intrinsic size may already be the binding
@@ -1615,7 +1634,7 @@ export function RoomVisualizationFlow({
           // for reasons nobody currently recalls -- see git log on
           // .getroomly-modal-container's max-height) -- not something to
           // introduce unprompted as a side effect of a bug-fix round.
-          maxHeight: bandAnchor ? `${bandAnchor.maxHeightBeforeFooter}px` : undefined,
+          maxHeight: bandAnchor ? `${bandAnchor.maxHeightWithinBounds}px` : undefined,
           overflow: 'hidden',
           display: 'flex',
           flexWrap: 'wrap',
