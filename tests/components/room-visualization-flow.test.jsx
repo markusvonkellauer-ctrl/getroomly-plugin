@@ -61,6 +61,33 @@ const isColor = (colorString, [r, g, b, a]) => {
   return cr === r && cg === g && cb === b && Math.abs(ca - a) < 0.001;
 };
 
+// Walks up from an element looking for the top band -- identified by its
+// real inline styles, not a selector or test id, since the component has
+// none. The band renders outside imageContainerRef (see renderTopBand's
+// comment in RoomVisualizationFlow.tsx -- resultContentRef could clip it
+// at short viewports otherwise), positioned via bandAnchor.
+// position:absolute + zIndex:10 + top/left:'14px' together is a unique
+// fingerprint: no other element in this component sets all of those (the
+// old status badge, removed, used top+left but not zIndex:10 combined
+// with position:absolute the same way; the toggle pill on its own uses
+// left+bottom, no zIndex). Shared at module scope since both the "image
+// top band" and "feedback buttons" describe blocks need it.
+const findBandAncestor = el => {
+  let node = el.parentElement;
+  while (node) {
+    if (
+      node.style.position === 'absolute' &&
+      node.style.top === '14px' &&
+      node.style.left === '14px' &&
+      node.style.zIndex === '10'
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+};
+
 describe('RoomVisualizationFlow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -1017,33 +1044,9 @@ describe('RoomVisualizationFlow', () => {
       await waitFor(() => screen.getByText('Review Your New Room'));
     };
 
-    // Walks up from an element looking for the band -- identified by its
-    // real inline styles, not a selector or test id, since the component
-    // has none. The band renders outside imageContainerRef now (see
-    // renderTopBand's comment -- resultContentRef could clip it at short
-    // viewports otherwise), positioned via bandAnchor (offsetTop/Left/
-    // Width read off imageContainerRef, which jsdom -- no real layout
-    // engine -- always resolves to 0, so width collapses to
-    // Math.max(0, 0-28)='0px'). position:absolute + zIndex:10 + top/
-    // left:'14px' together is still a unique fingerprint: no other element
-    // in this component sets all of those (the old badge, removed, used
-    // top+left but no zIndex:10 combined with position:absolute the same
-    // way; the toggle pill on its own uses left+bottom, no zIndex).
-    const findBandAncestor = el => {
-      let node = el.parentElement;
-      while (node) {
-        if (
-          node.style.position === 'absolute' &&
-          node.style.top === '14px' &&
-          node.style.left === '14px' &&
-          node.style.zIndex === '10'
-        ) {
-          return node;
-        }
-        node = node.parentElement;
-      }
-      return null;
-    };
+    // findBandAncestor is shared at module scope (top of this file) --
+    // the "feedback buttons" describe block below uses it too, to verify
+    // the confirmation pill actually relocated into the band.
 
     test('the status badge no longer renders, though the image alt text still conveys the same information', async () => {
       await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
@@ -1415,7 +1418,17 @@ describe('RoomVisualizationFlow', () => {
       // only appears once its text is already set isn't reliably announced
       // — this one instead stays mounted the whole time and only its text
       // content changes, see the comment in RoomVisualizationFlow.tsx).
-      expect(screen.getAllByText('Thanks for your feedback.')).toHaveLength(2);
+      const matches = screen.getAllByText('Thanks for your feedback.');
+      expect(matches).toHaveLength(2);
+
+      // Not just that two matches exist somewhere -- the visible one (the
+      // <div>, not the hidden <span role="status">) must actually be
+      // inside the top band. A regression that left the pill rendering in
+      // the footer (with the hidden live region supplying the other
+      // match) would still pass the length check above.
+      const visiblePill = matches.find(el => el.tagName === 'DIV');
+      expect(visiblePill).toBeDefined();
+      expect(findBandAncestor(visiblePill)).not.toBeNull();
     });
 
     test('the confirmation pill and its live-region announcement both clear after 2200ms', async () => {

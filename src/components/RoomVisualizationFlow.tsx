@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import {
   AIGenerationError,
   generateRoomVisualization,
@@ -171,16 +171,31 @@ export function RoomVisualizationFlow({
   } | null>(null);
   const measureBandAnchor = useCallback(() => {
     const imageEl = imageContainerRef.current;
-    if (!imageEl) {
-      setBandAnchor(null);
+    const bandEl = bandRef.current;
+    // bandEl can still be null the very first time this runs:
+    // attachImageContainerRef's callback ref fires mid-commit, and can
+    // race ahead of the band's own (later, plain) ref being assigned --
+    // found in review. Bailing out here (rather than falling back to
+    // document.body) leaves bandAnchor -- and therefore visibility:hidden
+    // -- untouched for that one moment; the useLayoutEffect below
+    // guarantees a real measurement runs after every commit where the
+    // band could exist, by which point bandEl is always populated (React
+    // attaches every ref in a commit before running that commit's layout
+    // effects). Once bandEl itself exists, though, a still-missing
+    // offsetParent does NOT mean "not really mounted" -- jsdom (unit
+    // tests, no real layout engine) never resolves offsetParent
+    // correctly even for a genuinely-mounted, correctly-styled element;
+    // bailing out on that too made every band-related unit test fail
+    // (the band stayed permanently visibility:hidden, invisible to
+    // testing-library's accessible-role queries). document.body there is
+    // a harmless fallback either way: in jsdom nothing checks the
+    // resulting pixel values, and in a real browser this genuinely
+    // shouldn't happen once bandEl is mounted under the (position:fixed)
+    // modal.
+    if (!imageEl || !bandEl) {
       return;
     }
-    // document.body is only reached on the very first call, before the
-    // band has ever mounted (bandRef.current is still null) -- imprecise,
-    // but harmless: the band renders visibility:hidden until this first
-    // real measurement completes, so a wrong transient position is never
-    // actually seen.
-    const containingEl = bandRef.current?.offsetParent ?? document.body;
+    const containingEl = bandEl.offsetParent ?? document.body;
     const imageRect = imageEl.getBoundingClientRect();
     const containingRect = containingEl.getBoundingClientRect();
     const top = imageRect.top - containingRect.top;
@@ -1183,6 +1198,39 @@ export function RoomVisualizationFlow({
   const showOriginal = resultButtons.showOriginal !== false;
   const showSaveShare = resultButtons.saveShare !== false;
 
+  // Guaranteed post-commit measurement for the top band's anchor -- the
+  // other triggers (attachImageContainerRef's inline call, the
+  // ResizeObservers on imageContainerRef/footerRef, window resize, the
+  // base image's onLoad) all depend on something ELSE changing size or
+  // firing at the right moment, which isn't reliable for two real cases
+  // found in review: (1) bandRef.current can still be null the very first
+  // time attachImageContainerRef's callback ref fires mid-commit, since it
+  // can race ahead of the band's own (later, plain) ref -- measureBandAnchor
+  // now bails out rather than falling back to a wrong body-relative
+  // measurement, so something has to guarantee a real one happens once
+  // refs settle; (2) maxHeightBeforeFooter depends on the footer's own
+  // position, which moves when downloadStatusVisible adds/removes the
+  // status line, but that doesn't necessarily change imageContainerRef's
+  // own size at all (its intrinsic size may already be the binding
+  // constraint), so the footerRef ResizeObserver isn't guaranteed to
+  // correlate 1:1 with every case that matters, and browsers without
+  // ResizeObserver support have no other trigger for it whatsoever.
+  // useLayoutEffect (not useEffect) specifically: runs synchronously after
+  // the DOM commits and every ref in it is assigned, but before the
+  // browser paints -- exactly what's needed to avoid a visible flash at
+  // the wrong position.
+  useLayoutEffect(() => {
+    measureBandAnchor();
+  }, [
+    step,
+    resultImage,
+    uploadedImage,
+    showOriginal,
+    showFeedback,
+    downloadStatusVisible,
+    measureBandAnchor,
+  ]);
+
   // Result step handlers
   const handleAddToBasket = () => {
     // Call callback (works in Shadow DOM / Embed mode)
@@ -1551,6 +1599,22 @@ export function RoomVisualizationFlow({
           top: `${(bandAnchor?.top ?? 0) + 14}px`,
           left: `${(bandAnchor?.left ?? 0) + 14}px`,
           width: `${Math.max(0, (bandAnchor?.width ?? 0) - 28)}px`,
+          // Repeatedly suggested in review: avoid this clipping entirely
+          // by shrinking the image further to reserve the band's full
+          // worst-case height instead. Doesn't work at the extreme case
+          // this already documents: at a 400px-tall viewport there is only
+          // ~89px of total space between the header and the footer to
+          // begin with (measured with Puppeteer), and the band's own
+          // worst-case wrapped depth is ~336px -- there is no amount of
+          // image-shrinking that reserves 336px out of an 89px budget, the
+          // image would have to go negative. Scroll/reflow inside the
+          // result view is the only mechanism that could fully eliminate
+          // this, and that's a real product/UX decision (this codebase has
+          // no prior instance of the result view scrolling, and this exact
+          // file has history of a previously-reverted modal-sizing change
+          // for reasons nobody currently recalls -- see git log on
+          // .getroomly-modal-container's max-height) -- not something to
+          // introduce unprompted as a side effect of a bug-fix round.
           maxHeight: bandAnchor ? `${bandAnchor.maxHeightBeforeFooter}px` : undefined,
           overflow: 'hidden',
           display: 'flex',

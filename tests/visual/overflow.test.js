@@ -999,24 +999,6 @@ describe('Top band vs the real clipping hierarchy: rendered outside resultConten
     }
   };
 
-  // The full previous matrix (667 down to 400) -- all of it, including the
-  // range that used to be below the ~514px threshold where clipping was
-  // an accepted, documented gap. With the band moved outside
-  // resultContentRef, it's now bounded only by the modal's own 80dvh cap,
-  // which is far more generous -- verified this genuinely eliminates the
-  // clipping down to 450px (previously broken from ~514px down). Only the
-  // single most extreme case in this matrix (400px -- a very short
-  // viewport, e.g. landscape phone) still clips, and far less badly than
-  // before: at 400px, a landscape photo's aspect ratio makes
-  // imageContainerRef not just short but also very narrow (~70px wide
-  // when this was measured), which forces BOTH the toggle pill's buttons
-  // AND the thumb group's circles into maximal internal wrapping at once
-  // -- the band's own worst-case height in that specific combination
-  // (~336px) can still exceed even the modal's generous cap (320px at
-  // this viewport). Measured overshoot ~65px, down from ~143px before
-  // this fix (against the tighter resultContentRef boundary) -- real,
-  // substantial progress, not a full guarantee at the most extreme
-  // viewport in this matrix.
   // The full previous matrix (667 down to 400), all of it now genuinely
   // clean: with the footer-safe cap (maxHeightBeforeFooter), the band's
   // own overflow:hidden always clips before reaching either the footer or
