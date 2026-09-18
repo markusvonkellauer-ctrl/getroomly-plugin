@@ -1280,39 +1280,6 @@ describe('RoomVisualizationFlow', () => {
 
       expect(img.style.maxHeight).toBe('234px');
     });
-
-    test('applies capped headroom (not a flat 150px floor) when the measurement is below 150px', async () => {
-      await renderAtResult({ imageUrl: 'blob:result' });
-
-      const img = screen.getByAltText('New Design');
-      const observer = MockResizeObserver.instances[0];
-
-      // 90px measured -> 40px capped headroom (not 60px, which a flat
-      // Math.max(measured, 150) floor would apply) -- see
-      // imageHeightHeadroomForBand in RoomVisualizationFlow.tsx: the cap
-      // exists specifically so a very short measurement (reachable at real
-      // short viewports, verified in tests/visual/overflow.test.js) can't
-      // reintroduce the modal/wrapper clipping this measurement is meant
-      // to prevent.
-      act(() => {
-        observer.callback([{ contentRect: { height: 90 } }]);
-      });
-      expect(img.style.maxHeight).toBe('130px');
-
-      // 149px measured -> 1px headroom (still below the cap, so uncapped
-      // arithmetic applies): 149 + min(40, 150-149) = 150.
-      act(() => {
-        observer.callback([{ contentRect: { height: 149 } }]);
-      });
-      expect(img.style.maxHeight).toBe('150px');
-
-      // 300px measured -> no headroom at all, already above the 150px
-      // target.
-      act(() => {
-        observer.callback([{ contentRect: { height: 300 } }]);
-      });
-      expect(img.style.maxHeight).toBe('300px');
-    });
   });
 
   // ─── Result footer spacing (real component styles) ─────────────────────────

@@ -556,16 +556,17 @@ describe('Top band: Before/After toggle + feedback thumbs never overlap or clip'
 
         // The band is position:absolute inside the image well, which has
         // overflow:hidden -- wrapping only grows the band's own height, it
-        // can't make the well taller. Found in review that a wrapped band
-        // (worst case: German/Finnish also forces the toggle pill itself to
-        // wrap its own two buttons internally, on top of the thumb group
-        // dropping to its own row) measured ~144px deep, and
-        // RoomVisualizationFlow.tsx's image maxHeight has a matching
-        // Math.max(..., 150) floor specifically so a short well can't clip
-        // this. This is the regression check for that floor: the wrapped
-        // band's real deepest point must fit within it.
+        // can't make the well taller. This isn't a pass/fail check against
+        // any target (there's no artificial floor protecting against this
+        // -- see the maxHeight comment in RoomVisualizationFlow.tsx for why
+        // one was tried and reverted): it's a regression guard on the
+        // band's own worst-case depth staying near where it was measured
+        // (~144px when this was written), so a future change that makes it
+        // meaningfully DEEPER doesn't go unnoticed. See the "band vs the
+        // real clipping hierarchy" suite below for whether this depth
+        // actually gets clipped at real viewport heights.
         const bandDepth = thumbsRect.bottom - wellRect.top;
-        expect(bandDepth).toBeLessThanOrEqual(150);
+        expect(bandDepth).toBeLessThanOrEqual(200);
       } finally {
         await page.close();
       }
@@ -589,28 +590,25 @@ describe('Top band: Before/After toggle + feedback thumbs never overlap or clip'
  * The fix subtracts a fixed pixel allowance from the dvh figure instead of
  * a flat percentage (see the comment on the image's maxHeight style).
  *
- * The image's maxHeight also adds a small, capped headroom on top of the
- * real measurement (see imageHeightHeadroomForBand in
- * RoomVisualizationFlow.tsx) so the top band (toggle + thumbs) has room to
- * wrap without being clipped by the image well's own overflow:hidden. That
- * headroom is a deliberate, BOUNDED exception to "never exceed the real
- * measurement" -- capped at +40px, and only kicks in once the real
- * measurement drops below 150px. At realistic viewport heights (667-568)
- * it never engages at all (verified: measured availability stays above
- * 200px at those heights with the current footer). Below ~520px it does
- * engage, and BY DESIGN the image can then render up to 40px taller than
- * the wrapper's real box -- an accepted, bounded tradeoff against
- * reintroducing image clipping, not a bug. This suite checks that bound
- * holds (image never exceeds wrapper height by more than the exact
- * headroom the production formula would compute), not that overshoot is
- * always zero.
+ * A version of this tried giving the image's maxHeight extra headroom
+ * beyond the real measurement, reasoning it would give the top band
+ * (toggle + thumbs, added on the image itself in a later change) room to
+ * wrap. That didn't actually work: resultContentRef (the wrapper this
+ * measures) is its own separate overflow:hidden ancestor with an
+ * independently flex-resolved height, so padding the image taller than
+ * what's genuinely available just gets clipped by resultContentRef itself
+ * -- see the maxHeight comment in RoomVisualizationFlow.tsx, and the "band
+ * vs the real clipping hierarchy" suite below for what actually happens to
+ * the band at short viewports. This suite only covers the image itself
+ * (not the band): the image must never exceed what's genuinely measured,
+ * full stop, at every viewport height in the matrix below.
  *
  * This renders the REAL header + REAL footer markup (all optional rows
  * present, using each language's actual translations) plus a mock image
  * sized with the same formula as production, inside a mock modal with the
  * real 80dvh cap + overflow:hidden.
  */
-describe('Result-step modal height: image never exceeds its bounded headroom over the footer', () => {
+describe('Result-step modal height: image is never clipped by the footer', () => {
   let browser;
 
   beforeAll(async () => {
@@ -634,13 +632,13 @@ describe('Result-step modal height: image never exceeds its bounded headroom ove
     // the excess even though the outer modal itself wasn't overflowing --
     // see the assertion against wrapperBottom below, not just modalBottom.
     //
-    // 520/480/450/400 extend the matrix into the range where the capped
-    // headroom (see the describe-block comment above) actually engages --
-    // found in review that the previous matrix (667-568) never exercised a
-    // measured height below 150px at all, so it couldn't have caught a
-    // regression in that formula either way.
+    // 520/480/450/400 extend the matrix down into short-viewport territory
+    // -- the image itself must never exceed the real measurement at any of
+    // these, regardless of how little room that leaves for the band on top
+    // of it (see the "band vs the real clipping hierarchy" suite below for
+    // that separate question).
     for (const viewportHeight of [667, 640, 600, 568, 520, 480, 450, 400]) {
-      it(`"${lang}" at 375x${viewportHeight}: image never exceeds the wrapper by more than the exact bounded headroom`, async () => {
+      it(`"${lang}" at 375x${viewportHeight}: image is not clipped by the modal or the content wrapper`, async () => {
         const t = translations[lang];
         const width = 375;
 
@@ -715,8 +713,7 @@ describe('Result-step modal height: image never exceeds its bounded headroom ove
                 const img = document.getElementById('result-image');
                 const ro = new ResizeObserver(entries => {
                   const h = entries[0].contentRect.height;
-                  const headroom = Math.min(40, Math.max(0, 150 - h));
-                  img.style.maxHeight = h + headroom + 'px';
+                  img.style.maxHeight = h + 'px';
                   window.__lastMeasuredHeight = h;
                 });
                 ro.observe(wrapper);
@@ -734,26 +731,177 @@ describe('Result-step modal height: image never exceeds its bounded headroom ove
               modalBottom: modal.getBoundingClientRect().bottom,
               wrapperBottom: wrapper.getBoundingClientRect().bottom,
               imageBottom: img.getBoundingClientRect().bottom,
-              measuredHeight: window.__lastMeasuredHeight,
             };
           });
 
-          // Mirrors imageHeightHeadroomForBand exactly -- the expected
-          // overshoot is 0 above 150px measured, growing to (never more
-          // than) 40px well below it. Checked against wrapperBottom, the
-          // real clipping boundary (see comment above); the modal check
-          // stays as a second, independent guard against the outer
-          // overflow:hidden.
-          const expectedHeadroom = Math.min(40, Math.max(0, 150 - result.measuredHeight));
-          expect(result.imageBottom).toBeLessThanOrEqual(
-            result.wrapperBottom + expectedHeadroom + 1
-          );
-          expect(result.imageBottom).toBeLessThanOrEqual(result.modalBottom + expectedHeadroom + 1);
+          // The wrapper is the real clipping boundary (see comment above) --
+          // checked first since that's the one the earlier static-formula
+          // fix missed. The modal check stays as a second, independent
+          // guard against the outer overflow:hidden.
+          expect(result.imageBottom).toBeLessThanOrEqual(result.wrapperBottom + 1);
+          expect(result.imageBottom).toBeLessThanOrEqual(result.modalBottom + 1);
         } finally {
           await page.close();
         }
       }, 15000);
     }
+  }
+});
+
+/**
+ * "Top band: Before/After toggle + feedback thumbs never overlap or clip"
+ * above tests the band in isolation, against a fixed-height mock well --
+ * it never modeled that the band actually sits inside TWO independent
+ * overflow:hidden ancestors (imageContainerRef, sized to the image itself,
+ * AND resultContentRef, the outer flex item with its own independently
+ * flex-resolved height), and a version of this PR's fix tried to solve
+ * short-viewport band clipping by padding the image's own maxHeight --
+ * which does nothing for resultContentRef specifically, since its height
+ * doesn't depend on the image's maxHeight at all (see the comment on the
+ * image's maxHeight in RoomVisualizationFlow.tsx). That fix was reverted;
+ * this suite instead honestly measures what actually happens against both
+ * real ancestors, at real viewport heights.
+ *
+ * Puppeteer-measured with the current footer: resultContentRef's real
+ * height crosses below the band's own worst-case depth (~144px, German/
+ * Finnish, fully wrapped) somewhere between 512px and 514px viewport
+ * height. Above that, the band must be fully visible -- that's the
+ * guarantee this codebase actually provides. Below it, the band can be
+ * genuinely clipped by resultContentRef; this is an accepted, documented
+ * gap (see the same maxHeight comment), not something this suite pretends
+ * is fixed -- but it still asserts an upper bound on how bad that
+ * clipping can get, so a regression that makes it much worse doesn't go
+ * unnoticed.
+ */
+describe('Top band vs the real clipping hierarchy (imageContainerRef + resultContentRef)', () => {
+  let browser;
+
+  beforeAll(async () => {
+    browser = await puppeteer.launch({
+      headless: process.env.CI !== 'false',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    if (browser) await browser.close();
+  });
+
+  const t = translations.de; // Vorher/Nachher -- the worst-case toggle text.
+  const width = 375;
+
+  const measure = async viewportHeight => {
+    const page = await browser.newPage();
+    try {
+      await page.setViewport({ width, height: viewportHeight });
+
+      const headerHtml = `
+        <div style="display:flex; flex-direction:row; align-items:center; padding:4px 16px; flex-shrink:0; gap:4px; font-family:${FONT_STACK};">
+          <div style="width:28px; flex-shrink:0;"></div>
+          <h2 style="flex:1; text-align:center; font-size:18px; font-weight:bold; letter-spacing:-0.025em; margin:0;">${escapeHtml(t.stepResult)}</h2>
+          <button style="flex-shrink:0; width:28px; height:28px; border-radius:50%; border:none;"></button>
+        </div>
+      `;
+      const tertiaryButtonStyle = `
+        gap:8px; justify-content:center; align-items:center; text-align:center;
+        min-height:44px; border-radius:999px; display:flex; font-size:14px;
+        padding:10px 16px; background:none; color:#6b7280; font-weight:500;
+        border:none; font-family:${FONT_STACK};
+      `;
+      const footerHtml = `
+        <div style="padding:8px 16px 16px; background-color:#ffffff; flex-shrink:0;">
+          <div style="display:flex; flex-direction:column; gap:8px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
+            <div style="display:flex; gap:10px;">
+              <button style="flex-shrink:0; width:54px; height:54px; border-radius:999px; border:1.5px solid #7d7979;"></button>
+              <button style="flex:1; height:54px; border-radius:999px; border:none; font-size:14px; background:${PRIMARY}; color:white;">${escapeHtml(t.addToBasket)}</button>
+            </div>
+            <p style="margin:0; text-align:center; font-size:12px; line-height:1.45; color:#444141;">${escapeHtml(t.disclaimer)}</p>
+            <p style="margin:0; text-align:center; font-size:12px; font-weight:600; color:${PRIMARY};"></p>
+            <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px;">
+              <button style="${tertiaryButtonStyle}">${escapeHtml(t.downloadToDevice)}</button>
+              <button style="${tertiaryButtonStyle}">${escapeHtml(t.shareWithFriends)}</button>
+              <button style="${tertiaryButtonStyle}">${escapeHtml(t.newPhoto)}</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const pillButtonStyle = `
+        box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
+        font-size:12px; font-weight:600; font-family:${FONT_STACK};
+        background:${PRIMARY}; color:white;
+      `;
+      const bandHtml = `
+        <div id="band" style="position:absolute; top:14px; left:14px; right:14px; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; z-index:10;">
+          <div style="display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%; box-sizing:border-box; gap:4px; padding:4px; border-radius:999px; background:rgba(255,255,255,.94);">
+            <button style="${pillButtonStyle}">${escapeHtml(t.toggleBefore)}</button>
+            <button style="${pillButtonStyle}">${escapeHtml(t.toggleAfter)}</button>
+          </div>
+          <div id="thumb-group" style="display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%; box-sizing:border-box; gap:8px; margin-left:auto; justify-content:flex-end;">
+            <button style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border:0; background:transparent; padding:0;"><span style="width:40px; height:40px; border-radius:50%; display:flex; background:rgba(255,255,255,.94);"></span></button>
+            <button style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border:0; background:transparent; padding:0;"><span style="width:40px; height:40px; border-radius:50%; display:flex; background:rgba(255,255,255,.94);"></span></button>
+          </div>
+        </div>
+      `;
+
+      await page.setContent(
+        `<!DOCTYPE html><html><body style="margin:0;">
+          <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; width:${width}px; box-sizing:border-box;">
+            ${headerHtml}
+            <div id="content-wrapper" style="flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
+              <div id="image-container" style="position:relative; display:inline-block; overflow:hidden;">
+                <img id="result-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3C/svg%3E" style="display:block; max-width:100%; max-height:150px; width:auto; height:auto;" />
+                ${bandHtml}
+              </div>
+            </div>
+            ${footerHtml}
+          </div>
+          <script>
+            const wrapper = document.getElementById('content-wrapper');
+            const img = document.getElementById('result-image');
+            const ro = new ResizeObserver(entries => {
+              img.style.maxHeight = entries[0].contentRect.height + 'px';
+              window.__lastMeasuredHeight = entries[0].contentRect.height;
+            });
+            ro.observe(wrapper);
+          </script>
+        </body></html>`
+      );
+      await page.waitForFunction(() => window.__lastMeasuredHeight !== undefined);
+
+      return page.evaluate(() => {
+        const toPlain = r => ({ top: r.top, bottom: r.bottom });
+        return {
+          wrapperRect: toPlain(document.getElementById('content-wrapper').getBoundingClientRect()),
+          imageContainerRect: toPlain(
+            document.getElementById('image-container').getBoundingClientRect()
+          ),
+          thumbGroupRect: toPlain(document.getElementById('thumb-group').getBoundingClientRect()),
+        };
+      });
+    } finally {
+      await page.close();
+    }
+  };
+
+  for (const viewportHeight of [667, 600, 520]) {
+    it(`at 375x${viewportHeight} (above the ~514px threshold): the band is fully visible, clipped by neither ancestor`, async () => {
+      const { wrapperRect, imageContainerRect, thumbGroupRect } = await measure(viewportHeight);
+      expect(thumbGroupRect.bottom).toBeLessThanOrEqual(wrapperRect.bottom + 1);
+      expect(thumbGroupRect.bottom).toBeLessThanOrEqual(imageContainerRect.bottom + 1);
+    }, 15000);
+  }
+
+  for (const viewportHeight of [480, 400]) {
+    it(`at 375x${viewportHeight} (below the ~514px threshold): clipping is bounded, not catastrophic`, async () => {
+      const { wrapperRect, thumbGroupRect } = await measure(viewportHeight);
+      const clippedBy = Math.max(0, thumbGroupRect.bottom - wrapperRect.bottom);
+      // Not a claim that this is fine -- it's the documented gap. Bounded
+      // generously (160px, comfortably above the ~143px measured at 400px
+      // when this was written) purely as a regression net against the gap
+      // getting dramatically worse, e.g. from an unrelated change growing
+      // the band further.
+      expect(clippedBy).toBeLessThanOrEqual(160);
+    }, 15000);
   }
 });
 
@@ -847,8 +995,7 @@ describe('Result footer: idle download-status line collapses instead of reservin
             const img = document.getElementById('result-image');
             const ro = new ResizeObserver(entries => {
               const h = entries[0].contentRect.height;
-              const headroom = Math.min(40, Math.max(0, 150 - h));
-              img.style.maxHeight = h + headroom + 'px';
+              img.style.maxHeight = h + 'px';
               window.__lastMeasuredHeight = h;
             });
             ro.observe(wrapper);

@@ -1239,37 +1239,7 @@ export function RoomVisualizationFlow({
     }
   };
 
-  // The image's own maxHeight needs some headroom above the raw
-  // ResizeObserver measurement so the top band (toggle + thumbs, appended
-  // below) has room to wrap without its own overflow:hidden well clipping
-  // it -- found in review that a fully-wrapped band can need up to ~144px.
-  // But headroom taken here is headroom NOT actually available per the
-  // real measurement -- resultContentRef can legitimately shrink below
-  // that (min-height:0, overflow:hidden on both it and this wrapper), so
-  // adding it back blindly reopens the exact modal/wrapper clipping bug
-  // the ResizeObserver measurement was added to fix in the first place
-  // (verified: at a 400px-tall viewport, measured available height is only
-  // ~53px -- flooring that straight to 150px would clip the image by
-  // ~97px against the footer below it). Capped at +40px so the worst case
-  // is bounded and testable, not "however much the target needs" -- this
-  // does NOT fully guarantee the band never clips in the most extreme
-  // combined case (very narrow AND very short at once, needing all three
-  // of: the toggle pill wrapping its own two buttons, the thumb group also
-  // wrapping its own two buttons, per feedbackWrapExtraHeadroom); that
-  // residual gap is an accepted, documented tradeoff against reintroducing
-  // the worse and more common modal-clipping bug -- same precedent as the
-  // pre-ResizeObserver formula's own acknowledged pathological-viewport
-  // overflow.
-  const imageHeightHeadroomForBand = measuredPx => {
-    const target = 150;
-    const maxHeadroom = 40;
-    return Math.min(maxHeadroom, Math.max(0, target - measuredPx));
-  };
-
   const renderResultStep = () => {
-    const measuredImageHeight = availableImageHeightPx ?? 150;
-    const imageMaxHeightPx = measuredImageHeight + imageHeightHeadroomForBand(measuredImageHeight);
-
     return (
       <div
         style={{
@@ -1329,10 +1299,31 @@ export function RoomVisualizationFlow({
                 // real shrunk box (Puppeteer measured ~39px of clipping at a
                 // 375x568 viewport), since the wrapper's overflow:hidden +
                 // minHeight:0 lets it shrink independently of any fixed
-                // guess. Plus a small, capped headroom addition for the top
-                // band below -- see imageHeightHeadroomForBand's comment for
-                // why it's capped rather than a flat floor.
-                maxHeight: `${imageMaxHeightPx}px`,
+                // guess.
+                //
+                // Deliberately NOT padded with extra headroom for the top
+                // band below (toggle + thumbs) -- a version of this tried
+                // that, but it couldn't have worked: resultContentRef is a
+                // SEPARATE overflow:hidden ancestor with its own
+                // independently flex-resolved height, unaffected by
+                // whatever this maxHeight claims, so padding the image
+                // taller than what's actually measured just gets clipped by
+                // resultContentRef itself before it could ever reach the
+                // band inside imageContainerRef's own (also overflow:hidden)
+                // box. There's no way to hand the band more room without
+                // either growing resultContentRef itself (which competes
+                // with the header/footer/80dvh budget this measurement
+                // exists to respect) or rendering the band outside the
+                // clipped hierarchy entirely (a real fix, but a bigger
+                // structural change than this PR's scope). At viewport
+                // heights where the measured value drops below what the
+                // band's worst wrapped case needs (~144px; measured with
+                // Puppeteer, this only happens below ~514px viewport height
+                // with the current footer), part of the band can be
+                // genuinely clipped -- an accepted, documented gap, same
+                // precedent as this codebase's existing acknowledgment of
+                // pathological-viewport overflow elsewhere in this file.
+                maxHeight: `${availableImageHeightPx ?? 150}px`,
                 width: 'auto',
                 height: 'auto',
                 transform: `scale(${imageScale})`,
