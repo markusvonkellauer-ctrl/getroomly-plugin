@@ -1018,17 +1018,25 @@ describe('RoomVisualizationFlow', () => {
     };
 
     // Walks up from an element looking for the band -- identified by its
-    // real inline styles (top/left/right all '14px'), not a selector or
-    // test id, since the component has none. No other element in this
-    // component sets all three of those together: the old badge (removed)
-    // used top+left only, and the toggle pill on its own used left+bottom.
+    // real inline styles, not a selector or test id, since the component
+    // has none. The band renders outside imageContainerRef now (see
+    // renderTopBand's comment -- resultContentRef could clip it at short
+    // viewports otherwise), positioned via bandAnchor (offsetTop/Left/
+    // Width read off imageContainerRef, which jsdom -- no real layout
+    // engine -- always resolves to 0, so width collapses to
+    // Math.max(0, 0-28)='0px'). position:absolute + zIndex:10 + top/
+    // left:'14px' together is still a unique fingerprint: no other element
+    // in this component sets all of those (the old badge, removed, used
+    // top+left but no zIndex:10 combined with position:absolute the same
+    // way; the toggle pill on its own uses left+bottom, no zIndex).
     const findBandAncestor = el => {
       let node = el.parentElement;
       while (node) {
         if (
+          node.style.position === 'absolute' &&
           node.style.top === '14px' &&
           node.style.left === '14px' &&
-          node.style.right === '14px'
+          node.style.zIndex === '10'
         ) {
           return node;
         }
@@ -1269,9 +1277,14 @@ describe('RoomVisualizationFlow', () => {
       await renderAtResult({ imageUrl: 'blob:result' });
 
       const img = screen.getByAltText('New Design');
-      expect(MockResizeObserver.instances).toHaveLength(1);
-      const observer = MockResizeObserver.instances[0];
-      expect(observer.element).not.toBeNull();
+      // Two observers exist now: this one (resultContentRef, identified by
+      // its own real inline style below) and a second one on
+      // imageContainerRef driving the top band's position -- see the next
+      // test. Both elements contain the img (imageContainerRef is nested
+      // inside resultContentRef), so .contains() alone can't disambiguate
+      // them; resultContentRef's flex:'1 1 auto' is unique to it.
+      const observer = MockResizeObserver.instances.find(i => i.element.style.flex === '1 1 auto');
+      expect(observer).toBeDefined();
       expect(observer.element.contains(img)).toBe(true);
 
       act(() => {
@@ -1279,6 +1292,29 @@ describe('RoomVisualizationFlow', () => {
       });
 
       expect(img.style.maxHeight).toBe('234px');
+    });
+
+    test('a second ResizeObserver observes imageContainerRef itself, separate from resultContentRef', async () => {
+      await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
+
+      // imageContainerRef's own inline style (distinct from
+      // resultContentRef's flex:'1 1 auto' above) -- display:inline-block
+      // is unique to it in this component. Its existence, observing the
+      // right element, is what this test actually connects to the real
+      // component: jsdom has no real layout engine, so offsetTop/Left/
+      // Width/Height all read 0 regardless of what this callback receives
+      // -- the resulting position math is only meaningfully verified in
+      // the real-browser suite (tests/visual/overflow.test.js).
+      const imageContainerObserver = MockResizeObserver.instances.find(
+        i => i.element.style.display === 'inline-block'
+      );
+      const wrapperObserver = MockResizeObserver.instances.find(
+        i => i.element.style.flex === '1 1 auto'
+      );
+      expect(imageContainerObserver).toBeDefined();
+      expect(imageContainerObserver).not.toBe(wrapperObserver);
+      expect(imageContainerObserver.element).not.toBe(wrapperObserver.element);
+      expect(wrapperObserver.element.contains(imageContainerObserver.element)).toBe(true);
     });
   });
 

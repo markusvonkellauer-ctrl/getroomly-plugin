@@ -424,10 +424,18 @@ describe('Top band: Before/After toggle + feedback thumbs never overlap or clip'
   const PILL_BUTTON_STYLE = `
     box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
     font-size:12px; font-weight:600; font-family:${FONT_STACK};
-    background:${PRIMARY}; color:white;
+    background:${PRIMARY}; color:white; overflow-wrap:break-word;
+    min-width:0; max-width:100%;
   `;
+  // Matches the real component's feedback group exactly (flexWrap,
+  // maxWidth, justify-content:flex-end) -- an earlier version of this
+  // fixture omitted all three, so it never actually exercised the thumb
+  // group's own internal-wrap path (found in review): at 140px well width
+  // the 112px band is still wider than the group's 96px one-line content,
+  // so wrapping never triggered there either way. See the 84px case below.
   const THUMB_GROUP_STYLE = `
-    display:flex; flex-shrink:0; gap:8px; margin-left:auto;
+    display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%;
+    box-sizing:border-box; gap:8px; margin-left:auto; justify-content:flex-end;
   `;
   const THUMB_HIT_TARGET_STYLE = `
     width:44px; height:44px; display:flex; align-items:center;
@@ -464,12 +472,21 @@ describe('Top band: Before/After toggle + feedback thumbs never overlap or clip'
   `;
 
   const measure = async (page, width, before, after) => {
-    await page.setViewport({ width: width + 40, height: 250 });
+    await page.setViewport({ width: width + 40, height: 500 });
+    // No overflow:hidden or fixed height here, deliberately: the band no
+    // longer renders inside imageContainerRef's own clipped well (see
+    // renderTopBand's comment in RoomVisualizationFlow.tsx) -- only its
+    // WIDTH is still bound by imageContainerRef's real measured width
+    // (bandAnchor.width), which #well still faithfully models. Height is
+    // now bounded only by the outer modal's own 80dvh cap, a completely
+    // different, viewport-height-dependent budget covered by the "Top
+    // band vs the real clipping hierarchy" suite below, not by anything
+    // width-only fixture like this one could meaningfully assert against.
     await page.setContent(
       `<!DOCTYPE html><html><body style="margin:0; padding:20px;">
         <div id="well" style="
-          position:relative; width:${width}px; height:150px;
-          overflow:hidden; box-sizing:border-box; background:#221a17;
+          position:relative; width:${width}px;
+          box-sizing:border-box; background:#221a17;
         ">
           ${buildBandHtml(before, after)}
         </div>
@@ -491,10 +508,12 @@ describe('Top band: Before/After toggle + feedback thumbs never overlap or clip'
   for (const lang of ALL_LANGUAGES) {
     // 140px simulates a narrow/portrait-photo well -- far narrower than
     // the 488px/328px figures elsewhere in this file, which assume a well
-    // roughly as wide as the modal itself. This well's width is driven by
-    // the uploaded photo's own aspect ratio, not the modal, so it can be
-    // much narrower in practice.
-    for (const width of [488, 328, 140]) {
+    // roughly as wide as the modal itself. 84px is narrower still --
+    // below the thumb group's own 96px one-line footprint (2x44px +
+    // 8px gap), the exact threshold where its own internal flex-wrap
+    // (added in review) is what keeps it from overflowing the well's
+    // right edge even when alone on its own line.
+    for (const width of [488, 328, 140, 84]) {
       it(`"${lang}" at ${width}px: toggle pill and thumb group don't overlap or clip`, async () => {
         const t = translations[lang];
         const page = await browser.newPage();
@@ -506,10 +525,19 @@ describe('Top band: Before/After toggle + feedback thumbs never overlap or clip'
             t.toggleAfter
           );
 
-          // The well has overflow:hidden in the real component -- anything
-          // past its edges is silently clipped, not wrapped or shrunk.
+          // #well only constrains WIDTH now (see measure's comment) --
+          // right and left are the two edges that constraint can
+          // meaningfully be checked against. top is a basic sanity check
+          // (nothing should render above its own container); there's no
+          // bottom edge to check here at all, since height clipping is a
+          // separate, viewport-dependent concern covered by the "Top band
+          // vs the real clipping hierarchy" suite below.
           expect(pillRect.right).toBeLessThanOrEqual(wellRect.right + 1);
+          expect(pillRect.left).toBeGreaterThanOrEqual(wellRect.left - 1);
+          expect(pillRect.top).toBeGreaterThanOrEqual(wellRect.top - 1);
           expect(thumbsRect.right).toBeLessThanOrEqual(wellRect.right + 1);
+          expect(thumbsRect.left).toBeGreaterThanOrEqual(wellRect.left - 1);
+          expect(thumbsRect.top).toBeGreaterThanOrEqual(wellRect.top - 1);
 
           // Real flex layout can't produce overlapping siblings by
           // construction, but that guarantee only holds as long as
@@ -750,30 +778,30 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
 
 /**
  * "Top band: Before/After toggle + feedback thumbs never overlap or clip"
- * above tests the band in isolation, against a fixed-height mock well --
- * it never modeled that the band actually sits inside TWO independent
- * overflow:hidden ancestors (imageContainerRef, sized to the image itself,
- * AND resultContentRef, the outer flex item with its own independently
- * flex-resolved height), and a version of this PR's fix tried to solve
- * short-viewport band clipping by padding the image's own maxHeight --
- * which does nothing for resultContentRef specifically, since its height
- * doesn't depend on the image's maxHeight at all (see the comment on the
- * image's maxHeight in RoomVisualizationFlow.tsx). That fix was reverted;
- * this suite instead honestly measures what actually happens against both
- * real ancestors, at real viewport heights.
+ * above tests the band in isolation, against a fixed-height mock well.
+ * That doesn't model the real risk: the band used to be a child of
+ * imageContainerRef, clipped by ITS overflow:hidden, but resultContentRef
+ * -- a SEPARATE overflow:hidden ancestor with its own independently
+ * flex-resolved height -- could clip it first, before the image's own
+ * size ever mattered (Puppeteer-measured: resultContentRef's real height
+ * crossed below the band's own worst-case depth, ~144px, somewhere
+ * between 512-514px viewport height with the current footer). Real fix
+ * (RoomVisualizationFlow.tsx's renderTopBand): the band now renders
+ * OUTSIDE resultContentRef entirely, as a sibling positioned via
+ * bandAnchor (imageContainerRef's own on-screen box, kept in sync with a
+ * dedicated ResizeObserver) -- so it's bounded only by the outer modal's
+ * own 80dvh budget, not by resultContentRef's tighter leftover-space
+ * calculation.
  *
- * Puppeteer-measured with the current footer: resultContentRef's real
- * height crosses below the band's own worst-case depth (~144px, German/
- * Finnish, fully wrapped) somewhere between 512px and 514px viewport
- * height. Above that, the band must be fully visible -- that's the
- * guarantee this codebase actually provides. Below it, the band can be
- * genuinely clipped by resultContentRef; this is an accepted, documented
- * gap (see the same maxHeight comment), not something this suite pretends
- * is fixed -- but it still asserts an upper bound on how bad that
- * clipping can get, so a regression that makes it much worse doesn't go
- * unnoticed.
+ * This models that real structure: the band as a sibling of the content
+ * wrapper and footer (not nested inside either), positioned the same way
+ * production does (offsetTop/Left/Width read off image-container, which
+ * -- since nothing between it and the modal has its own position set --
+ * resolve directly against the modal, matching how
+ * .getroomly-modal-container's position:fixed + transform makes it the
+ * real containing block in production).
  */
-describe('Top band vs the real clipping hierarchy (imageContainerRef + resultContentRef)', () => {
+describe('Top band vs the real clipping hierarchy: rendered outside resultContentRef', () => {
   let browser;
 
   beforeAll(async () => {
@@ -828,10 +856,10 @@ describe('Top band vs the real clipping hierarchy (imageContainerRef + resultCon
       const pillButtonStyle = `
         box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
         font-size:12px; font-weight:600; font-family:${FONT_STACK};
-        background:${PRIMARY}; color:white;
+        background:${PRIMARY}; color:white; overflow-wrap:break-word; min-width:0; max-width:100%;
       `;
       const bandHtml = `
-        <div id="band" style="position:absolute; top:14px; left:14px; right:14px; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; z-index:10;">
+        <div id="band" style="position:absolute; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; z-index:10;">
           <div style="display:flex; flex-shrink:0; flex-wrap:wrap; max-width:100%; box-sizing:border-box; gap:4px; padding:4px; border-radius:999px; background:rgba(255,255,255,.94);">
             <button style="${pillButtonStyle}">${escapeHtml(t.toggleBefore)}</button>
             <button style="${pillButtonStyle}">${escapeHtml(t.toggleAfter)}</button>
@@ -845,36 +873,51 @@ describe('Top band vs the real clipping hierarchy (imageContainerRef + resultCon
 
       await page.setContent(
         `<!DOCTYPE html><html><body style="margin:0;">
-          <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; width:${width}px; box-sizing:border-box;">
+          <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; position:relative; width:${width}px; box-sizing:border-box;">
             ${headerHtml}
             <div id="content-wrapper" style="flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
               <div id="image-container" style="position:relative; display:inline-block; overflow:hidden;">
                 <img id="result-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3C/svg%3E" style="display:block; max-width:100%; max-height:150px; width:auto; height:auto;" />
-                ${bandHtml}
               </div>
             </div>
+            ${bandHtml}
             ${footerHtml}
           </div>
           <script>
             const wrapper = document.getElementById('content-wrapper');
             const img = document.getElementById('result-image');
-            const ro = new ResizeObserver(entries => {
+            const imageContainer = document.getElementById('image-container');
+            const band = document.getElementById('band');
+
+            function measureBand() {
+              band.style.top = (imageContainer.offsetTop + 14) + 'px';
+              band.style.left = (imageContainer.offsetLeft + 14) + 'px';
+              band.style.width = Math.max(0, imageContainer.offsetWidth - 28) + 'px';
+            }
+
+            const wrapperObserver = new ResizeObserver(entries => {
               img.style.maxHeight = entries[0].contentRect.height + 'px';
               window.__lastMeasuredHeight = entries[0].contentRect.height;
             });
-            ro.observe(wrapper);
+            wrapperObserver.observe(wrapper);
+
+            const imageContainerObserver = new ResizeObserver(() => {
+              measureBand();
+              window.__bandMeasured = true;
+            });
+            imageContainerObserver.observe(imageContainer);
+            measureBand();
           </script>
         </body></html>`
       );
-      await page.waitForFunction(() => window.__lastMeasuredHeight !== undefined);
+      await page.waitForFunction(
+        () => window.__lastMeasuredHeight !== undefined && window.__bandMeasured
+      );
 
       return page.evaluate(() => {
         const toPlain = r => ({ top: r.top, bottom: r.bottom });
         return {
-          wrapperRect: toPlain(document.getElementById('content-wrapper').getBoundingClientRect()),
-          imageContainerRect: toPlain(
-            document.getElementById('image-container').getBoundingClientRect()
-          ),
+          modalRect: toPlain(document.getElementById('modal').getBoundingClientRect()),
           thumbGroupRect: toPlain(document.getElementById('thumb-group').getBoundingClientRect()),
         };
       });
@@ -883,26 +926,39 @@ describe('Top band vs the real clipping hierarchy (imageContainerRef + resultCon
     }
   };
 
-  for (const viewportHeight of [667, 600, 520]) {
-    it(`at 375x${viewportHeight} (above the ~514px threshold): the band is fully visible, clipped by neither ancestor`, async () => {
-      const { wrapperRect, imageContainerRect, thumbGroupRect } = await measure(viewportHeight);
-      expect(thumbGroupRect.bottom).toBeLessThanOrEqual(wrapperRect.bottom + 1);
-      expect(thumbGroupRect.bottom).toBeLessThanOrEqual(imageContainerRect.bottom + 1);
+  // The full previous matrix (667 down to 400) -- all of it, including the
+  // range that used to be below the ~514px threshold where clipping was
+  // an accepted, documented gap. With the band moved outside
+  // resultContentRef, it's now bounded only by the modal's own 80dvh cap,
+  // which is far more generous -- verified this genuinely eliminates the
+  // clipping down to 450px (previously broken from ~514px down). Only the
+  // single most extreme case in this matrix (400px -- a very short
+  // viewport, e.g. landscape phone) still clips, and far less badly than
+  // before: at 400px, a landscape photo's aspect ratio makes
+  // imageContainerRef not just short but also very narrow (~70px wide
+  // when this was measured), which forces BOTH the toggle pill's buttons
+  // AND the thumb group's circles into maximal internal wrapping at once
+  // -- the band's own worst-case height in that specific combination
+  // (~336px) can still exceed even the modal's generous cap (320px at
+  // this viewport). Measured overshoot ~65px, down from ~143px before
+  // this fix (against the tighter resultContentRef boundary) -- real,
+  // substantial progress, not a full guarantee at the most extreme
+  // viewport in this matrix.
+  for (const viewportHeight of [667, 640, 600, 568, 520, 480, 450]) {
+    it(`at 375x${viewportHeight}: the band is fully visible, bounded only by the modal's own cap`, async () => {
+      const { modalRect, thumbGroupRect } = await measure(viewportHeight);
+      expect(thumbGroupRect.bottom).toBeLessThanOrEqual(modalRect.bottom + 1);
     }, 15000);
   }
 
-  for (const viewportHeight of [480, 400]) {
-    it(`at 375x${viewportHeight} (below the ~514px threshold): clipping is bounded, not catastrophic`, async () => {
-      const { wrapperRect, thumbGroupRect } = await measure(viewportHeight);
-      const clippedBy = Math.max(0, thumbGroupRect.bottom - wrapperRect.bottom);
-      // Not a claim that this is fine -- it's the documented gap. Bounded
-      // generously (160px, comfortably above the ~143px measured at 400px
-      // when this was written) purely as a regression net against the gap
-      // getting dramatically worse, e.g. from an unrelated change growing
-      // the band further.
-      expect(clippedBy).toBeLessThanOrEqual(160);
-    }, 15000);
-  }
+  it('at 375x400 (the most extreme case in this matrix): remaining clipping is far smaller than before this fix', async () => {
+    const { modalRect, thumbGroupRect } = await measure(400);
+    const clippedBy = Math.max(0, thumbGroupRect.bottom - modalRect.bottom);
+    // Bounded generously (100px, comfortably above the ~65px measured
+    // when this was written) as a regression net against this specific
+    // residual gap getting dramatically worse.
+    expect(clippedBy).toBeLessThanOrEqual(100);
+  }, 15000);
 });
 
 /**
