@@ -251,28 +251,9 @@ export function RoomVisualizationFlow({
   // caps it correctly when the bottom corner is large.
   const bottomControlRef = useRef<HTMLDivElement | null>(null);
   const [bottomControlHeight, setBottomControlHeight] = useState<number | null>(null);
-  // Depends on `step`: the wrapper this ref attaches to only renders
-  // during the 'result' step (see renderPhotoOverlay's call site), so on
-  // first mount (still at 'upload') bottomControlRef.current is null and
-  // this effect no-ops -- without `step` in the deps array it would never
-  // run again once the ref actually became populated, the same class of
-  // bug imageContainerRef needed a callback ref to avoid (found in
-  // review: caught because a real unit test renders the full upload ->
-  // result flow, not just the result step in isolation).
-  useEffect(() => {
-    const el = bottomControlRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') {
-      return;
-    }
-    const observer = new ResizeObserver(entries => {
-      const entry = entries[0];
-      if (entry) {
-        setBottomControlHeight(entry.contentRect.height);
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [step]);
+  // The effect observing bottomControlRef lives further down, alongside
+  // showFeedback's own declaration (it depends on showFeedback -- see
+  // that effect's comment for why).
 
   // Mutable refs so touch handlers can read latest values without being in the
   // effect dep array (avoids re-registering listeners on every scale update).
@@ -1221,6 +1202,36 @@ export function RoomVisualizationFlow({
   const showOriginal = resultButtons.showOriginal !== false;
   const showSaveShare = resultButtons.saveShare !== false;
 
+  // Depends on `step` AND `showFeedback`: bottomControlRef's wrapper only
+  // renders when both `step === 'result'` and `showFeedback` are true
+  // (see renderPhotoOverlay's call site). `step` alone isn't enough --
+  // found in review: useEmbedConfig re-reads config.buttons on every
+  // 'getroomly-open-modal' event without remounting (same mechanism as
+  // the config.language case below), so a host toggling feedback on/off
+  // while the SAME result stays mounted changes showFeedback without
+  // changing step at all. Without showFeedback here too: turning feedback
+  // ON would mount an unobserved wrapper (the toggle's collision cap
+  // never applies to it); turning it OFF leaves the last-measured height
+  // stale in state, potentially clipping the toggle unnecessarily on a
+  // later remount. The `!el` branch explicitly clears that stale value
+  // instead of just leaving it, so it can't linger past the wrapper's own
+  // lifetime.
+  useEffect(() => {
+    const el = bottomControlRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') {
+      setBottomControlHeight(null);
+      return;
+    }
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (entry) {
+        setBottomControlHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [step, showFeedback]);
+
   // Guaranteed post-commit measurement for the overlay's anchor -- the
   // other triggers (attachImageContainerRef's inline call, the
   // ResizeObserver on imageContainerRef, window resize, the base image's
@@ -1256,6 +1267,22 @@ export function RoomVisualizationFlow({
     // explicit dependency rather than relying on some other value
     // happening to change at the same time. Found in review.
     config?.language,
+    // Same class of gap, found in a later review round, for a DIFFERENT
+    // reason than these three flags had back when footer-distance was
+    // still tracked here (see measureOverlayAnchor's own comment for why
+    // that tracking was removed entirely). .getroomly-modal-container is
+    // position:fixed with top:50% + transform:translate(-50%,-50%)
+    // (App.tsx) -- it's vertically RE-CENTERED around its own total
+    // height. Hiding/showing a footer row (add-to-basket, favorite,
+    // save/share) changes the modal's total height, which shifts the
+    // modal's rendered top position on the page to keep it centered --
+    // and therefore shifts the image's absolute viewport position too,
+    // even though the image's OWN size never changes. Neither the image's
+    // ResizeObserver (fires on size change only) nor window resize (the
+    // window itself hasn't changed) catches a shift like that.
+    showAddToBasket,
+    showFavorite,
+    showSaveShare,
     measureOverlayAnchor,
   ]);
 

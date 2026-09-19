@@ -390,25 +390,6 @@ describe('Cross-language tertiary row overflow (combined row, not per-button)', 
 });
 
 /**
- * The top band (RoomVisualizationFlow.tsx, renderResultStep) holds the
- * Before/After toggle pill (left) and the feedback thumb group (right) as
- * siblings in one `flex-wrap` row -- see ANDRING-5b-bildkontroller.md,
- * "Ändring 6". "Före"/"Efter" is short in Swedish/English but much wider in
- * German ("Vorher"/"Nachher") and Finnish ("Ennen"/"Jälkeen"); on a narrow
- * or landscape-cropped photo the pill can grow enough to reach the thumbs'
- * corner. The fix is layout (flex-wrap + marginLeft:auto on the thumb
- * group), not per-language measurement -- deliberately, per the same
- * document: a pixel reservation needs per-locale upkeep and can still be
- * wrong at 200% zoom or a substituted system font.
- *
- * This renders the real band structure (toggle pill + thumb group,
- * matching the production inline styles) inside a mock image well and
- * checks two things: neither element is clipped by the well's
- * overflow:hidden, and -- the actual point of this suite -- the pill and
- * the thumb group never overlap, wrapping onto separate lines instead when
- * the well is too narrow for both on one line.
- */
-/**
  * Replaces a shared top row (toggle + thumbs in one flex-wrap band) with
  * two INDEPENDENTLY corner-anchored controls -- toggle top-right, thumbs
  * (or the confirmation pill that replaces them) bottom-right -- decided
@@ -700,6 +681,171 @@ describe('Photo overlay: toggle (top-right) and thumbs (bottom-right) each fit w
       }
     }, 15000);
   }
+});
+
+/**
+ * Found in review: the collision-avoidance formula (toggle maxHeight =
+ * overlayHeight - 14 - bottomControlHeight - 14 - 8) doesn't care WHY the
+ * overlay is short -- only that it is. The "Photo overlay" suite above
+ * fixes width:150px, so it only exercises narrow-width-driven shortness
+ * (both controls needing to wrap). This suite fixes a comfortably WIDE
+ * well (300px -- the toggle never needs to wrap) and varies HEIGHT
+ * instead, using the exact real image heights already established by the
+ * "Result-step modal height" suite below for each viewport (400px
+ * viewport -> ~106.6px image; 450px -> ~146.6px; 480px+ -> the full 150px
+ * fallback) -- this is the SAME underlying concern raised earlier in this
+ * PR about short viewports, now re-verified against the new formula
+ * rather than assumed to no longer apply just because the old
+ * maxHeightWithinBounds code was removed.
+ *
+ * Measured directly before writing any assertion: only the single most
+ * extreme viewport (400px, ~106.6px image) actually clips a
+ * comfortably-wide, never-wrapping toggle at all (~26.6px visible vs. its
+ * ~40px natural single-line height) -- 450px and above leave enough room
+ * even in this axis. Reported honestly as a real, bounded, accepted
+ * degradation (same category as the narrow-width case), not asserted
+ * away -- closing it fully still needs the same scroll/reflow decision
+ * declined in every earlier round of this PR.
+ */
+describe('Photo overlay at short (not narrow) viewports: height alone can clip a normal, never-wrapping toggle', () => {
+  let browser;
+
+  beforeAll(async () => {
+    browser = await puppeteer.launch({
+      headless: process.env.CI !== 'false',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    if (browser) await browser.close();
+  });
+
+  const TOGGLE_GROUP_STYLE = `
+    position:absolute; top:14px; right:14px; display:flex; flex-shrink:0;
+    flex-wrap:wrap; max-width:calc(100% - 28px); box-sizing:border-box;
+    gap:4px; padding:4px; border-radius:999px;
+    background:rgba(255,255,255,.94);
+  `;
+  const PILL_BUTTON_STYLE = `
+    box-sizing:border-box; border:0; border-radius:999px; padding:9px 16px;
+    font-size:12px; font-weight:600; font-family:${FONT_STACK};
+    background:${PRIMARY}; color:white; overflow-wrap:break-word;
+    min-width:0; max-width:100%;
+  `;
+  const THUMB_HIT_TARGET_STYLE = `
+    width:44px; height:44px; display:flex; align-items:center;
+    justify-content:center; border:0; background:transparent; padding:0;
+  `;
+  const THUMB_CIRCLE_STYLE = `
+    width:40px; height:40px; border-radius:50%; display:flex;
+    align-items:center; justify-content:center;
+    background:rgba(255,255,255,.94); box-sizing:border-box;
+  `;
+  const WELL_WIDTH = 300; // Comfortably wide -- the toggle never wraps here.
+
+  const measure = async (page, wellHeight, before, after) => {
+    await page.setViewport({ width: WELL_WIDTH + 40, height: 300 });
+    await page.setContent(
+      `<!DOCTYPE html><html><body style="margin:0; padding:20px;">
+        <div id="well" style="
+          position:relative; width:${WELL_WIDTH}px; height:${wellHeight}px;
+          overflow:hidden; box-sizing:border-box; background:#221a17;
+        ">
+          <div class="toggle-group" style="${TOGGLE_GROUP_STYLE}">
+            <button style="${PILL_BUTTON_STYLE}">${escapeHtml(before)}</button>
+            <button style="${PILL_BUTTON_STYLE}">${escapeHtml(after)}</button>
+          </div>
+          <div id="bottom-control" style="position:absolute; bottom:14px; right:14px; max-width:calc(100% - 28px); box-sizing:border-box;">
+            <div class="thumb-group" style="display:flex; flex-shrink:0; flex-wrap:wrap; gap:8px; justify-content:flex-end;">
+              <button style="${THUMB_HIT_TARGET_STYLE}"><span style="${THUMB_CIRCLE_STYLE}"></span></button>
+              <button style="${THUMB_HIT_TARGET_STYLE}"><span style="${THUMB_CIRCLE_STYLE}"></span></button>
+            </div>
+          </div>
+        </div>
+        <script>
+          const well = document.getElementById('well');
+          const toggle = document.querySelector('.toggle-group');
+          const bottomControl = document.getElementById('bottom-control');
+          const wellRect = well.getBoundingClientRect();
+          const bottomControlRect = bottomControl.getBoundingClientRect();
+          const bottomControlHeight = bottomControlRect.bottom - bottomControlRect.top;
+          const overlayHeight = wellRect.bottom - wellRect.top;
+          const maxHeight = Math.max(0, overlayHeight - 14 - bottomControlHeight - 14 - 8);
+          toggle.style.maxHeight = maxHeight + 'px';
+          toggle.style.overflow = 'hidden';
+        </script>
+      </body></html>`
+    );
+    return page.evaluate(() => {
+      const toPlain = r => ({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+      return {
+        wellRect: toPlain(document.getElementById('well').getBoundingClientRect()),
+        toggleRect: toPlain(document.querySelector('.toggle-group').getBoundingClientRect()),
+        thumbsRect: toPlain(document.querySelector('.thumb-group').getBoundingClientRect()),
+      };
+    });
+  };
+
+  const t = translations.en;
+
+  // Real image heights at 480px viewport and above are the full 150px
+  // fallback (measured via the "Result-step modal height" suite's own
+  // fixture) -- comfortable, hard guarantee: neither control is clipped
+  // at all in this wide, never-wrapping case.
+  for (const wellHeight of [150]) {
+    it(`at a comfortable ${wellHeight}px well height (480px viewport and taller): neither control is clipped`, async () => {
+      const page = await browser.newPage();
+      try {
+        const { wellRect, toggleRect, thumbsRect } = await measure(
+          page,
+          wellHeight,
+          t.toggleBefore,
+          t.toggleAfter
+        );
+        expect(toggleRect.bottom).toBeLessThanOrEqual(wellRect.bottom + 1);
+        expect(thumbsRect.bottom).toBeLessThanOrEqual(wellRect.bottom + 1);
+        // Not just "clipped box stays in bounds" -- the toggle's natural
+        // single-line height (~40px) must be FULLY represented, not
+        // silently shrunk by the cap.
+        expect(toggleRect.bottom - toggleRect.top).toBeGreaterThanOrEqual(38);
+      } finally {
+        await page.close();
+      }
+    }, 15000);
+  }
+
+  it('at a ~146.6px well height (450px viewport, real measured image height): still no clipping', async () => {
+    const page = await browser.newPage();
+    try {
+      const { wellRect, toggleRect } = await measure(
+        page,
+        146.578125,
+        t.toggleBefore,
+        t.toggleAfter
+      );
+      expect(toggleRect.bottom).toBeLessThanOrEqual(wellRect.bottom + 1);
+      expect(toggleRect.bottom - toggleRect.top).toBeGreaterThanOrEqual(38);
+    } finally {
+      await page.close();
+    }
+  }, 15000);
+
+  it('at a ~106.6px well height (400px viewport, real measured image height): the toggle is clipped even though it never wraps -- open, bounded gap', async () => {
+    const page = await browser.newPage();
+    try {
+      const { toggleRect } = await measure(page, 106.59375, t.toggleBefore, t.toggleAfter);
+      const toggleVisibleHeight = toggleRect.bottom - toggleRect.top;
+      // Real measured: ~26.6px (vs. its ~40px natural single-line
+      // height). Bounded generously (35px, above the ~26.6px measured) as
+      // a regression net, not a claim this is fine -- reported the same
+      // way as every other accepted-degradation case in this file.
+      expect(toggleVisibleHeight).toBeGreaterThan(0);
+      expect(toggleVisibleHeight).toBeLessThanOrEqual(35);
+    } finally {
+      await page.close();
+    }
+  }, 15000);
 });
 
 /**
