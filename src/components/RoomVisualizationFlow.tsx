@@ -126,7 +126,7 @@ export function RoomVisualizationFlow({
   const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null);
   const lastTapRef = useRef(0);
 
-  // The photo overlay (Before/After toggle, top-right corner; feedback
+  // The photo overlay (Before/After toggle, top-left corner; feedback
   // thumbs, bottom-right corner) used to be a child of imageContainerRef,
   // clipped by its overflow:hidden -- but at short viewports
   // resultContentRef (a SEPARATE overflow:hidden ancestor, with its own
@@ -192,8 +192,17 @@ export function RoomVisualizationFlow({
     const containingEl = overlayEl.offsetParent ?? document.body;
     const imageRect = imageEl.getBoundingClientRect();
     const containingRect = containingEl.getBoundingClientRect();
-    const top = imageRect.top - containingRect.top;
-    const left = imageRect.left - containingRect.left;
+    // getBoundingClientRect() is measured from the containing element's
+    // BORDER box, but a position:absolute child's top/left resolve
+    // against its PADDING box -- found in review: .getroomly-modal-
+    // container (the real containingEl in production) has a 1px border
+    // (index.css's .border class), so subtracting containingRect.top/left
+    // alone landed the overlay 1px down and right of the image. clientTop/
+    // clientLeft give exactly the border width (0 for the document.body
+    // fallback, which has none), correcting for it regardless of what
+    // border containingEl does or doesn't have.
+    const top = imageRect.top - containingRect.top - containingEl.clientTop;
+    const left = imageRect.left - containingRect.left - containingEl.clientLeft;
     // The overlay's own box is set to EXACTLY the image's box (top/left/
     // width/height, no insets baked in here -- each control applies its
     // own 14px inset from whichever corner it's anchored to instead, see
@@ -231,7 +240,7 @@ export function RoomVisualizationFlow({
   // the thumb group / confirmation pill currently occupies it -- see
   // renderPhotoOverlay, they share one stable wrapper specifically so this
   // ref doesn't have to track two different, conditionally-mounted
-  // elements). Read by the toggle group (top-right) to cap its own
+  // elements). Read by the toggle group (top-left) to cap its own
   // maxHeight so its wrapped text can never grow down far enough to
   // visually overlap the bottom-right corner -- found in review (caught by
   // actually screenshotting the narrowest case, not by the numeric-only
@@ -1218,8 +1227,26 @@ export function RoomVisualizationFlow({
   // lifetime.
   useEffect(() => {
     const el = bottomControlRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') {
+    if (!el) {
       setBottomControlHeight(null);
+      return;
+    }
+    if (typeof ResizeObserver === 'undefined') {
+      // Found in review: leaving this null here (as an earlier version
+      // did) doesn't just cost one frame the way it does in browsers
+      // WITH ResizeObserver -- it means bottomControlHeight never becomes
+      // non-null AT ALL, so the toggle's maxHeight cap (which requires a
+      // real measurement, deliberately -- see its own comment on why a
+      // static guess was rejected) never applies for the entire session,
+      // not just a brief flash. A static WORST-CASE fallback (96px, the
+      // thumb group's own known wrapped-height constant: 2x44px circles +
+      // 8px gap, independent of language) is the right trade-off
+      // specifically here, unlike the static-reservation approach
+      // rejected for the general case: it only ever activates in a
+      // browser that can't measure at all, so it can't wrongly clip the
+      // toggle's ordinary case in any browser where a real measurement is
+      // possible.
+      setBottomControlHeight(96);
       return;
     }
     const observer = new ResizeObserver(entries => {
@@ -1604,7 +1631,7 @@ export function RoomVisualizationFlow({
     );
   };
 
-  // Photo overlay -- Före/Efter toggle in the top-right corner, feedback
+  // Photo overlay -- Före/Efter toggle in the top-left corner, feedback
   // thumbs (or the confirmation pill that replaces them) in the
   // bottom-right corner, both rendered on top of the result image as two
   // INDEPENDENTLY corner-anchored elements, not a shared row. NOT a child
@@ -1669,7 +1696,7 @@ export function RoomVisualizationFlow({
           overflow: 'hidden',
           zIndex: 10,
           // This box spans the image's full area, including the empty
-          // space between the toggle (top-right) and the thumb group
+          // space between the toggle (top-left) and the thumb group
           // (bottom-right) -- without this, that empty space still
           // hit-tests as part of this div (its own box, regardless of
           // visible content), and since the overlay is a DOM SIBLING of
@@ -1691,7 +1718,7 @@ export function RoomVisualizationFlow({
             style={{
               position: 'absolute',
               top: '14px',
-              right: '14px',
+              left: '14px',
               display: 'flex',
               flexShrink: 0,
               flexWrap: 'wrap',
@@ -1700,7 +1727,7 @@ export function RoomVisualizationFlow({
               // ratio, not the modal width -- a narrow/portrait photo
               // can render a well far narrower than this pill's
               // natural content width. Without a cap, the overlay's own
-              // overflow:hidden would silently clip the pill's left
+              // overflow:hidden would silently clip the pill's right
               // side instead of wrapping it. calc(100% - 28px) mirrors
               // the 14px inset on both sides against the overlay's own
               // width, which is exactly the image's width (see

@@ -1035,12 +1035,12 @@ describe('RoomVisualizationFlow', () => {
   // later replaced (decided directly with the user, after measuring that
   // it could make the thumb group entirely invisible on narrow photos --
   // see the PR conversation) with two independently corner-anchored
-  // controls: toggle top-right, thumbs bottom-right. These read the real
+  // controls: toggle top-left, thumbs bottom-right. These read the real
   // rendered DOM's inline styles/ancestry directly, the same way the
   // ResizeObserver-wiring and footer-spacing tests above do, so a
   // regression is caught even if it never touches the Puppeteer fixtures
   // in tests/visual/overflow.test.js.
-  describe('photo overlay: toggle top-right, thumbs bottom-right, independently corner-anchored', () => {
+  describe('photo overlay: toggle top-left, thumbs bottom-right, independently corner-anchored', () => {
     const renderAtResult = async (generationResult, props = {}) => {
       generateRoomVisualization.mockResolvedValueOnce(generationResult);
       render(<RoomVisualizationFlow {...defaultProps} {...props} />);
@@ -1076,7 +1076,7 @@ describe('RoomVisualizationFlow', () => {
 
       // Same outer overlay (one absolutely-positioned box matching the
       // image), but NOT the same immediate parent -- each control has its
-      // own position:absolute wrapper (top-right for the toggle,
+      // own position:absolute wrapper (top-left for the toggle,
       // bottom-right for the thumbs) nested directly inside that shared
       // overlay, rather than being flex siblings in one shared row.
       expect(toggleOverlay).not.toBeNull();
@@ -1095,7 +1095,7 @@ describe('RoomVisualizationFlow', () => {
     // not a descendant -- the pinch/double-tap handlers are attached
     // directly to imageContainerRef's own element (see
     // attachImageContainerRef), so an event that lands on the overlay's
-    // own box (including the empty space between the toggle, top-right,
+    // own box (including the empty space between the toggle, top-left,
     // and the thumb group, bottom-right) can never bubble to those
     // handlers, regardless of what's visually beneath it. Without
     // pointerEvents:'none' on the overlay and 'auto' restored on each
@@ -1197,9 +1197,75 @@ describe('RoomVisualizationFlow', () => {
       }
     });
 
+    // Found in review: getBoundingClientRect() is measured from the
+    // containing element's BORDER box, but a position:absolute child's
+    // top/left resolve against its PADDING box -- .getroomly-modal-
+    // container (the real containingEl in production) has a real 1px
+    // border (index.css's .border class), which the previous test above
+    // can't catch at all, since document.body (its containingEl, the
+    // jsdom fallback) has no border and clientTop/clientLeft of 0 either
+    // way. This mocks a nonzero clientTop/clientLeft on that same
+    // fallback element specifically to exercise the correction itself,
+    // independent of which real element ends up being containingEl.
+    test('measureOverlayAnchor corrects for a bordered containing element (clientTop/clientLeft), not just its border-box origin', async () => {
+      class MockResizeObserver {
+        constructor(callback) {
+          this.callback = callback;
+        }
+        observe(element) {
+          this.element = element;
+          MockResizeObserver.instances.push(this);
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      MockResizeObserver.instances = [];
+      const originalResizeObserver = global.ResizeObserver;
+      global.ResizeObserver = MockResizeObserver;
+
+      const clientTopSpy = jest.spyOn(document.body, 'clientTop', 'get').mockReturnValue(1);
+      const clientLeftSpy = jest.spyOn(document.body, 'clientLeft', 'get').mockReturnValue(1);
+
+      try {
+        await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result', generationId: 'gen-1' });
+
+        const beforeButton = screen.getByRole('button', { name: 'Before' });
+        const overlay = findOverlayAncestor(beforeButton);
+        const imageContainerObserver = MockResizeObserver.instances.find(
+          i => i.element.style.display === 'inline-block'
+        );
+
+        jest.spyOn(imageContainerObserver.element, 'getBoundingClientRect').mockReturnValue({
+          top: 100,
+          left: 20,
+          width: 300,
+          height: 150,
+          bottom: 250,
+          right: 320,
+          x: 20,
+          y: 100,
+          toJSON() {},
+        });
+        act(() => {
+          imageContainerObserver.callback([{ contentRect: { height: 150 } }]);
+        });
+
+        // containingRect (document.body's own getBoundingClientRect,
+        // unmocked) is still {top:0, left:0, ...} in jsdom -- only
+        // clientTop/clientLeft are mocked here, isolating the correction
+        // this test targets: top = 100 - 0 - 1 = 99, left = 20 - 0 - 1 = 19.
+        expect(overlay.style.top).toBe('99px');
+        expect(overlay.style.left).toBe('19px');
+      } finally {
+        global.ResizeObserver = originalResizeObserver;
+        clientTopSpy.mockRestore();
+        clientLeftSpy.mockRestore();
+      }
+    });
+
     // Found in review (caught by actually screenshotting the narrowest
     // case, not by numeric-only checks): two independently, correctly
-    // positioned controls (toggle top-right, thumbs bottom-right) can
+    // positioned controls (toggle top-left, thumbs bottom-right) can
     // still visually overlap if the toggle's own wrapped text grows tall
     // enough to reach the thumb group underneath it. Fixed by measuring
     // the bottom-right corner's real rendered height and capping the
@@ -1233,7 +1299,7 @@ describe('RoomVisualizationFlow', () => {
         );
         // bottomControlRef's own wrapper -- position:absolute + bottom:
         // 14px + right:14px together are unique to it in this component
-        // (the toggle group uses top+right, not bottom+right).
+        // (the toggle group uses top+left, not bottom+right).
         const bottomControlObserver = MockResizeObserver.instances.find(
           i => i.element.style.bottom === '14px' && i.element.style.right === '14px'
         );
@@ -1264,6 +1330,55 @@ describe('RoomVisualizationFlow', () => {
         });
 
         // maxHeight = overlayHeight(150) - 14 - bottomControlHeight(96) - 14 - 8 = 18
+        expect(toggleGroup.style.maxHeight).toBe('18px');
+        expect(toggleGroup.style.overflow).toBe('hidden');
+      } finally {
+        global.ResizeObserver = originalResizeObserver;
+      }
+    });
+
+    // Found in review: without ResizeObserver at all (older browsers),
+    // the effect observing bottomControlRef used to leave
+    // bottomControlHeight permanently null, which the toggle's maxHeight
+    // formula reads as "not yet measured" -- meaning the collision cap
+    // never applied for the WHOLE session there, not just a brief
+    // first-frame flash the way it does in browsers that do have
+    // ResizeObserver. Fixed with a conservative static fallback (96px,
+    // the thumb group's own known worst-case wrapped height) that only
+    // ever activates in this specific no-ResizeObserver branch.
+    test('without ResizeObserver at all, the toggle still gets a conservative fallback cap instead of none', async () => {
+      const originalResizeObserver = global.ResizeObserver;
+      delete global.ResizeObserver;
+
+      try {
+        await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result', generationId: 'gen-1' });
+
+        const beforeButton = screen.getByRole('button', { name: 'Before' });
+        const toggleGroup = beforeButton.closest('[role="group"]');
+        const imageContainerEl = screen.getByAltText('New Design').parentElement;
+
+        jest.spyOn(imageContainerEl, 'getBoundingClientRect').mockReturnValue({
+          top: 0,
+          left: 0,
+          width: 84,
+          height: 150,
+          bottom: 150,
+          right: 84,
+          x: 0,
+          y: 0,
+          toJSON() {},
+        });
+        // measureOverlayAnchor is also wired to window resize
+        // unconditionally (see its own effect), independent of
+        // ResizeObserver entirely -- the same trigger production uses on
+        // an actual orientation change.
+        act(() => {
+          window.dispatchEvent(new Event('resize'));
+        });
+
+        // maxHeight = overlayHeight(150) - 14 - fallbackBottomHeight(96) - 14 - 8 = 18
+        // Same result as the real-measurement test above, by design: the
+        // fallback constant IS the thumb group's own worst-case height.
         expect(toggleGroup.style.maxHeight).toBe('18px');
         expect(toggleGroup.style.overflow).toBe('hidden');
       } finally {

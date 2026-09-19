@@ -391,7 +391,7 @@ describe('Cross-language tertiary row overflow (combined row, not per-button)', 
 
 /**
  * Replaces a shared top row (toggle + thumbs in one flex-wrap band) with
- * two INDEPENDENTLY corner-anchored controls -- toggle top-right, thumbs
+ * two INDEPENDENTLY corner-anchored controls -- toggle top-left, thumbs
  * (or the confirmation pill that replaces them) bottom-right -- decided
  * directly with the user after measuring that the shared row could make
  * the thumb group entirely invisible on narrow portrait photos (see the
@@ -409,11 +409,11 @@ describe('Cross-language tertiary row overflow (combined row, not per-button)', 
  * comment in RoomVisualizationFlow.tsx for why the overlay's height now
  * always equals the image's own height directly).
  */
-describe('Photo overlay: toggle (top-right) and thumbs (bottom-right) each fit within their own corner', () => {
+describe('Photo overlay: toggle (top-left) and thumbs (bottom-right) each fit within their own corner', () => {
   let browser;
 
   const TOGGLE_GROUP_STYLE = `
-    position:absolute; top:14px; right:14px; display:flex; flex-shrink:0;
+    position:absolute; top:14px; left:14px; display:flex; flex-shrink:0;
     flex-wrap:wrap; max-width:calc(100% - 28px); box-sizing:border-box;
     gap:4px; padding:4px; border-radius:999px;
     background:rgba(255,255,255,.94);
@@ -702,10 +702,12 @@ describe('Photo overlay: toggle (top-right) and thumbs (bottom-right) each fit w
  * extreme viewport (400px, ~106.6px image) actually clips a
  * comfortably-wide, never-wrapping toggle at all (~26.6px visible vs. its
  * ~40px natural single-line height) -- 450px and above leave enough room
- * even in this axis. Reported honestly as a real, bounded, accepted
- * degradation (same category as the narrow-width case), not asserted
- * away -- closing it fully still needs the same scroll/reflow decision
- * declined in every earlier round of this PR.
+ * even in this axis. Reported honestly as a real, bounded degradation
+ * (same category as the narrow-width case) -- the only way to eliminate
+ * it entirely would be scroll/reflow in the result view, which the user
+ * explicitly decided against pursuing (2026-09-19, see the PR
+ * conversation): the current bounded/documented behavior is accepted as
+ * final, not a placeholder awaiting a future fix.
  */
 describe('Photo overlay at short (not narrow) viewports: height alone can clip a normal, never-wrapping toggle', () => {
   let browser;
@@ -722,7 +724,7 @@ describe('Photo overlay at short (not narrow) viewports: height alone can clip a
   });
 
   const TOGGLE_GROUP_STYLE = `
-    position:absolute; top:14px; right:14px; display:flex; flex-shrink:0;
+    position:absolute; top:14px; left:14px; display:flex; flex-shrink:0;
     flex-wrap:wrap; max-width:calc(100% - 28px); box-sizing:border-box;
     gap:4px; padding:4px; border-radius:999px;
     background:rgba(255,255,255,.94);
