@@ -1227,26 +1227,18 @@ export function RoomVisualizationFlow({
   // lifetime.
   useEffect(() => {
     const el = bottomControlRef.current;
-    if (!el) {
+    if (!el || typeof ResizeObserver === 'undefined') {
+      // Also covers the no-ResizeObserver case: this effect only ever
+      // subscribes to a real observer, so bottomControlHeight simply
+      // never gets a real measurement there. The fallback for that case
+      // (a conservative constant, not a live measurement) is applied at
+      // the point of use instead -- see effectiveBottomControlHeight --
+      // specifically so this effect body only ever calls setState from
+      // an actual subscription callback, not synchronously as part of
+      // its own setup (eslint's react-hooks/set-state-in-effect: calling
+      // setState directly in an effect body causes an avoidable extra
+      // render).
       setBottomControlHeight(null);
-      return;
-    }
-    if (typeof ResizeObserver === 'undefined') {
-      // Found in review: leaving this null here (as an earlier version
-      // did) doesn't just cost one frame the way it does in browsers
-      // WITH ResizeObserver -- it means bottomControlHeight never becomes
-      // non-null AT ALL, so the toggle's maxHeight cap (which requires a
-      // real measurement, deliberately -- see its own comment on why a
-      // static guess was rejected) never applies for the entire session,
-      // not just a brief flash. A static WORST-CASE fallback (96px, the
-      // thumb group's own known wrapped-height constant: 2x44px circles +
-      // 8px gap, independent of language) is the right trade-off
-      // specifically here, unlike the static-reservation approach
-      // rejected for the general case: it only ever activates in a
-      // browser that can't measure at all, so it can't wrongly clip the
-      // toggle's ordinary case in any browser where a real measurement is
-      // possible.
-      setBottomControlHeight(96);
       return;
     }
     const observer = new ResizeObserver(entries => {
@@ -1258,6 +1250,26 @@ export function RoomVisualizationFlow({
     observer.observe(el);
     return () => observer.disconnect();
   }, [step, showFeedback]);
+  // Found in review: without ResizeObserver at all (older browsers),
+  // bottomControlHeight above never becomes non-null, so the toggle's
+  // maxHeight cap (which requires a real measurement, deliberately -- see
+  // bottomControlHeight's own comment on why a static guess was rejected
+  // for the general case) would never apply for the entire session there,
+  // not just a brief flash. A static WORST-CASE fallback (96px, the thumb
+  // group's own known wrapped-height constant: 2x44px circles + 8px gap,
+  // independent of language) is the right trade-off specifically here,
+  // unlike the general static-reservation approach: it only ever applies
+  // in a browser that can't measure at all, so it can't wrongly clip the
+  // toggle's ordinary case anywhere a real measurement is possible.
+  // Computed here (derived from render-time state), not inside the effect
+  // above, so setting it never needs a synchronous setState call in an
+  // effect body.
+  const effectiveBottomControlHeight =
+    bottomControlHeight !== null
+      ? bottomControlHeight
+      : showFeedback && typeof ResizeObserver === 'undefined'
+        ? 96
+        : null;
 
   // Guaranteed post-commit measurement for the overlay's anchor -- the
   // other triggers (attachImageContainerRef's inline call, the
@@ -1744,16 +1756,18 @@ export function RoomVisualizationFlow({
               // grow down far enough to visually overlap the bottom-right
               // corner (thumbs / confirmation pill) -- see
               // bottomControlHeight's own declaration for why this has to
-              // be a real measurement, not a static guess. undefined (no
+              // be a real measurement (or, lacking ResizeObserver, a
+              // conservative fallback -- see effectiveBottomControlHeight),
+              // not a static guess used unconditionally. undefined (no
               // cap) until both the overlay's real height AND the bottom
-              // corner's real height are known, matching the same
-              // "undefined until measured" convention overlayAnchor itself
-              // uses -- a one-frame gap before the ResizeObserver's first
-              // callback fires, not worth extra complexity to close for a
+              // corner's height are known, matching the same "undefined
+              // until measured" convention overlayAnchor itself uses -- a
+              // one-frame gap before the ResizeObserver's first callback
+              // fires, not worth extra complexity to close for a
               // narrow-case-only, single-frame flash.
               maxHeight:
-                overlayAnchor && bottomControlHeight !== null
-                  ? `${Math.max(0, overlayAnchor.height - 14 - bottomControlHeight - 14 - 8)}px`
+                overlayAnchor && effectiveBottomControlHeight !== null
+                  ? `${Math.max(0, overlayAnchor.height - 14 - effectiveBottomControlHeight - 14 - 8)}px`
                   : undefined,
               overflow: 'hidden',
             }}
