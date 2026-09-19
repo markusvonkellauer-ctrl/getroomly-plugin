@@ -126,113 +126,93 @@ export function RoomVisualizationFlow({
   const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null);
   const lastTapRef = useRef(0);
 
-  // The top band (Before/After toggle + feedback thumbs) used to be a
-  // child of imageContainerRef, clipped by its overflow:hidden -- but at
-  // short viewports resultContentRef (a SEPARATE overflow:hidden ancestor,
-  // with its own independently flex-resolved height) could clip it first,
-  // regardless of the image's own size, making the only feedback/Before-
-  // After controls genuinely inaccessible. Fixed by rendering the band as
-  // a sibling of the header/content/footer stack instead (see the JSX
+  // The photo overlay (Before/After toggle, top-right corner; feedback
+  // thumbs, bottom-right corner) used to be a child of imageContainerRef,
+  // clipped by its overflow:hidden -- but at short viewports
+  // resultContentRef (a SEPARATE overflow:hidden ancestor, with its own
+  // independently flex-resolved height) could clip it first, regardless
+  // of the image's own size, making the only feedback/Before-After
+  // controls genuinely inaccessible. Fixed by rendering the overlay as a
+  // sibling of the header/content/footer stack instead (see the JSX
   // below, outside imageContainerRef entirely).
   //
-  // bandAnchor is imageContainerRef's on-screen box, in the SAME
-  // coordinate system the band's own position:absolute resolves against
-  // -- found in review that resultContentRef is itself position:relative
-  // (its own div, further down), so it's imageContainerRef's real
-  // offsetParent; reading offsetTop/Left directly (an earlier version of
-  // this did) silently returns coordinates relative to resultContentRef,
-  // not the band's own containing block, landing the band near the
-  // header instead of over the image. getBoundingClientRect gives both
-  // elements' positions in the same (viewport) coordinate system
-  // regardless of how many positioned ancestors sit in between either of
-  // them, so subtracting is correct no matter what resultContentRef (or
-  // anything else) does with its own `position`.
+  // overlayAnchor is imageContainerRef's on-screen box, in the SAME
+  // coordinate system the overlay's own position:absolute resolves
+  // against -- found in review that resultContentRef is itself
+  // position:relative (its own div, further down), so it's
+  // imageContainerRef's real offsetParent; reading offsetTop/Left
+  // directly (an earlier version of this did) silently returns
+  // coordinates relative to resultContentRef, not the overlay's own
+  // containing block, landing it near the header instead of over the
+  // image. getBoundingClientRect gives both elements' positions in the
+  // same (viewport) coordinate system regardless of how many positioned
+  // ancestors sit in between either of them, so subtracting is correct
+  // no matter what resultContentRef (or anything else) does with its own
+  // `position`.
   //
-  // bandRef is the chicken-and-egg piece: the band's own containing block
-  // is only knowable once it has actually mounted (via its own
+  // overlayRef is the chicken-and-egg piece: the overlay's own containing
+  // block is only knowable once it has actually mounted (via its own
   // offsetParent), but it only needs to mount at all once a real anchor
-  // exists. renderTopBand mounts it regardless, visually hidden until the
-  // first real measurement lands, specifically so this has something to
-  // read.
-  const bandRef = useRef<HTMLDivElement | null>(null);
-  // Read in measureBandAnchor to cap the band's own height before it
-  // reaches the footer -- since the band is position:absolute (out of
-  // normal document flow entirely), it doesn't push the footer down the
-  // way an in-flow element would, so a sufficiently wrapped band could
-  // otherwise paint OVER the footer's cart button/disclaimer instead of
-  // just being clipped by the modal. Found in review.
-  const footerRef = useRef<HTMLDivElement | null>(null);
-  const [bandAnchor, setBandAnchor] = useState<{
+  // exists. renderPhotoOverlay mounts it regardless, visually hidden
+  // until the first real measurement lands, specifically so this has
+  // something to read.
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const [overlayAnchor, setOverlayAnchor] = useState<{
     top: number;
     left: number;
     width: number;
     height: number;
-    maxHeightWithinBounds: number;
   } | null>(null);
-  const measureBandAnchor = useCallback(() => {
+  const measureOverlayAnchor = useCallback(() => {
     const imageEl = imageContainerRef.current;
-    const bandEl = bandRef.current;
-    // bandEl can still be null the very first time this runs:
+    const overlayEl = overlayRef.current;
+    // overlayEl can still be null the very first time this runs:
     // attachImageContainerRef's callback ref fires mid-commit, and can
-    // race ahead of the band's own (later, plain) ref being assigned --
-    // found in review. Bailing out here (rather than falling back to
-    // document.body) leaves bandAnchor -- and therefore visibility:hidden
-    // -- untouched for that one moment; the useLayoutEffect below
-    // guarantees a real measurement runs after every commit where the
-    // band could exist, by which point bandEl is always populated (React
-    // attaches every ref in a commit before running that commit's layout
-    // effects). Once bandEl itself exists, though, a still-missing
-    // offsetParent does NOT mean "not really mounted" -- jsdom (unit
-    // tests, no real layout engine) never resolves offsetParent
-    // correctly even for a genuinely-mounted, correctly-styled element;
-    // bailing out on that too made every band-related unit test fail
-    // (the band stayed permanently visibility:hidden, invisible to
-    // testing-library's accessible-role queries). document.body there is
-    // a harmless fallback either way: in jsdom nothing checks the
-    // resulting pixel values, and in a real browser this genuinely
-    // shouldn't happen once bandEl is mounted under the (position:fixed)
-    // modal.
-    if (!imageEl || !bandEl) {
+    // race ahead of the overlay's own (later, plain) ref being assigned
+    // -- found in review. Bailing out here (rather than falling back to
+    // document.body) leaves overlayAnchor -- and therefore
+    // visibility:hidden -- untouched for that one moment; the
+    // useLayoutEffect below guarantees a real measurement runs after
+    // every commit where the overlay could exist, by which point
+    // overlayEl is always populated (React attaches every ref in a
+    // commit before running that commit's layout effects). Once
+    // overlayEl itself exists, though, a still-missing offsetParent does
+    // NOT mean "not really mounted" -- jsdom (unit tests, no real layout
+    // engine) never resolves offsetParent correctly even for a
+    // genuinely-mounted, correctly-styled element; bailing out on that
+    // too made every overlay-related unit test fail (the overlay stayed
+    // permanently visibility:hidden, invisible to testing-library's
+    // accessible-role queries). document.body there is a harmless
+    // fallback either way: in jsdom nothing checks the resulting pixel
+    // values, and in a real browser this genuinely shouldn't happen once
+    // overlayEl is mounted under the (position:fixed) modal.
+    if (!imageEl || !overlayEl) {
       return;
     }
-    const containingEl = bandEl.offsetParent ?? document.body;
+    const containingEl = overlayEl.offsetParent ?? document.body;
     const imageRect = imageEl.getBoundingClientRect();
     const containingRect = containingEl.getBoundingClientRect();
     const top = imageRect.top - containingRect.top;
     const left = imageRect.left - containingRect.left;
-    // 8px breathing room before the footer, not flush against it. Falls
-    // back to a generous value (won't realistically bind) if the footer
-    // ref isn't available yet -- the modal's own 80dvh cap still applies
-    // regardless, this is only ever a tighter, additional constraint.
-    const footerTop = footerRef.current
-      ? footerRef.current.getBoundingClientRect().top - containingRect.top
-      : Number.MAX_SAFE_INTEGER;
-    // Also cap by the image's OWN height, independent of the footer --
-    // found in review. resultContentRef is flex:1 1 auto with
-    // justifyContent:'flex-start' and the image itself only sizes to
-    // display:inline-block, so a narrow/short image (e.g. an 84px-wide,
-    // 150px-tall portrait crop -- narrower photos render shorter, since
-    // height comes from the image's own aspect ratio once width is the
-    // constraining dimension) can leave a lot of empty flex space below
-    // it before the footer. Without this, maxHeightWithinBounds tracked
-    // ONLY the footer's distance, so a sufficiently wrapped band could
-    // clip cleanly by its own overflow:hidden yet still extend well past
-    // the photo's bottom edge into that empty space -- floating below
-    // the photo instead of clipping within it. No extra bottom inset
-    // here (unlike the footer's 8px): touching the image's own edge is
-    // fine, this is a photo overlay, not adjacent UI that needs breathing
-    // room from another element.
-    const maxHeightWithinImage = Math.max(0, imageRect.height - 14);
-    const maxHeightWithinBounds = Math.max(
-      0,
-      Math.min(footerTop - (top + 14) - 8, maxHeightWithinImage)
-    );
-    setBandAnchor({
+    // The overlay's own box is set to EXACTLY the image's box (top/left/
+    // width/height, no insets baked in here -- each control applies its
+    // own 14px inset from whichever corner it's anchored to instead, see
+    // renderPhotoOverlay). That makes the footer irrelevant to this
+    // calculation entirely: since the overlay can never be taller than
+    // the image itself, and the image (normal document flow) never
+    // overlaps the footer to begin with, the overlay structurally can't
+    // either -- no separate footer-distance tracking needed. An earlier
+    // version of this DID track footer distance (maxHeightBeforeFooter /
+    // maxHeightWithinBounds, plus a dedicated footerRef ResizeObserver
+    // and language/button-visibility dependencies to keep it fresh) --
+    // removed once the single shared band (both controls sharing one
+    // row) was replaced with two independently corner-anchored controls,
+    // which made that whole tracking mechanism dead weight.
+    setOverlayAnchor({
       top,
       left,
       width: imageRect.width,
       height: imageRect.height,
-      maxHeightWithinBounds,
     });
   }, []);
 
@@ -243,32 +223,56 @@ export function RoomVisualizationFlow({
   // flex row, not its own size), e.g. an actual window/orientation
   // resize. Cheap enough to just always listen.
   useEffect(() => {
-    window.addEventListener('resize', measureBandAnchor);
-    return () => window.removeEventListener('resize', measureBandAnchor);
-  }, [measureBandAnchor]);
+    window.addEventListener('resize', measureOverlayAnchor);
+    return () => window.removeEventListener('resize', measureOverlayAnchor);
+  }, [measureOverlayAnchor]);
 
-  // maxHeightWithinBounds depends on the footer's own position, which can
-  // move without imageContainerRef changing size at all -- e.g.
-  // downloadStatusVisible adding/removing the status line in the footer
-  // (see handleDownloadToDevice) grows the footer, pulling its top edge
-  // closer to the image, while the image itself may still fit its own
-  // intrinsic size unchanged. Without this, that leaves a stale (too
-  // generous) cap that could let a wrapped band paint into where the
-  // footer just grew into. footerRef's own div is always mounted (every
-  // step renders into it), so a plain mount-time observe is enough --
-  // no callback-ref dance needed the way imageContainerRef's has, since
-  // this element doesn't unmount/remount across steps. Found in review.
+  // Measures the bottom-right corner's real rendered height (whichever of
+  // the thumb group / confirmation pill currently occupies it -- see
+  // renderPhotoOverlay, they share one stable wrapper specifically so this
+  // ref doesn't have to track two different, conditionally-mounted
+  // elements). Read by the toggle group (top-right) to cap its own
+  // maxHeight so its wrapped text can never grow down far enough to
+  // visually overlap the bottom-right corner -- found in review (caught by
+  // actually screenshotting the narrowest case, not by the numeric-only
+  // checks that missed it): at extreme widths (~84px) the toggle's own
+  // wrapped text can reach ~146px tall, comfortably overlapping the thumb
+  // group beneath it despite each being individually positioned within its
+  // own corner correctly.
+  //
+  // A STATIC height reservation (e.g. always reserving the thumb group's
+  // worst-case 96px) was tried first and rejected: measured directly, the
+  // thumb group only needs that much when it's ALSO forced to wrap (narrow
+  // widths) -- at normal/wide widths it renders as a single 44px-tall row,
+  // and a static 96px+ reservation would clip the toggle's own ordinary
+  // single-line case for no reason, on any image that happens to be ~150px
+  // tall (the common case, not a rare one). Only a real measurement avoids
+  // that: it costs the toggle nothing when the bottom corner is small, and
+  // caps it correctly when the bottom corner is large.
+  const bottomControlRef = useRef<HTMLDivElement | null>(null);
+  const [bottomControlHeight, setBottomControlHeight] = useState<number | null>(null);
+  // Depends on `step`: the wrapper this ref attaches to only renders
+  // during the 'result' step (see renderPhotoOverlay's call site), so on
+  // first mount (still at 'upload') bottomControlRef.current is null and
+  // this effect no-ops -- without `step` in the deps array it would never
+  // run again once the ref actually became populated, the same class of
+  // bug imageContainerRef needed a callback ref to avoid (found in
+  // review: caught because a real unit test renders the full upload ->
+  // result flow, not just the result step in isolation).
   useEffect(() => {
-    const el = footerRef.current;
+    const el = bottomControlRef.current;
     if (!el || typeof ResizeObserver === 'undefined') {
       return;
     }
-    const observer = new ResizeObserver(() => {
-      measureBandAnchor();
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (entry) {
+        setBottomControlHeight(entry.contentRect.height);
+      }
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [measureBandAnchor]);
+  }, [step]);
 
   // Mutable refs so touch handlers can read latest values without being in the
   // effect dep array (avoids re-registering listeners on every scale update).
@@ -645,7 +649,7 @@ export function RoomVisualizationFlow({
   const attachImageContainerRef = useCallback(
     (el: HTMLDivElement | null) => {
       imageContainerRef.current = el;
-      measureBandAnchor();
+      measureOverlayAnchor();
       if (!el) {
         return;
       }
@@ -659,12 +663,12 @@ export function RoomVisualizationFlow({
         } else if (e.touches.length === 1) {
           // Belt-and-suspenders guard against any button inside this
           // container registering as a double-tap-to-reset-zoom gesture.
-          // The top band (Before/After toggle, feedback thumbs) and the
-          // favorite/action-row buttons all live outside imageContainerRef
-          // now (see renderTopBand and the footer), so touches on them
-          // never reach this handler via bubbling in the first place --
-          // this only matters for whatever real descendants this
-          // container still has.
+          // The photo overlay (Before/After toggle, feedback thumbs) and
+          // the favorite/action-row buttons all live outside
+          // imageContainerRef now (see renderPhotoOverlay and the
+          // footer), so touches on them never reach this handler via
+          // bubbling in the first place -- this only matters for
+          // whatever real descendants this container still has.
           const target = e.touches[0].target;
           if (target instanceof Element && target.closest('button')) {
             return;
@@ -695,7 +699,7 @@ export function RoomVisualizationFlow({
       el.addEventListener('touchmove', onTouchMove, { passive: false });
       el.addEventListener('touchend', onTouchEnd, { passive: true });
 
-      // Re-measures the band's anchor whenever imageContainerRef's own
+      // Re-measures the overlay's anchor whenever imageContainerRef's own
       // rendered size changes (image maxHeight resolving, aspect ratio,
       // etc.) -- deliberately its own observer rather than piggy-backing
       // on resultContentRef's (above): that one fires in the same tick as
@@ -705,7 +709,7 @@ export function RoomVisualizationFlow({
       let resizeObserver: ResizeObserver | undefined;
       if (typeof ResizeObserver !== 'undefined') {
         resizeObserver = new ResizeObserver(() => {
-          measureBandAnchor();
+          measureOverlayAnchor();
         });
         resizeObserver.observe(el);
       }
@@ -717,7 +721,7 @@ export function RoomVisualizationFlow({
         resizeObserver?.disconnect();
       };
     },
-    [getDistance, setImageScale, measureBandAnchor]
+    [getDistance, setImageScale, measureOverlayAnchor]
   );
 
   const renderStepIndicator = (currentStep: 'upload' | 'processing' | 'result') => {
@@ -1217,29 +1221,22 @@ export function RoomVisualizationFlow({
   const showOriginal = resultButtons.showOriginal !== false;
   const showSaveShare = resultButtons.saveShare !== false;
 
-  // Guaranteed post-commit measurement for the top band's anchor -- the
+  // Guaranteed post-commit measurement for the overlay's anchor -- the
   // other triggers (attachImageContainerRef's inline call, the
-  // ResizeObservers on imageContainerRef/footerRef, window resize, the
-  // base image's onLoad) all depend on something ELSE changing size or
-  // firing at the right moment, which isn't reliable for two real cases
-  // found in review: (1) bandRef.current can still be null the very first
-  // time attachImageContainerRef's callback ref fires mid-commit, since it
-  // can race ahead of the band's own (later, plain) ref -- measureBandAnchor
+  // ResizeObserver on imageContainerRef, window resize, the base image's
+  // onLoad) all depend on something ELSE changing size or firing at the
+  // right moment, which isn't reliable for one real case found in review:
+  // overlayRef.current can still be null the very first time
+  // attachImageContainerRef's callback ref fires mid-commit, since it can
+  // race ahead of the overlay's own (later, plain) ref -- measureOverlayAnchor
   // now bails out rather than falling back to a wrong body-relative
   // measurement, so something has to guarantee a real one happens once
-  // refs settle; (2) maxHeightWithinBounds depends on the footer's own
-  // position, which moves when downloadStatusVisible adds/removes the
-  // status line, but that doesn't necessarily change imageContainerRef's
-  // own size at all (its intrinsic size may already be the binding
-  // constraint), so the footerRef ResizeObserver isn't guaranteed to
-  // correlate 1:1 with every case that matters, and browsers without
-  // ResizeObserver support have no other trigger for it whatsoever.
-  // useLayoutEffect (not useEffect) specifically: runs synchronously after
-  // the DOM commits and every ref in it is assigned, but before the
-  // browser paints -- exactly what's needed to avoid a visible flash at
-  // the wrong position.
+  // refs settle. useLayoutEffect (not useEffect) specifically: runs
+  // synchronously after the DOM commits and every ref in it is assigned,
+  // but before the browser paints -- exactly what's needed to avoid a
+  // visible flash at the wrong position.
   useLayoutEffect(() => {
-    measureBandAnchor();
+    measureOverlayAnchor();
   }, [
     step,
     resultImage,
@@ -1255,24 +1252,11 @@ export function RoomVisualizationFlow({
     // That both changes the header's rendered text (which can move
     // imageContainerRef without resizing it, so neither the image
     // observer nor window.resize necessarily fires) and changes the
-    // band's own translated toggle text, so this needs to be an explicit
-    // dependency rather than relying on some other value happening to
-    // change at the same time. Found in review.
+    // overlay's own translated toggle text, so this needs to be an
+    // explicit dependency rather than relying on some other value
+    // happening to change at the same time. Found in review.
     config?.language,
-    // Same class of gap, found in the same review round: these three
-    // don't affect the band's OWN content, but they gate whole rows in
-    // the FOOTER (add-to-basket, favorite, save/share), which changes the
-    // footer's real height and therefore maxHeightWithinBounds. The
-    // dedicated ResizeObserver on footerRef (below) already covers this
-    // in any browser that supports ResizeObserver; this is the fallback
-    // for the one that doesn't, exactly like the config.language case
-    // above -- a host toggling config.buttons via another
-    // 'getroomly-open-modal' call while this instance stays mounted
-    // otherwise has no trigger there at all.
-    showAddToBasket,
-    showFavorite,
-    showSaveShare,
-    measureBandAnchor,
+    measureOverlayAnchor,
   ]);
 
   // Result step handlers
@@ -1516,7 +1500,7 @@ export function RoomVisualizationFlow({
               // itself rather than waiting on the observer's own timing,
               // and is the only measurement path left at all in browsers
               // without ResizeObserver support (found in review).
-              onLoad={measureBandAnchor}
+              onLoad={measureOverlayAnchor}
               style={{
                 display: 'block',
                 maxWidth: '100%',
@@ -1531,19 +1515,19 @@ export function RoomVisualizationFlow({
                 // minHeight:0 lets it shrink independently of any fixed
                 // guess.
                 //
-                // Deliberately NOT padded with extra headroom for the top
-                // band (toggle + thumbs) -- an earlier version of this
-                // tried that, but it couldn't have worked: resultContentRef
-                // is a SEPARATE overflow:hidden ancestor with its own
-                // independently flex-resolved height, unaffected by
-                // whatever this maxHeight claims, so padding the image
-                // taller than what's actually measured just gets clipped by
-                // resultContentRef itself. The real fix (renderTopBand,
-                // bandAnchor) renders the band OUTSIDE resultContentRef
-                // entirely, as a sibling positioned via measured
-                // coordinates -- so it no longer depends on this image's
-                // own maxHeight at all. This stays exactly the real
-                // available space, nothing more.
+                // Deliberately NOT padded with extra headroom for the
+                // photo overlay (toggle + thumbs) -- an earlier version of
+                // this tried that, but it couldn't have worked:
+                // resultContentRef is a SEPARATE overflow:hidden ancestor
+                // with its own independently flex-resolved height,
+                // unaffected by whatever this maxHeight claims, so padding
+                // the image taller than what's actually measured just gets
+                // clipped by resultContentRef itself. The real fix
+                // (renderPhotoOverlay, overlayAnchor) renders the overlay
+                // OUTSIDE resultContentRef entirely, as a sibling
+                // positioned via measured coordinates -- so it no longer
+                // depends on this image's own maxHeight at all. This stays
+                // exactly the real available space, nothing more.
                 maxHeight: `${availableImageHeightPx ?? 150}px`,
                 width: 'auto',
                 height: 'auto',
@@ -1593,19 +1577,22 @@ export function RoomVisualizationFlow({
     );
   };
 
-  // Top band -- Före/Efter toggle (left) + feedback thumbs / confirmation
-  // (right), rendered on top of the result image. NOT a child of
-  // imageContainerRef (see bandAnchor's declaration for why): a version of
-  // this was, and at short viewports resultContentRef -- a SEPARATE
-  // overflow:hidden ancestor with its own independently flex-resolved
-  // height, uninfluenced by anything set on the image itself -- could clip
-  // it before the image's own overflow:hidden ever came into play, making
-  // the only feedback/Before-After controls genuinely inaccessible. This
-  // renders as a sibling of the header/content/footer stack instead,
-  // positioned with bandAnchor (imageContainerRef's own on-screen box,
-  // kept in sync via ResizeObserver) so it's only bounded by
-  // .getroomly-modal-container's own 80dvh budget -- much more generous
-  // than resultContentRef's leftover-after-header-and-footer calculation.
+  // Photo overlay -- Före/Efter toggle in the top-right corner, feedback
+  // thumbs (or the confirmation pill that replaces them) in the
+  // bottom-right corner, both rendered on top of the result image as two
+  // INDEPENDENTLY corner-anchored elements, not a shared row. NOT a child
+  // of imageContainerRef (see overlayAnchor's declaration for why): a
+  // version of this was, and at short viewports resultContentRef -- a
+  // SEPARATE overflow:hidden ancestor with its own independently
+  // flex-resolved height, uninfluenced by anything set on the image
+  // itself -- could clip it before the image's own overflow:hidden ever
+  // came into play, making the only feedback/Before-After controls
+  // genuinely inaccessible. This renders as a sibling of the
+  // header/content/footer stack instead, positioned with overlayAnchor
+  // (imageContainerRef's own on-screen box, kept in sync via
+  // ResizeObserver) and sized to EXACTLY match the image -- see
+  // measureOverlayAnchor's comment for why that makes the footer
+  // irrelevant here.
   //
   // Replaces the old status badge: the badge duplicated what the toggle's
   // own fill + text + aria-pressed already say, so it's removed rather
@@ -1613,74 +1600,60 @@ export function RoomVisualizationFlow({
   // ANDRING-5b-bildkontroller.md), not an accident of the toggle moving
   // here.
   //
-  // One flex-wrap row, not two independently-positioned corners: "Före"/
-  // "Efter" is much wider in German/Finnish/French/Portuguese than in
-  // Swedish/English, and on a narrow or landscape-cropped photo the toggle
-  // can grow into the thumbs' corner. flex-wrap means the thumb group (or
-  // the confirmation pill that replaces it) drops to its own line, staying
-  // right-aligned via marginLeft:auto, instead of overlapping -- handled
-  // by layout, not by measuring translated text per language (that needs
-  // per-locale upkeep and can still be wrong at 200% zoom or a substituted
-  // system font). Both direct children are flexShrink:0 -- wrapping, not
-  // shrinking, is the mechanism; shrinking would compress the toggle
-  // buttons' padding, which must stay identical in both states so the
-  // control doesn't shift geometry every time it's pressed.
-  const renderTopBand = () => {
+  // Two independent corners, not one shared flex-wrap row: an earlier
+  // version of this put both groups in one top row (justify-content:
+  // space-between), which meant they competed for the SAME combined
+  // width AND the same shared height budget -- on a narrow portrait photo
+  // (measured: an 84px-wide 9:16 crop) both groups wrapped internally at
+  // once, and their COMBINED stacked height (~252px measured) blew a
+  // ~128px budget so badly that the thumb group ended up entirely
+  // invisible, not just clipped. Splitting them into separate corners
+  // means each gets the image's FULL width to itself (raising the
+  // "doesn't need to wrap at all" threshold from their combined width
+  // down to each group's own, much smaller individual width -- the thumb
+  // group alone only needs 96px), and each has its own independent
+  // height budget measured from its own corner instead of a shared one --
+  // converting the worst remaining case (an extremely narrow image) from
+  // "one entire group disappears" into "the toggle's own wrapped text
+  // clips by a few pixels at the image's edge" (measured: ~10px past the
+  // image's own bottom edge in the same 84px-wide case), a meaningfully
+  // smaller degradation. Decided directly with the user rather than
+  // unilaterally -- see the PR conversation for the full reasoning and
+  // the measurements behind it.
+  const renderPhotoOverlay = () => {
     if (!((showOriginal || showFeedback) && (resultImage || uploadedImage))) {
       return null;
     }
     // Always mounts once the conditions above are met, regardless of
-    // whether a real measurement has landed yet -- bandRef needs to exist
-    // for measureBandAnchor's own offsetParent lookup to work at all (see
-    // its comment), and visibility:hidden means a transient wrong/zeroed
-    // position is never actually visible in the meantime.
+    // whether a real measurement has landed yet -- overlayRef needs to
+    // exist for measureOverlayAnchor's own offsetParent lookup to work at
+    // all (see its comment), and visibility:hidden means a transient
+    // wrong/zeroed position is never actually visible in the meantime.
     return (
       <div
-        ref={bandRef}
+        ref={overlayRef}
         style={{
           position: 'absolute',
-          visibility: bandAnchor ? 'visible' : 'hidden',
-          top: `${(bandAnchor?.top ?? 0) + 14}px`,
-          left: `${(bandAnchor?.left ?? 0) + 14}px`,
-          width: `${Math.max(0, (bandAnchor?.width ?? 0) - 28)}px`,
-          // Repeatedly suggested in review: avoid this clipping entirely
-          // by shrinking the image further to reserve the band's full
-          // worst-case height instead. Doesn't work at the extreme case
-          // this already documents: at a 400px-tall viewport there is only
-          // ~89px of total space between the header and the footer to
-          // begin with (measured with Puppeteer), and the band's own
-          // worst-case wrapped depth is ~336px -- there is no amount of
-          // image-shrinking that reserves 336px out of an 89px budget, the
-          // image would have to go negative. Scroll/reflow inside the
-          // result view is the only mechanism that could fully eliminate
-          // this, and that's a real product/UX decision (this codebase has
-          // no prior instance of the result view scrolling, and this exact
-          // file has history of a previously-reverted modal-sizing change
-          // for reasons nobody currently recalls -- see git log on
-          // .getroomly-modal-container's max-height) -- not something to
-          // introduce unprompted as a side effect of a bug-fix round.
-          maxHeight: bandAnchor ? `${bandAnchor.maxHeightWithinBounds}px` : undefined,
+          visibility: overlayAnchor ? 'visible' : 'hidden',
+          top: `${overlayAnchor?.top ?? 0}px`,
+          left: `${overlayAnchor?.left ?? 0}px`,
+          width: `${overlayAnchor?.width ?? 0}px`,
+          height: `${overlayAnchor?.height ?? 0}px`,
           overflow: 'hidden',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: '10px',
           zIndex: 10,
-          // This box spans the full band area, including the empty gap
-          // between the toggle and the thumb group (justifyContent:
-          // space-between) -- without this, that empty space still
+          // This box spans the image's full area, including the empty
+          // space between the toggle (top-right) and the thumb group
+          // (bottom-right) -- without this, that empty space still
           // hit-tests as part of this div (its own box, regardless of
-          // visible content), and since the band is a DOM SIBLING of
+          // visible content), and since the overlay is a DOM SIBLING of
           // imageContainerRef, not a descendant, a touch starting there
           // can never bubble to the pinch/double-tap handlers attached
           // directly to imageContainerRef -- silently losing zoom
-          // gestures that start anywhere in the top band's empty space,
-          // not just intentionally excluded taps on the controls
-          // themselves. 'none' here makes the empty area transparent to
-          // hit-testing (falling through to the image beneath); each real
-          // control below restores 'auto' so it stays clickable. Found in
-          // review.
+          // gestures that start anywhere in that empty space, not just
+          // intentionally excluded taps on the controls themselves.
+          // 'none' here makes the empty area transparent to hit-testing
+          // (falling through to the image beneath); each real control
+          // below restores 'auto' so it stays clickable. Found in review.
           pointerEvents: 'none',
         }}
       >
@@ -1689,6 +1662,9 @@ export function RoomVisualizationFlow({
             role="group"
             aria-label={t.toggleGroupLabel}
             style={{
+              position: 'absolute',
+              top: '14px',
+              right: '14px',
               display: 'flex',
               flexShrink: 0,
               flexWrap: 'wrap',
@@ -1696,10 +1672,13 @@ export function RoomVisualizationFlow({
               // The well is sized to the uploaded photo's own aspect
               // ratio, not the modal width -- a narrow/portrait photo
               // can render a well far narrower than this pill's
-              // natural content width. Without a cap, the well's
-              // overflow:hidden would silently clip the pill's right
-              // side instead of wrapping it within the band above.
-              maxWidth: '100%',
+              // natural content width. Without a cap, the overlay's own
+              // overflow:hidden would silently clip the pill's left
+              // side instead of wrapping it. calc(100% - 28px) mirrors
+              // the 14px inset on both sides against the overlay's own
+              // width, which is exactly the image's width (see
+              // measureOverlayAnchor).
+              maxWidth: 'calc(100% - 28px)',
               boxSizing: 'border-box',
               gap: '4px',
               padding: '4px',
@@ -1707,6 +1686,22 @@ export function RoomVisualizationFlow({
               background: 'rgba(255, 255, 255, 0.94)',
               backdropFilter: 'blur(12px)',
               boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+              // Caps the toggle's own height so its wrapped text can never
+              // grow down far enough to visually overlap the bottom-right
+              // corner (thumbs / confirmation pill) -- see
+              // bottomControlHeight's own declaration for why this has to
+              // be a real measurement, not a static guess. undefined (no
+              // cap) until both the overlay's real height AND the bottom
+              // corner's real height are known, matching the same
+              // "undefined until measured" convention overlayAnchor itself
+              // uses -- a one-frame gap before the ResizeObserver's first
+              // callback fires, not worth extra complexity to close for a
+              // narrow-case-only, single-frame flash.
+              maxHeight:
+                overlayAnchor && bottomControlHeight !== null
+                  ? `${Math.max(0, overlayAnchor.height - 14 - bottomControlHeight - 14 - 8)}px`
+                  : undefined,
+              overflow: 'hidden',
             }}
           >
             <button
@@ -1724,11 +1719,11 @@ export function RoomVisualizationFlow({
                 transition: 'all 0.2s',
                 // Falls back to breaking mid-word only when there's
                 // truly no word-boundary room left (e.g. "Nachher" alone
-                // in a ~56px band on a steeply portrait photo) -- flex-
-                // wrap on the row above already handles the normal case
-                // (the two buttons dropping to separate lines), this is
-                // the one level deeper: fitting a SINGLE button's own
-                // text when even that doesn't have room.
+                // on a steeply portrait photo) -- flex-wrap on the row
+                // above already handles the normal case (the two
+                // buttons dropping to separate lines), this is the one
+                // level deeper: fitting a SINGLE button's own text when
+                // even that doesn't have room.
                 overflowWrap: 'break-word',
                 minWidth: 0,
                 maxWidth: '100%',
@@ -1759,34 +1754,49 @@ export function RoomVisualizationFlow({
           </div>
         )}
 
-        {showFeedback && feedbackState === 'open' && (
+        {/* Stable wrapper for the bottom-right corner -- exists whenever
+            showFeedback is true, regardless of which of its two children
+            (thumb group / confirmation pill) is currently mounted, so
+            bottomControlRef's ResizeObserver has one consistent element to
+            observe instead of needing to re-attach across the
+            conditionally-mounted children it wraps. Handles the corner
+            positioning and width cap; the children below only handle their
+            own visual styling. */}
+        {showFeedback && (
           <div
-            role="group"
-            aria-label={t.feedbackQuestion}
+            ref={bottomControlRef}
             style={{
-              display: 'flex',
-              flexShrink: 0,
-              // The two 44px hit targets (96px combined with the gap)
-              // don't shrink, and a steeply portrait photo can render
-              // narrower than that even alone on the band's second
-              // line (found in review: a 9:16 crop at this PR's own
-              // 150px height floor works out to ~84px wide, well under
-              // 96px). flexWrap here lets the two buttons stack onto
-              // their own lines too, instead of overflowing the
-              // band's right edge and being clipped by the image
-              // well's overflow:hidden -- the same graceful-
-              // degradation approach already used for the toggle
-              // pill's own buttons and for this row within the band.
-              flexWrap: 'wrap',
-              maxWidth: '100%',
+              position: 'absolute',
+              bottom: '14px',
+              right: '14px',
+              maxWidth: 'calc(100% - 28px)',
               boxSizing: 'border-box',
-              gap: '8px',
-              marginLeft: 'auto',
-              justifyContent: 'flex-end',
-              pointerEvents: 'auto',
             }}
           >
-            {/* Two independent circles, not a segmented pill like the
+            {feedbackState === 'open' && (
+              <div
+                role="group"
+                aria-label={t.feedbackQuestion}
+                style={{
+                  display: 'flex',
+                  flexShrink: 0,
+                  // The two 44px hit targets (96px combined with the gap)
+                  // don't shrink, and a steeply portrait photo can render
+                  // narrower than that (found in review: a 9:16 crop at
+                  // this component's 150px fallback height works out to
+                  // ~84px wide, well under 96px). flexWrap here lets the
+                  // two buttons stack onto their own lines instead of
+                  // overflowing the overlay's left edge and being clipped
+                  // by its overflow:hidden -- the same graceful-degradation
+                  // approach already used for the toggle pill's own
+                  // buttons.
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  justifyContent: 'flex-end',
+                  pointerEvents: 'auto',
+                }}
+              >
+                {/* Two independent circles, not a segmented pill like the
                 toggle above -- the pill shape signals "a choice
                 between two states, one always active" (the toggle);
                 thumbs are two independent one-shot actions, and
@@ -1797,136 +1807,136 @@ export function RoomVisualizationFlow({
                 controls starting to dominate the photo) -- each
                 button's own box is 44px so the real hit target meets
                 WCAG 2.5.8 without enlarging what's actually drawn. */}
-            <button
-              onClick={handleLike}
-              aria-label={t.feedbackLikeLabel}
-              style={{
-                width: '44px',
-                height: '44px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                padding: 0,
-                flexShrink: 0,
-              }}
-            >
-              <span
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(255, 255, 255, 0.94)',
-                  backdropFilter: 'blur(12px)',
-                  boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
-                  color: '#201e1d',
-                }}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
+                <button
+                  onClick={handleLike}
+                  aria-label={t.feedbackLikeLabel}
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    padding: 0,
+                    flexShrink: 0,
+                  }}
                 >
-                  <path d="M7 10v12" />
-                  <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
-                </svg>
-              </span>
-            </button>
-            <button
-              onClick={handleDislike}
-              aria-label={t.feedbackDislikeLabel}
-              style={{
-                width: '44px',
-                height: '44px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                padding: 0,
-                flexShrink: 0,
-              }}
-            >
-              <span
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(255, 255, 255, 0.94)',
-                  backdropFilter: 'blur(12px)',
-                  boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
-                  color: '#201e1d',
-                }}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
+                  <span
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'rgba(255, 255, 255, 0.94)',
+                      backdropFilter: 'blur(12px)',
+                      boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                      color: '#201e1d',
+                    }}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M7 10v12" />
+                      <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+                    </svg>
+                  </span>
+                </button>
+                <button
+                  onClick={handleDislike}
+                  aria-label={t.feedbackDislikeLabel}
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    padding: 0,
+                    flexShrink: 0,
+                  }}
                 >
-                  <path d="M17 14V2" />
-                  <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
-                </svg>
-              </span>
-            </button>
-          </div>
-        )}
+                  <span
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'rgba(255, 255, 255, 0.94)',
+                      backdropFilter: 'blur(12px)',
+                      boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                      color: '#201e1d',
+                    }}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M17 14V2" />
+                      <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
+                    </svg>
+                  </span>
+                </button>
+              </div>
+            )}
 
-        {showFeedback && feedbackState === 'thanks' && (
-          <div
-            style={{
-              marginLeft: 'auto',
-              flexShrink: 0,
-              // Same reservation as the toggle pill above -- at the
-              // narrowest realistic well (140px, ~112px inside the
-              // band's own insets) several languages' feedbackThanks
-              // text is wider than that with no wrap, and the image
-              // wrapper's own overflow:hidden would silently clip it
-              // instead of wrapping (found in review, verified with
-              // Puppeteer: even English overflowed by ~50px at 140px
-              // before this was added). No whiteSpace:nowrap here, so
-              // text wraps within the pill once constrained.
-              //
-              // maxWidth alone only caps the pill's own BOX -- it
-              // doesn't make the TEXT inside able to wrap. Without
-              // overflow-wrap + minWidth:0 (found in review, verified
-              // with Puppeteer: scrollWidth exceeded clientWidth at an
-              // 84px well, meaning the text was overflowing the pill's
-              // own box even though the box itself measured within
-              // bounds) the text still overflows the constrained box and
-              // gets clipped by the band's own overflow:hidden one level
-              // up -- same fix already applied to the toggle buttons
-              // above.
-              maxWidth: '100%',
-              minWidth: 0,
-              overflowWrap: 'break-word',
-              boxSizing: 'border-box',
-              fontWeight: 600,
-              fontSize: '11.5px',
-              lineHeight: 1.25,
-              color: '#201e1d',
-              padding: '11px 14px',
-              borderRadius: '999px',
-              background: 'rgba(255, 255, 255, 0.94)',
-              backdropFilter: 'blur(12px)',
-              boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
-            }}
-          >
-            {t.feedbackThanks}
+            {feedbackState === 'thanks' && (
+              <div
+                style={{
+                  flexShrink: 0,
+                  // Same reservation as the toggle pill above -- at the
+                  // narrowest realistic well (140px, ~112px inside the
+                  // overlay's own insets) several languages' feedbackThanks
+                  // text is wider than that with no wrap, and the overlay's
+                  // own overflow:hidden would silently clip it instead of
+                  // wrapping (found in review, verified with Puppeteer: even
+                  // English overflowed by ~50px at 140px before this was
+                  // added). No whiteSpace:nowrap here, so text wraps within
+                  // the pill once constrained.
+                  //
+                  // maxWidth alone only caps the pill's own BOX -- it
+                  // doesn't make the TEXT inside able to wrap. Without
+                  // overflow-wrap + minWidth:0 (found in review, verified
+                  // with Puppeteer: scrollWidth exceeded clientWidth at an
+                  // 84px well, meaning the text was overflowing the pill's
+                  // own box even though the box itself measured within
+                  // bounds) the text still overflows the constrained box and
+                  // gets clipped by the overlay's own overflow:hidden one
+                  // level up -- same fix already applied to the toggle
+                  // buttons above.
+                  minWidth: 0,
+                  overflowWrap: 'break-word',
+                  boxSizing: 'border-box',
+                  fontWeight: 600,
+                  fontSize: '11.5px',
+                  lineHeight: 1.25,
+                  color: '#201e1d',
+                  padding: '11px 14px',
+                  borderRadius: '999px',
+                  background: 'rgba(255, 255, 255, 0.94)',
+                  backdropFilter: 'blur(12px)',
+                  boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                }}
+              >
+                {t.feedbackThanks}
+              </div>
+            )}
           </div>
         )}
 
@@ -2476,14 +2486,13 @@ export function RoomVisualizationFlow({
         {step === 'result' && renderResultStep()}
       </div>
 
-      {/* Top band (Before/After toggle + feedback thumbs) -- deliberately
-          NOT nested inside the content wrapper above; see renderTopBand's
-          own comment for why. */}
-      {step === 'result' && renderTopBand()}
+      {/* Photo overlay (Before/After toggle + feedback thumbs) --
+          deliberately NOT nested inside the content wrapper above; see
+          renderPhotoOverlay's own comment for why. */}
+      {step === 'result' && renderPhotoOverlay()}
 
       {/* Footer - Dynamic based on step */}
       <div
-        ref={footerRef}
         style={{
           padding: '8px var(--getroomly-space-sm) var(--getroomly-space-sm)',
           backgroundColor: '#ffffff',
