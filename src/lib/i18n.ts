@@ -59,7 +59,7 @@ export interface TranslationStrings {
   toggleBefore: string;
   toggleAfter: string;
   toggleGroupLabel: string;
-  /** aria-label on the feedback thumb group (top-right of the result image) -- not visible text; there's no written question on the image itself, a deliberate tradeoff (see ANDRING-5b-bildkontroller.md, "Ändring 4"). */
+  /** aria-label on the feedback thumb group (bottom-right of the result image) -- not visible text; there's no written question on the image itself, a deliberate tradeoff (see ANDRING-5b-bildkontroller.md, "Ändring 4"). */
   feedbackQuestion: string;
   /** Shown in a confirmation pill on the image, replacing the two thumb circles in place, for 2200ms after either is clicked, then clears -- see thankForFeedback in RoomVisualizationFlow.tsx. */
   feedbackThanks: string;
