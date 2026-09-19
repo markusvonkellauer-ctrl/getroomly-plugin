@@ -1572,11 +1572,18 @@ export function RoomVisualizationFlow({
       }, 2400);
     };
 
-    if (navigator.share) {
+    // Synchronous, not fetch()+blob() -- resultImage is always a data: URI
+    // (see ai-generation.ts and dataUrlToBlob's own comment above), so this
+    // avoids two unnecessary await hops per tier before navigator.share()/
+    // clipboard.write() are even called, shortening the async chain that
+    // can run before a possible tier-3 triggerDownload -- the same
+    // activation-loss risk handleDownloadToDevice's own synchronous
+    // dataUrlToBlob conversion is deliberately avoiding above.
+    const blob = dataUrlToBlob(resultImage);
+
+    if (navigator.share && blob) {
       try {
-        const response = await fetch(resultImage);
-        const blob = await response.blob();
-        const file = new File([blob], `getroomly-design-${Date.now()}.png`, { type: 'image/png' });
+        const file = new File([blob], `getroomly-design-${Date.now()}.png`, { type: blob.type });
 
         await navigator.share({
           files: [file],
@@ -1585,7 +1592,12 @@ export function RoomVisualizationFlow({
         });
         return;
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
+        // Checked structurally, not via `instanceof Error` -- the Web
+        // Share API rejects with a DOMException, which doesn't reliably
+        // satisfy `instanceof Error` across browsers/realms, so that check
+        // could silently fail and fall through even on a plain user
+        // cancellation.
+        if ((error as { name?: string } | null)?.name === 'AbortError') {
           // User cancelled the share sheet -- not a failure, don't fall
           // through to the clipboard/download tiers below.
           return;
@@ -1600,9 +1612,7 @@ export function RoomVisualizationFlow({
     // clipboard via this API) -- typeof-checked the same way ResizeObserver
     // is elsewhere in this file, rather than assuming support.
     try {
-      if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
-        const response = await fetch(resultImage);
-        const blob = await response.blob();
+      if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined' && blob) {
         await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
         showShareConfirmation('copied');
         return;
@@ -2149,7 +2159,8 @@ export function RoomVisualizationFlow({
   // Result Footer Component (Step 4)
   // Tertiary buttons (download/share/new photo) are flat text buttons in one
   // centred row, not full-width blocks — visually distinct from the primary
-  // row above so they read as secondary actions. Auto width, not width:100%.
+  // row above so they read as secondary actions. Equal-share flex width
+  // (see flex:1 1 0 below), not width:100%.
   const tertiaryButtonStyle: React.CSSProperties = {
     gap: '8px',
     justifyContent: 'center',
@@ -2181,6 +2192,20 @@ export function RoomVisualizationFlow({
     color: '#6b7280',
     fontWeight: '500',
     border: 'none',
+  };
+
+  // When showSaveShare is false, New Photo is the row's ONLY child -- with
+  // the equal-share flex:1 1 0 above, a lone flex item still has
+  // flex-grow:1 and stretches to fill the entire row width (justifyContent
+  // centering doesn't stop growth, it only centers items that DON'T grow),
+  // turning what should stay a small centred pill into a full-width bar.
+  // flex:'0 1 auto' + the browser's default auto minWidth restores the
+  // original auto-width, non-growing pill for that one-button case, without
+  // touching the equal-share behavior the two/three-button row still needs.
+  const soloTertiaryButtonStyle: React.CSSProperties = {
+    ...tertiaryButtonStyle,
+    flex: '0 1 auto',
+    minWidth: 'auto',
   };
 
   const renderResultFooter = () => (
@@ -2332,10 +2357,43 @@ export function RoomVisualizationFlow({
             </button>
           </>
         )}
-        <button onClick={handleNewPhoto} style={tertiaryButtonStyle}>
+        <button
+          onClick={handleNewPhoto}
+          style={showSaveShare ? tertiaryButtonStyle : soloTertiaryButtonStyle}
+        >
           {t.newPhoto}
         </button>
       </div>
+      {/* Same reasoning as addedToBasketAnnouncement above -- a label
+          change on the Download/Share buttons, which already have focus
+          from the click that triggered it, isn't reliably announced by all
+          screen readers on its own. One shared node covers both buttons:
+          only one of them can show a confirmation at a time. */}
+      {showSaveShare && (
+        <span
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            margin: '-1px',
+            padding: 0,
+            overflow: 'hidden',
+            clip: 'rect(0 0 0 0)',
+            whiteSpace: 'nowrap',
+            border: 0,
+          }}
+        >
+          {downloadButtonConfirmed
+            ? t.downloadedAnnouncement
+            : shareButtonStatus === 'copied'
+              ? t.copiedAnnouncement
+              : shareButtonStatus === 'downloaded'
+                ? t.downloadedAnnouncement
+                : ''}
+        </span>
+      )}
     </div>
   );
 

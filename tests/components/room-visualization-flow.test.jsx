@@ -1913,6 +1913,41 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  describe('tertiary row: New Photo width when saveShare is disabled', () => {
+    const renderAtResult = async (generationResult, props = {}) => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    test('does not get flex-grow when it is the only tertiary button (saveShare disabled)', async () => {
+      await renderAtResult(
+        { imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' },
+        { config: { buttons: { saveShare: false } } }
+      );
+
+      const newPhotoButton = screen.getByText('New Photo');
+      // flex-grow:0 (not the equal-share row's flex-grow:1) is what stops a
+      // lone flex item from stretching to fill the row -- found in review:
+      // flex:1 1 0 on every tertiary button meant a solo New Photo button
+      // (download/share hidden) stretched to the footer's full width
+      // instead of staying a small centred pill.
+      expect(newPhotoButton.style.flexGrow).toBe('0');
+      expect(screen.queryByText('Download Image')).not.toBeInTheDocument();
+      expect(screen.queryByText('Share')).not.toBeInTheDocument();
+    });
+
+    test('gets equal-share flex-grow when it shares the row with download/share', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      const newPhotoButton = screen.getByText('New Photo');
+      expect(newPhotoButton.style.flexGrow).toBe('1');
+    });
+  });
+
   describe('download to device (Safari data: URI download fix)', () => {
     // generateRoomVisualization always resolves imageUrl as a base64 data:
     // URI (see ai-generation.ts) — real production traffic never hands
@@ -2006,6 +2041,27 @@ describe('RoomVisualizationFlow', () => {
       }
     });
 
+    test('announces the download via a hidden aria-live region, not just the visible label swap', async () => {
+      const user = userEvent.setup();
+      jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      const downloadButton = screen.getByText('Download Image');
+      // Disambiguated from the add-to-basket live region (and the feedback
+      // thumbs' own one) via DOM position, the same technique used for
+      // addedToBasketAnnouncement above -- there are multiple
+      // role="status" aria-live="polite" nodes mounted simultaneously.
+      const disclaimer = screen.getByText(/is an estimate/i);
+      const announcement = disclaimer.nextElementSibling.nextElementSibling;
+      expect(announcement).toHaveAttribute('role', 'status');
+      expect(announcement).toHaveAttribute('aria-live', 'polite');
+      expect(announcement).toHaveTextContent('');
+
+      await user.click(downloadButton);
+
+      expect(announcement).toHaveTextContent('The image has been downloaded.');
+    });
+
     test('names the file "...-original.jpg" and downloads the uploaded photo when showing the original image', async () => {
       const user = userEvent.setup();
       const clickSpy = jest
@@ -2083,29 +2139,31 @@ describe('RoomVisualizationFlow', () => {
       delete navigator.share;
     });
 
-    test('fetches the image and calls navigator.share with a File, when available', async () => {
+    test('decodes the data: URL synchronously (no fetch) and calls navigator.share with a File, when available', async () => {
       const user = userEvent.setup();
-      const fakeBlob = new Blob(['fake-image-bytes']);
-      global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn().mockResolvedValue(fakeBlob) });
       navigator.share = jest.fn().mockResolvedValue(undefined);
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
       await user.click(screen.getByText('Share'));
 
-      expect(global.fetch).toHaveBeenCalledWith(RESULT_DATA_URL);
+      // dataUrlToBlob, not fetch() -- see handleShareWithFriends's own
+      // comment for why (shortens the async chain before a possible tier-3
+      // fallback, avoiding the same iOS Safari activation-loss risk
+      // handleDownloadToDevice's synchronous conversion already avoids).
+      expect(global.fetch).not.toHaveBeenCalled();
       expect(navigator.share).toHaveBeenCalledTimes(1);
       const shareArg = navigator.share.mock.calls[0][0];
       expect(shareArg.files).toHaveLength(1);
       expect(shareArg.files[0]).toBeInstanceOf(File);
-      expect(shareArg.files[0].type).toBe('image/png');
+      // RESULT_DATA_URL's declared MIME type, decoded from the data: URL
+      // itself (see tests/unit/data-url.test.js) -- not a hardcoded value,
+      // so a mismatched declared/actual type would be caught here.
+      expect(shareArg.files[0].type).toBe('image/jpeg');
       expect(shareArg.title).toContain('Test Rug');
     });
 
     test('does not fall back to downloading when navigator.share succeeds', async () => {
       const user = userEvent.setup();
-      global.fetch = jest
-        .fn()
-        .mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
       navigator.share = jest.fn().mockResolvedValue(undefined);
       const clickSpy = jest
         .spyOn(HTMLAnchorElement.prototype, 'click')
@@ -2151,9 +2209,6 @@ describe('RoomVisualizationFlow', () => {
 
     test('falls to tier 3 (download) when navigator.share rejects with a real error', async () => {
       const user = userEvent.setup();
-      global.fetch = jest
-        .fn()
-        .mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
       navigator.share = jest.fn().mockRejectedValue(new Error('share failed'));
       const clickSpy = jest
         .spyOn(HTMLAnchorElement.prototype, 'click')
@@ -2168,11 +2223,17 @@ describe('RoomVisualizationFlow', () => {
 
     test('does NOT fall back to downloading when the user cancels the native share sheet (AbortError)', async () => {
       const user = userEvent.setup();
-      global.fetch = jest
-        .fn()
-        .mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
-      const abortError = new Error('cancelled');
-      abortError.name = 'AbortError';
+      // A plain object, not `new Error()` -- Node's own built-in
+      // DOMException happens to be `instanceof Error`, so it can't
+      // reproduce the actual gap found in review: a real browser's
+      // DOMException (what the Web Share API actually rejects with) isn't
+      // guaranteed to satisfy `instanceof Error` across realms, so the old
+      // `error instanceof Error && error.name === 'AbortError'` check could
+      // silently miss it and fall through to the clipboard/download tiers
+      // on a plain cancellation. This reproduces that failure mode
+      // directly: anything with the right `.name`, `instanceof Error` or
+      // not, must be treated as a cancellation.
+      const abortError = { name: 'AbortError', message: 'cancelled' };
       navigator.share = jest.fn().mockRejectedValue(abortError);
       const clickSpy = jest
         .spyOn(HTMLAnchorElement.prototype, 'click')
@@ -2193,10 +2254,8 @@ describe('RoomVisualizationFlow', () => {
         delete global.ClipboardItem;
       });
 
-      test('when navigator.share is unavailable but the clipboard API is, writes the image and shows "Copied ✓" on the share button', async () => {
+      test('when navigator.share is unavailable but the clipboard API is, writes the image (decoded synchronously, no fetch) and shows "Copied ✓" on the share button', async () => {
         const user = userEvent.setup();
-        const fakeBlob = new Blob(['fake-image-bytes'], { type: 'image/jpeg' });
-        global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn().mockResolvedValue(fakeBlob) });
         const clipboardWrite = jest.fn().mockResolvedValue(undefined);
         Object.defineProperty(navigator, 'clipboard', {
           value: { write: clipboardWrite },
@@ -2218,9 +2277,17 @@ describe('RoomVisualizationFlow', () => {
         const shareButton = screen.getByText('Share');
         await user.click(shareButton);
 
+        // dataUrlToBlob, not fetch() -- see the "decodes the data: URL
+        // synchronously" test above for why.
+        expect(global.fetch).not.toHaveBeenCalled();
         expect(clipboardWrite).toHaveBeenCalledTimes(1);
-        const writtenItem = clipboardWrite.mock.calls[0][0][0];
-        expect(writtenItem.items).toHaveProperty('image/jpeg', fakeBlob);
+        const writtenBlob = clipboardWrite.mock.calls[0][0][0].items['image/jpeg'];
+        // RESULT_DATA_URL decodes to 'fake-result-image' (see
+        // tests/unit/data-url.test.js) -- checked by type/size rather than
+        // object identity or .text(), since jsdom's Blob has neither a
+        // real content-equality check nor a .text() method.
+        expect(writtenBlob.type).toBe('image/jpeg');
+        expect(writtenBlob.size).toBe('fake-result-image'.length);
         // Tier 2 succeeding means tier 3 (download) never runs.
         expect(clickSpy).not.toHaveBeenCalled();
 
@@ -2229,12 +2296,28 @@ describe('RoomVisualizationFlow', () => {
         clickSpy.mockRestore();
       });
 
+      test('announces the copy via the same hidden aria-live region the download button uses', async () => {
+        const user = userEvent.setup();
+        Object.defineProperty(navigator, 'clipboard', {
+          value: { write: jest.fn().mockResolvedValue(undefined) },
+          configurable: true,
+        });
+        global.ClipboardItem = class {};
+
+        await renderAtResult({ imageUrl: RESULT_DATA_URL });
+        const shareButton = screen.getByText('Share');
+        const disclaimer = screen.getByText(/is an estimate/i);
+        const announcement = disclaimer.nextElementSibling.nextElementSibling;
+        expect(announcement).toHaveTextContent('');
+
+        await user.click(shareButton);
+
+        expect(announcement).toHaveTextContent('The image has been copied to your clipboard.');
+      });
+
       test('the "Copied ✓" confirmation reverts to "Share" after 2400ms', async () => {
         jest.useFakeTimers();
         const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-        global.fetch = jest
-          .fn()
-          .mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
         Object.defineProperty(navigator, 'clipboard', {
           value: { write: jest.fn().mockResolvedValue(undefined) },
           configurable: true,
@@ -2245,12 +2328,11 @@ describe('RoomVisualizationFlow', () => {
           await renderAtResult({ imageUrl: RESULT_DATA_URL });
           const shareButton = screen.getByText('Share');
           await user.click(shareButton);
-          // handleShareWithFriends chains several awaited promises
-          // (fetch -> blob -> clipboard.write) before setting the
-          // confirmation state -- with fake timers active, user.click()'s
-          // own settling isn't guaranteed to also flush all of those, so
-          // this waits for the visible effect directly rather than
-          // assuming the click alone was enough.
+          // handleShareWithFriends awaits clipboard.write() before setting
+          // the confirmation state -- with fake timers active, user.click()'s
+          // own settling isn't guaranteed to also flush that, so this waits
+          // for the visible effect directly rather than assuming the click
+          // alone was enough.
           await waitFor(() => expect(shareButton).toHaveTextContent('Copied ✓'));
 
           act(() => {
@@ -2264,9 +2346,6 @@ describe('RoomVisualizationFlow', () => {
 
       test('when the clipboard write itself fails, falls through to tier 3 (download) instead', async () => {
         const user = userEvent.setup();
-        global.fetch = jest
-          .fn()
-          .mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
         Object.defineProperty(navigator, 'clipboard', {
           value: { write: jest.fn().mockRejectedValue(new Error('denied')) },
           configurable: true,

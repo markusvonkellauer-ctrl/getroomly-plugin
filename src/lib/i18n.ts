@@ -76,9 +76,13 @@ export interface TranslationStrings {
   downloadToDevice: string;
   /** The download button's own label swaps to this short confirmation (e.g. "Nedladdad ✓") for 2400ms after a click, then reverts to downloadToDevice -- replaces a separate, permanently-mounted status line that stayed empty nearly all the time. Also reused by the share button (shareWithFriends) for its own download fallback -- see handleShareWithFriends. */
   downloadedLabel: string;
+  /** Visually-hidden role="status" aria-live="polite" text announced alongside downloadedLabel, on either the download or share button -- same reasoning as addedToBasketAnnouncement: a label change on a button that already has focus isn't reliably announced by all screen readers on its own. */
+  downloadedAnnouncement: string;
   shareWithFriends: string;
   /** The share button's own label swaps to this short confirmation (e.g. "Kopierad ✓") for 2400ms when its clipboard fallback succeeds (see handleShareWithFriends's 3-tier chain: native share sheet -> clipboard -> download). */
   copiedLabel: string;
+  /** Visually-hidden role="status" aria-live="polite" text announced alongside copiedLabel -- same reasoning as downloadedAnnouncement above. */
+  copiedAnnouncement: string;
   newPhoto: string;
   termsTitle: string;
   termsSection1Title: string;
