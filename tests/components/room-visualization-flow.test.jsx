@@ -1676,19 +1676,23 @@ describe('RoomVisualizationFlow', () => {
       return utils;
     };
 
-    test('the footer column uses an 8px row gap, and the download-status line has no minHeight', async () => {
-      const { container } = await renderAtResult({ imageUrl: 'blob:result' });
+    test('the footer column uses an 8px row gap, and the disclaimer pulls the tertiary row 4px closer', async () => {
+      await renderAtResult({ imageUrl: 'blob:result' });
 
-      // Two elements share role="status" (the feedback question span is the
-      // other one) -- the download-status line is the <p>.
-      const statusP = container.querySelector('p[role="status"]');
-      expect(statusP).not.toBeNull();
-      expect(statusP.style.minHeight).toBe('');
+      // The permanent disclaimer text is a stable anchor -- unlike the old
+      // download-status line (now gone, replaced by the download button's
+      // own label swapping -- see the "download to device" describe block
+      // below), this element always renders regardless of any transient
+      // confirmation state.
+      const disclaimer = screen.getByText(
+        'The image is an estimate. Measure at home before you buy.'
+      );
+      expect(disclaimer.style.margin).toBe('0px 0px -4px');
 
-      // The status <p> is a direct child of the footer's own flex column,
+      // The disclaimer is a direct child of the footer's own flex column,
       // per renderResultFooter's structure -- its parent IS the element
       // whose gap this asserts.
-      const footerColumn = statusP.parentElement;
+      const footerColumn = disclaimer.parentElement;
       expect(footerColumn.style.gap).toBe('8px');
     });
   });
@@ -1824,6 +1828,91 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  // ─── Add to Basket confirmation ─────────────────────────────────────────────
+
+  describe('add to basket confirmation', () => {
+    const renderAtResult = async (generationResult, props = {}) => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    test('the button\'s own label swaps to "Added ✓" for 2400ms after a click, then reverts', async () => {
+      jest.useFakeTimers();
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+
+      try {
+        await renderAtResult({ imageUrl: 'blob:result' });
+        expect(screen.queryByText('Added ✓')).not.toBeInTheDocument();
+
+        const addButton = screen.getByText('Add to Basket');
+        await user.click(addButton);
+        // Same button, new text -- not a separate status line.
+        expect(addButton).toHaveTextContent('Added ✓');
+        expect(screen.queryByText('Add to Basket')).not.toBeInTheDocument();
+
+        act(() => {
+          jest.advanceTimersByTime(2400);
+        });
+        expect(addButton).toHaveTextContent('Add to Basket');
+        expect(screen.queryByText('Added ✓')).not.toBeInTheDocument();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    // Found in review (the same reasoning already applied to the feedback
+    // thumbs' own confirmation pill): a label change on a button that
+    // already has focus isn't reliably announced by all screen readers on
+    // its own, so a visually-hidden, always-mounted live region carries
+    // the full-sentence confirmation alongside the visible label swap.
+    test('a hidden aria-live region announces the full confirmation sentence alongside the label swap', async () => {
+      const user = userEvent.setup();
+      await renderAtResult({ imageUrl: 'blob:result' });
+
+      // Two elements share role="status" (the feedback thumbs' own live
+      // region is the other one, on the image overlay) -- disambiguated
+      // via DOM position: this one is renderResultFooter's own, the
+      // disclaimer's immediately preceding sibling per that function's
+      // JSX order (action row -> this live region -> disclaimer).
+      const disclaimer = screen.getByText(
+        'The image is an estimate. Measure at home before you buy.'
+      );
+      const liveRegion = disclaimer.previousElementSibling;
+      expect(liveRegion.getAttribute('role')).toBe('status');
+      expect(liveRegion.getAttribute('aria-live')).toBe('polite');
+      expect(liveRegion).toHaveTextContent('');
+
+      await user.click(screen.getByText('Add to Basket'));
+
+      expect(liveRegion).toHaveTextContent('The product has been added to your basket.');
+    });
+
+    test('still fires onAddToBasket and the getroomly-add-to-cart window event', async () => {
+      const user = userEvent.setup();
+      const onAddToBasket = jest.fn();
+      const eventListener = jest.fn();
+      window.addEventListener('getroomly-add-to-cart', eventListener);
+
+      try {
+        await renderAtResult(
+          { imageUrl: 'blob:result' },
+          { config: { callbacks: { onAddToBasket } } }
+        );
+
+        await user.click(screen.getByText('Add to Basket'));
+
+        expect(onAddToBasket).toHaveBeenCalledWith('blob:result', 'rug-001');
+        expect(eventListener).toHaveBeenCalledTimes(1);
+      } finally {
+        window.removeEventListener('getroomly-add-to-cart', eventListener);
+      }
+    });
+  });
+
   describe('download to device (Safari data: URI download fix)', () => {
     // generateRoomVisualization always resolves imageUrl as a base64 data:
     // URI (see ai-generation.ts) — real production traffic never hands
@@ -1889,7 +1978,7 @@ describe('RoomVisualizationFlow', () => {
       clickSpy.mockRestore();
     });
 
-    test('shows "Image downloaded." for 2400ms after a download, then clears it', async () => {
+    test('the download button\'s own label swaps to "Downloaded ✓" for 2400ms after a download, then reverts', async () => {
       jest.useFakeTimers();
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
       const clickSpy = jest
@@ -1898,15 +1987,19 @@ describe('RoomVisualizationFlow', () => {
 
       try {
         await renderAtResult({ imageUrl: RESULT_DATA_URL });
-        expect(screen.queryByText('Image downloaded.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Downloaded ✓')).not.toBeInTheDocument();
 
-        await user.click(screen.getByText('Download Image'));
-        expect(screen.getByText('Image downloaded.')).toBeInTheDocument();
+        const downloadButton = screen.getByText('Download Image');
+        await user.click(downloadButton);
+        // Same button, new text -- not a separate status line.
+        expect(downloadButton).toHaveTextContent('Downloaded ✓');
+        expect(screen.queryByText('Download Image')).not.toBeInTheDocument();
 
         act(() => {
           jest.advanceTimersByTime(2400);
         });
-        expect(screen.queryByText('Image downloaded.')).not.toBeInTheDocument();
+        expect(downloadButton).toHaveTextContent('Download Image');
+        expect(screen.queryByText('Downloaded ✓')).not.toBeInTheDocument();
       } finally {
         jest.useRealTimers();
         clickSpy.mockRestore();
@@ -2025,14 +2118,19 @@ describe('RoomVisualizationFlow', () => {
       clickSpy.mockRestore();
     });
 
-    test('falls back to handleDownloadToDevice when navigator.share is unavailable', async () => {
+    test('falls all the way to tier 3 (download) when navigator.share is unavailable and clipboard is too -- shows "Downloaded ✓" on the SHARE button, not the download button', async () => {
       const user = userEvent.setup();
       const clickSpy = jest
         .spyOn(HTMLAnchorElement.prototype, 'click')
         .mockImplementation(() => {});
 
+      // jsdom has neither navigator.share nor navigator.clipboard by
+      // default -- this test's whole point is that BOTH being absent
+      // falls all the way through to tier 3, so nothing is mocked for
+      // either.
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
-      await user.click(screen.getByText('Share'));
+      const shareButton = screen.getByText('Share');
+      await user.click(shareButton);
 
       // The data: URL path (see "download to device" above) decodes
       // synchronously and never calls fetch — confirms the download
@@ -2041,10 +2139,17 @@ describe('RoomVisualizationFlow', () => {
       expect(clickSpy).toHaveBeenCalledTimes(1);
       expect(clickSpy.mock.instances[0].download).toBe('Test Rug-visualization.jpg');
 
+      // The SHARE button shows the confirmation -- found in review: an
+      // earlier version of this called handleDownloadToDevice directly
+      // from this fallback, which would have wrongly confirmed on the
+      // DOWNLOAD button (the user clicked Share, not Download).
+      expect(shareButton).toHaveTextContent('Downloaded ✓');
+      expect(screen.queryByText('Download Image')).toHaveTextContent('Download Image');
+
       clickSpy.mockRestore();
     });
 
-    test('falls back to handleDownloadToDevice when navigator.share rejects with a real error', async () => {
+    test('falls to tier 3 (download) when navigator.share rejects with a real error', async () => {
       const user = userEvent.setup();
       global.fetch = jest
         .fn()
@@ -2078,6 +2183,108 @@ describe('RoomVisualizationFlow', () => {
 
       expect(clickSpy).not.toHaveBeenCalled();
       clickSpy.mockRestore();
+    });
+
+    // ─── Tier 2: clipboard (new) ───────────────────────────────────────────
+
+    describe('tier 2: clipboard fallback', () => {
+      afterEach(() => {
+        delete navigator.clipboard;
+        delete global.ClipboardItem;
+      });
+
+      test('when navigator.share is unavailable but the clipboard API is, writes the image and shows "Copied ✓" on the share button', async () => {
+        const user = userEvent.setup();
+        const fakeBlob = new Blob(['fake-image-bytes'], { type: 'image/jpeg' });
+        global.fetch = jest.fn().mockResolvedValue({ blob: jest.fn().mockResolvedValue(fakeBlob) });
+        const clipboardWrite = jest.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', {
+          value: { write: clipboardWrite },
+          configurable: true,
+        });
+        // jsdom has no real ClipboardItem -- a minimal stand-in is enough,
+        // since handleShareWithFriends only constructs one and passes it
+        // through to the (mocked) write() call, never inspects it itself.
+        global.ClipboardItem = class {
+          constructor(items) {
+            this.items = items;
+          }
+        };
+        const clickSpy = jest
+          .spyOn(HTMLAnchorElement.prototype, 'click')
+          .mockImplementation(() => {});
+
+        await renderAtResult({ imageUrl: RESULT_DATA_URL });
+        const shareButton = screen.getByText('Share');
+        await user.click(shareButton);
+
+        expect(clipboardWrite).toHaveBeenCalledTimes(1);
+        const writtenItem = clipboardWrite.mock.calls[0][0][0];
+        expect(writtenItem.items).toHaveProperty('image/jpeg', fakeBlob);
+        // Tier 2 succeeding means tier 3 (download) never runs.
+        expect(clickSpy).not.toHaveBeenCalled();
+
+        expect(shareButton).toHaveTextContent('Copied ✓');
+
+        clickSpy.mockRestore();
+      });
+
+      test('the "Copied ✓" confirmation reverts to "Share" after 2400ms', async () => {
+        jest.useFakeTimers();
+        const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+        global.fetch = jest
+          .fn()
+          .mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
+        Object.defineProperty(navigator, 'clipboard', {
+          value: { write: jest.fn().mockResolvedValue(undefined) },
+          configurable: true,
+        });
+        global.ClipboardItem = class {};
+
+        try {
+          await renderAtResult({ imageUrl: RESULT_DATA_URL });
+          const shareButton = screen.getByText('Share');
+          await user.click(shareButton);
+          // handleShareWithFriends chains several awaited promises
+          // (fetch -> blob -> clipboard.write) before setting the
+          // confirmation state -- with fake timers active, user.click()'s
+          // own settling isn't guaranteed to also flush all of those, so
+          // this waits for the visible effect directly rather than
+          // assuming the click alone was enough.
+          await waitFor(() => expect(shareButton).toHaveTextContent('Copied ✓'));
+
+          act(() => {
+            jest.advanceTimersByTime(2400);
+          });
+          expect(shareButton).toHaveTextContent('Share');
+        } finally {
+          jest.useRealTimers();
+        }
+      });
+
+      test('when the clipboard write itself fails, falls through to tier 3 (download) instead', async () => {
+        const user = userEvent.setup();
+        global.fetch = jest
+          .fn()
+          .mockResolvedValue({ blob: jest.fn().mockResolvedValue(new Blob(['x'])) });
+        Object.defineProperty(navigator, 'clipboard', {
+          value: { write: jest.fn().mockRejectedValue(new Error('denied')) },
+          configurable: true,
+        });
+        global.ClipboardItem = class {};
+        const clickSpy = jest
+          .spyOn(HTMLAnchorElement.prototype, 'click')
+          .mockImplementation(() => {});
+
+        await renderAtResult({ imageUrl: RESULT_DATA_URL });
+        const shareButton = screen.getByText('Share');
+        await user.click(shareButton);
+
+        expect(clickSpy).toHaveBeenCalledTimes(1);
+        expect(shareButton).toHaveTextContent('Downloaded ✓');
+
+        clickSpy.mockRestore();
+      });
     });
   });
 });

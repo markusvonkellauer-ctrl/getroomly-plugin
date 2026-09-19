@@ -55,6 +55,10 @@ export interface TranslationStrings {
   labelOriginal: string;
   labelNew: string;
   addToBasket: string;
+  /** The Add to Basket button's own label swaps to this short confirmation (e.g. "Tillagt ✓") for 2400ms after a click, then reverts -- same pattern as downloadedLabel/copiedLabel. Not a status line: the button that triggered the action is the one that changes. */
+  addedToBasketLabel: string;
+  /** Visually-hidden role="status" aria-live="polite" text announced alongside addedToBasketLabel -- a label change on a button that already has focus isn't reliably announced by all screen readers on its own, so this full-sentence node (stays mounted, only its text changes) carries the confirmation instead. */
+  addedToBasketAnnouncement: string;
   /** Before/After toggle pill on the result image (short, e.g. "Före"/"Efter") -- distinct from labelOriginal/labelNew, which are the base/overlay images' alt text and need to work as full sentence fragments there too. */
   toggleBefore: string;
   toggleAfter: string;
@@ -69,10 +73,12 @@ export interface TranslationStrings {
   favoriteLabelActive: string;
   /** Permanent measurement-accuracy disclaimer under the action row -- never replaced by a transient message. */
   disclaimer: string;
-  /** Transient status line shown for 2400ms after a successful download, in its own element below the disclaimer so it never hides it. */
-  downloadedStatus: string;
   downloadToDevice: string;
+  /** The download button's own label swaps to this short confirmation (e.g. "Nedladdad ✓") for 2400ms after a click, then reverts to downloadToDevice -- replaces a separate, permanently-mounted status line that stayed empty nearly all the time. Also reused by the share button (shareWithFriends) for its own download fallback -- see handleShareWithFriends. */
+  downloadedLabel: string;
   shareWithFriends: string;
+  /** The share button's own label swaps to this short confirmation (e.g. "Kopierad ✓") for 2400ms when its clipboard fallback succeeds (see handleShareWithFriends's 3-tier chain: native share sheet -> clipboard -> download). */
+  copiedLabel: string;
   newPhoto: string;
   termsTitle: string;
   termsSection1Title: string;

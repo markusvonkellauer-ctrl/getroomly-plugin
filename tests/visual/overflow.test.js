@@ -136,18 +136,18 @@ const BUTTON_SPECS = [
       </div>`,
   },
   {
-    // tertiaryButtonStyle (RoomVisualizationFlow.tsx:1295-1309) applies to
-    // all three tertiary-row buttons below. Not width:100% inside its own
-    // grid column anymore — it's an auto-width flex item, one of three
-    // sharing one row (renderResultFooter, ~line 1370-1390), so the
-    // realistic per-item budget is roughly a third of the footer's own
-    // width (520px modal maxWidth / 360px mobile embed width, minus 16px
-    // padding each side, minus two 6px row gaps, divided by 3 — see the
-    // BUTTON_SPECS header comment above for where those 520px/360px
-    // figures come from).
-    name: 'New Photo (RoomVisualizationFlow.tsx:1385-1387, tertiary row)',
+    // tertiaryButtonStyle (RoomVisualizationFlow.tsx:2153-2184) applies to
+    // all three tertiary-row buttons below: flex:1 1 0 + minWidth:0, one of
+    // three equal-share items sharing one row (renderResultFooter,
+    // ~line 2320-2338) with a 4px gap between them (not the button's own
+    // width:100% or an auto-width flex item anymore), so the realistic
+    // per-item budget is roughly a third of the footer's own width (520px
+    // modal maxWidth / 360px mobile embed width, minus 16px padding each
+    // side, minus two 4px row gaps, divided by 3 — see the BUTTON_SPECS
+    // header comment above for where those 520px/360px figures come from).
+    name: 'New Photo (RoomVisualizationFlow.tsx:2335-2337, tertiary row)',
     translationKey: 'newPhoto',
-    containerWidths: [158, 105],
+    containerWidths: [160, 106],
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">
         <button id="target" style="
@@ -155,14 +155,16 @@ const BUTTON_SPECS = [
           align-items:center; text-align:center; min-height:44px; border-radius:999px;
           display:flex; font-size:14px; padding:10px 16px;
           background:none; color:#6b7280; font-weight:500;
-          border:none; font-family:${FONT_STACK};
+          border:none; flex:1 1 0; min-width:0; font-family:${FONT_STACK};
         ">${text}</button>
       </div>`,
   },
   {
-    name: 'Download to Device (RoomVisualizationFlow.tsx:1377-1379, tertiary row)',
+    // Also covers downloadedLabel (the "Nedladdad ✓" confirmation the same
+    // button swaps to after a click) -- see the confirmed-label case below.
+    name: 'Download to Device (RoomVisualizationFlow.tsx:2323-2325, tertiary row)',
     translationKey: 'downloadToDevice',
-    containerWidths: [158, 105],
+    containerWidths: [160, 106],
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">
         <button id="target" style="
@@ -170,14 +172,14 @@ const BUTTON_SPECS = [
           align-items:center; text-align:center; min-height:44px; border-radius:999px;
           display:flex; font-size:14px; padding:10px 16px;
           background:none; color:#6b7280; font-weight:500;
-          border:none; font-family:${FONT_STACK};
+          border:none; flex:1 1 0; min-width:0; font-family:${FONT_STACK};
         ">${text}</button>
       </div>`,
   },
   {
-    name: 'Share with Friends (RoomVisualizationFlow.tsx:1380-1382, tertiary row)',
+    name: 'Share with Friends (RoomVisualizationFlow.tsx:2326-2332, tertiary row)',
     translationKey: 'shareWithFriends',
-    containerWidths: [158, 105],
+    containerWidths: [160, 106],
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">
         <button id="target" style="
@@ -185,7 +187,42 @@ const BUTTON_SPECS = [
           align-items:center; text-align:center; min-height:44px; border-radius:999px;
           display:flex; font-size:14px; padding:10px 16px;
           background:none; color:#6b7280; font-weight:500;
-          border:none; font-family:${FONT_STACK};
+          border:none; flex:1 1 0; min-width:0; font-family:${FONT_STACK};
+        ">${text}</button>
+      </div>`,
+  },
+  {
+    // The share button's clipboard-fallback confirmation (see
+    // handleShareWithFriends's 3-tier chain) -- same pill, same width
+    // budget as shareWithFriends above, different translation key.
+    name: 'Share with Friends: "Copied" confirmation (tertiary row)',
+    translationKey: 'copiedLabel',
+    containerWidths: [160, 106],
+    render: (text, width) => `
+      <div style="width:${width}px; box-sizing:border-box;">
+        <button id="target" style="
+          box-sizing:border-box; gap:8px; justify-content:center;
+          align-items:center; text-align:center; min-height:44px; border-radius:999px;
+          display:flex; font-size:14px; padding:10px 16px;
+          background:none; color:#6b7280; font-weight:500;
+          border:none; flex:1 1 0; min-width:0; font-family:${FONT_STACK};
+        ">${text}</button>
+      </div>`,
+  },
+  {
+    // The download button's own "Downloaded ✓" confirmation, and also what
+    // the share button's tier-3 (download) fallback shows on itself.
+    name: 'Downloaded confirmation (tertiary row, download or share button)',
+    translationKey: 'downloadedLabel',
+    containerWidths: [160, 106],
+    render: (text, width) => `
+      <div style="width:${width}px; box-sizing:border-box;">
+        <button id="target" style="
+          box-sizing:border-box; gap:8px; justify-content:center;
+          align-items:center; text-align:center; min-height:44px; border-radius:999px;
+          display:flex; font-size:14px; padding:10px 16px;
+          background:none; color:#6b7280; font-weight:500;
+          border:none; flex:1 1 0; min-width:0; font-family:${FONT_STACK};
         ">${text}</button>
       </div>`,
   },
@@ -311,31 +348,33 @@ describe('Cross-language button overflow', () => {
  * The per-button checks above measure each tertiary button in isolation at
  * an assumed per-item width budget (a third of the row). That doesn't
  * actually match the real layout: tertiaryButtonStyle
- * (RoomVisualizationFlow.tsx:1295-1310) gives each button no explicit
- * width at all — they're auto-width flex items sharing one row
- * (renderResultFooter, ~line 1370-1390) with `flexWrap: 'wrap'`, so a
- * button doesn't get squeezed into a third of the row; the ROW wraps to a
- * second line instead if all three don't fit on one. This renders the
- * real three-button row together, at the same 488px/328px content widths
- * as the per-button checks above (520px modal / 360px mobile embed minus
- * 16px padding each side), and checks the ROW never overflows
- * horizontally — flexWrap should make that structurally impossible short
- * of a single button's own text exceeding the full row width, so this is
- * a regression guard for `flexWrap: 'wrap'` itself as much as a layout
- * check.
+ * (RoomVisualizationFlow.tsx:2153-2184) gives each button `flex:1 1 0;
+ * minWidth:0` — an equal share of the row (renderResultFooter,
+ * ~line 2320-2338), not an auto-width item that can grow past its share or
+ * wrap the row to a second line. This renders the real three-button row
+ * together, at the same 488px/328px content widths as the per-button
+ * checks above (520px modal / 360px mobile embed minus 16px padding each
+ * side), and checks two things flex:1 1 0 is specifically meant to
+ * guarantee: the ROW itself never overflows its container (buttons shrink
+ * to fit, they never force the row wider), and all three buttons stay
+ * equal width regardless of which one has the longest text for that
+ * language — the exact "wrong per-button min-width" bug this design
+ * replaced (see the tertiaryButtonStyle comment: min-width alone was a
+ * floor, not a ceiling, so a longer label grew its own button and pushed
+ * its siblings sideways).
  */
 describe('Cross-language tertiary row overflow (combined row, not per-button)', () => {
   let browser;
 
   const ROW_STYLE = `
-    display:flex; flex-wrap:wrap; justify-content:center; gap:6px; width:100%;
+    display:flex; justify-content:center; gap:4px; width:100%;
     box-sizing:border-box;
   `;
   const BUTTON_STYLE = `
     box-sizing:border-box; gap:8px; justify-content:center; align-items:center;
     text-align:center; min-height:44px; border-radius:999px; display:flex;
     font-size:14px; padding:10px 16px; background:none; color:#6b7280;
-    font-weight:500; border:none; font-family:${FONT_STACK};
+    font-weight:500; border:none; flex:1 1 0; min-width:0; font-family:${FONT_STACK};
   `;
 
   beforeAll(async () => {
@@ -351,7 +390,7 @@ describe('Cross-language tertiary row overflow (combined row, not per-button)', 
 
   for (const lang of ALL_LANGUAGES) {
     for (const width of [488, 328]) {
-      it(`tertiary row — "${lang}" at ${width}px never overflows horizontally`, async () => {
+      it(`tertiary row — "${lang}" at ${width}px never overflows horizontally, and all three buttons stay equal width`, async () => {
         const t = translations[lang];
         const texts = [t.downloadToDevice, t.newPhoto, t.shareWithFriends];
         for (const text of texts) {
@@ -377,10 +416,19 @@ describe('Cross-language tertiary row overflow (combined row, not per-button)', 
 
           const box = await page.evaluate(() => {
             const row = document.querySelector('.target').parentElement;
-            return { scrollWidth: row.scrollWidth, clientWidth: row.clientWidth };
+            const widths = Array.from(row.querySelectorAll('.target')).map(
+              el => el.getBoundingClientRect().width
+            );
+            return { scrollWidth: row.scrollWidth, clientWidth: row.clientWidth, widths };
           });
 
           expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 1);
+          // flex:1 1 0 gives all three an equal share regardless of text
+          // length — within 1.5px of the widest, to allow for browser
+          // subpixel/rounding distribution across three flex items.
+          const maxWidth = Math.max(...box.widths);
+          const minWidth = Math.min(...box.widths);
+          expect(maxWidth - minWidth).toBeLessThanOrEqual(1.5);
         } finally {
           await page.close();
         }
@@ -988,7 +1036,7 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
             gap:8px; justify-content:center; align-items:center; text-align:center;
             min-height:44px; border-radius:999px; display:flex; font-size:14px;
             padding:10px 16px; background:none; color:#6b7280; font-weight:500;
-            border:none; font-family:${FONT_STACK};
+            border:none; flex:1 1 0; min-width:0; font-family:${FONT_STACK};
           `;
 
           const footerHtml = `
@@ -998,9 +1046,8 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
                   <button style="flex-shrink:0; width:54px; height:54px; border-radius:999px; border:1.5px solid #7d7979;"></button>
                   <button style="flex:1; gap:8px; justify-content:center; text-align:center; font-weight:700; height:54px; border-radius:999px; display:flex; align-items:center; border:none; font-size:14px; padding:10px 16px; background:${PRIMARY}; color:white;">${escapeHtml(t.addToBasket)}</button>
                 </div>
-                <p style="margin:0; text-align:center; font-size:12px; line-height:1.45; color:#444141;">${escapeHtml(t.disclaimer)}</p>
-                <p style="margin:0; text-align:center; font-size:12px; font-weight:600; color:${PRIMARY};">${escapeHtml(t.downloadedStatus)}</p>
-                <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px;">
+                <p style="margin:0 0 -4px; text-align:center; font-size:12px; line-height:1.45; color:#444141;">${escapeHtml(t.disclaimer)}</p>
+                <div style="display:flex; justify-content:center; gap:4px;">
                   <button style="${tertiaryButtonStyle}">${escapeHtml(t.downloadToDevice)}</button>
                   <button style="${tertiaryButtonStyle}">${escapeHtml(t.shareWithFriends)}</button>
                   <button style="${tertiaryButtonStyle}">${escapeHtml(t.newPhoto)}</button>
@@ -1079,20 +1126,21 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
 });
 
 /**
- * The download-status <p> (RoomVisualizationFlow.tsx, in renderResultFooter)
- * used to permanently reserve 15px via minHeight, even though it's empty
- * except for the 2400ms after a download. That reservation was removed so
- * the line collapses to 0 when idle and only takes real space while the
- * confirmation message is actually showing -- reclaiming height for the
- * image the rest of the time. Neither of this file's other suites actually
- * exercises the idle (empty) case in a real browser: the jsdom component
- * test only checks the text is absent (not computed height), and the
- * "Result-step modal height" suite above always fills the status line with
- * real text -- so a regression that reintroduced minHeight would pass both
- * unnoticed. This isolates exactly that: same footer fixture, idle vs.
- * filled, in a real browser.
+ * Point 3 of the 2026-09 footer redesign replaced the tertiary row's
+ * per-button `min-width` (a floor, not a ceiling -- a longer confirmation
+ * label like "Downloaded ✓" still grew that one button's own natural width
+ * and visibly pushed its siblings sideways) with `flex: 1 1 0; min-width: 0`
+ * on all three buttons, so width is determined by the row, not by any one
+ * button's text. jsdom can't be trusted for this (no real layout engine),
+ * and the "Cross-language tertiary row overflow" suite above only exercises
+ * each button's IDLE label -- never the moment right after a click, when
+ * one button's label is longer than the other two's. This isolates exactly
+ * that real-browser case: swap one button to its longest real confirmation
+ * label and verify the row still doesn't overflow and all three buttons
+ * stay equal width, instead of the old per-button min-width bug where only
+ * the clicked button visibly grew.
  */
-describe('Result footer: idle download-status line collapses instead of reserving space', () => {
+describe('Result footer tertiary row: button widths are label-independent', () => {
   let browser;
 
   beforeAll(async () => {
@@ -1106,109 +1154,71 @@ describe('Result footer: idle download-status line collapses instead of reservin
     if (browser) await browser.close();
   });
 
-  // English only -- this is a CSS-structural check (does the empty <p>
-  // collapse), not a translated-text-length one, so it doesn't need every
-  // language the way the pill/button overflow suites above do.
-  const t = translations.en;
   const width = 375;
-  const viewportHeight = 568;
-
-  const buildFooterHtml = statusText => `
-    <div id="result-footer" style="padding:8px 16px 16px; background-color:#ffffff; flex-shrink:0;">
-      <div style="display:flex; flex-direction:column; gap:8px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
-        <div style="display:flex; gap:10px;">
-          <button style="flex-shrink:0; width:54px; height:54px; border-radius:999px; border:1.5px solid #7d7979;"></button>
-          <button style="flex:1; gap:8px; justify-content:center; text-align:center; font-weight:700; height:54px; border-radius:999px; display:flex; align-items:center; border:none; font-size:14px; padding:10px 16px; background:${PRIMARY}; color:white;">${escapeHtml(t.addToBasket)}</button>
-        </div>
-        <p style="margin:0; text-align:center; font-size:12px; line-height:1.45; color:#444141;">${escapeHtml(t.disclaimer)}</p>
-        <p id="status-line" style="margin:0; text-align:center; font-size:12px; font-weight:600; color:${PRIMARY};">${escapeHtml(statusText)}</p>
-        <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px;">
-          <button style="${tertiaryButtonStyleFixture}">${escapeHtml(t.downloadToDevice)}</button>
-          <button style="${tertiaryButtonStyleFixture}">${escapeHtml(t.shareWithFriends)}</button>
-          <button style="${tertiaryButtonStyleFixture}">${escapeHtml(t.newPhoto)}</button>
-        </div>
-      </div>
-    </div>
-  `;
+  const containerWidth = width - 32; // 16px padding each side, real footer
 
   const tertiaryButtonStyleFixture = `
-    gap:8px; justify-content:center; align-items:center; text-align:center;
-    min-height:44px; border-radius:999px; display:flex; font-size:14px;
-    padding:10px 16px; background:none; color:#6b7280; font-weight:500;
-    border:none; font-family:${FONT_STACK};
+    box-sizing:border-box; gap:8px; justify-content:center; align-items:center;
+    text-align:center; min-height:44px; border-radius:999px; display:flex;
+    font-size:14px; padding:10px 16px; background:none; color:#6b7280;
+    font-weight:500; border:none; flex:1 1 0; min-width:0; font-family:${FONT_STACK};
   `;
 
-  const headerHtml = `
-    <div style="display:flex; flex-direction:row; align-items:center; padding:4px 16px; flex-shrink:0; gap:4px; font-family:${FONT_STACK};">
-      <div style="width:28px; flex-shrink:0;"></div>
-      <h2 style="flex:1; text-align:center; font-size:18px; font-weight:bold; letter-spacing:-0.025em; margin:0;">${escapeHtml(t.stepResult)}</h2>
-      <button style="flex-shrink:0; width:28px; height:28px; border-radius:50%; border:none;"></button>
-    </div>
-  `;
-
-  // Mirrors the real component's ResizeObserver-driven image sizing (see
-  // the "Result-step modal height" suite above for the full rationale) so
-  // the geometry comparison below reflects genuine available space, not an
-  // artifact of a fixed image size.
-  const measure = async statusText => {
+  const measure = async (downloadLabel, shareLabel, newPhotoLabel) => {
     const page = await browser.newPage();
     try {
-      await page.setViewport({ width, height: viewportHeight });
+      await page.setViewport({ width, height: 300 });
       await page.setContent(
-        `<!DOCTYPE html><html><body style="margin:0;">
-          <div id="modal" style="max-height:80dvh; overflow:hidden; display:flex; flex-direction:column; width:${width}px; box-sizing:border-box;">
-            ${headerHtml}
-            <div id="content-wrapper" style="position:relative; flex:1 1 auto; min-height:0; overflow:hidden; display:flex; align-items:flex-start; justify-content:center;">
-              <img id="result-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3C/svg%3E" style="display:block; max-width:100%; max-height:150px; width:auto; height:auto;" />
-            </div>
-            ${buildFooterHtml(statusText)}
+        `<!DOCTYPE html><html><body style="margin:0; padding:16px; box-sizing:border-box;">
+          <div id="row" style="display:flex; justify-content:center; gap:4px; width:${containerWidth}px; box-sizing:border-box;">
+            <button id="download-btn" style="${tertiaryButtonStyleFixture}">${escapeHtml(downloadLabel)}</button>
+            <button id="share-btn" style="${tertiaryButtonStyleFixture}">${escapeHtml(shareLabel)}</button>
+            <button id="newphoto-btn" style="${tertiaryButtonStyleFixture}">${escapeHtml(newPhotoLabel)}</button>
           </div>
-          <script>
-            const wrapper = document.getElementById('content-wrapper');
-            const img = document.getElementById('result-image');
-            const ro = new ResizeObserver(entries => {
-              const h = entries[0].contentRect.height;
-              img.style.maxHeight = h + 'px';
-              window.__lastMeasuredHeight = h;
-            });
-            ro.observe(wrapper);
-          </script>
         </body></html>`
       );
-      await page.waitForFunction(() => window.__lastMeasuredHeight !== undefined);
-      return page.evaluate(() => ({
-        statusLineHeight: document.getElementById('status-line').getBoundingClientRect().height,
-        wrapperHeight: document.getElementById('content-wrapper').getBoundingClientRect().height,
-        footerHeight: document.getElementById('result-footer').getBoundingClientRect().height,
-      }));
+      return page.evaluate(() => {
+        const row = document.getElementById('row');
+        const widths = ['download-btn', 'share-btn', 'newphoto-btn'].map(
+          id => document.getElementById(id).getBoundingClientRect().width
+        );
+        return {
+          scrollWidth: row.scrollWidth,
+          clientWidth: row.clientWidth,
+          widths,
+        };
+      });
     } finally {
       await page.close();
     }
   };
 
-  it('the empty status line renders at 0 height in a real browser (not the old 15px minHeight)', async () => {
-    const idle = await measure('');
-    expect(idle.statusLineHeight).toBe(0);
+  // German has consistently the longest translated confirmation labels in
+  // this string set ("Hinzugefügt ✓", "Heruntergeladen ✓") -- the worst
+  // case for this check, not an arbitrary pick.
+  const t = translations.de;
+
+  const expectEqualWidths = widths => {
+    const maxWidth = Math.max(...widths);
+    const minWidth = Math.min(...widths);
+    expect(maxWidth - minWidth).toBeLessThanOrEqual(1.5);
+  };
+
+  it('all three buttons are equal width when idle', async () => {
+    const idle = await measure(t.downloadToDevice, t.shareWithFriends, t.newPhoto);
+    expect(idle.scrollWidth).toBeLessThanOrEqual(idle.clientWidth + 1);
+    expectEqualWidths(idle.widths);
   }, 15000);
 
-  it('the filled status line renders at its real text height, not 0', async () => {
-    const filled = await measure(t.downloadedStatus);
-    expect(filled.statusLineHeight).toBeGreaterThan(0);
+  it('swapping the download button to "Heruntergeladen ✓" does not grow it relative to its siblings, or overflow the row', async () => {
+    const confirmed = await measure(t.downloadedLabel, t.shareWithFriends, t.newPhoto);
+    expect(confirmed.scrollWidth).toBeLessThanOrEqual(confirmed.clientWidth + 1);
+    expectEqualWidths(confirmed.widths);
   }, 15000);
 
-  // Compares the footer's own rendered height, not the image well's --
-  // whether the wrapper (and therefore the image) actually gets taller
-  // depends on the modal's 80dvh cap being engaged in the first place,
-  // which varies by viewport/footer-content combination (below the cap,
-  // flex-grow has no established container size to expand into, so the
-  // footer shrinking doesn't hand the image anything). The footer's own
-  // height shrinking is the direct, viewport-independent consequence of
-  // removing minHeight -- it's what makes more room possible whenever the
-  // cap IS engaged, which the "Result-step modal height" suite above
-  // covers across 16 languages x 4 viewport heights.
-  it('the footer itself renders shorter when idle than when the status message is showing', async () => {
-    const idle = await measure('');
-    const filled = await measure(t.downloadedStatus);
-    expect(idle.footerHeight).toBeLessThan(filled.footerHeight);
-  }, 20000);
+  it('swapping the share button to "Kopiert ✓" does not grow it relative to its siblings, or overflow the row', async () => {
+    const confirmed = await measure(t.downloadToDevice, t.copiedLabel, t.newPhoto);
+    expect(confirmed.scrollWidth).toBeLessThanOrEqual(confirmed.clientWidth + 1);
+    expectEqualWidths(confirmed.widths);
+  }, 15000);
 });

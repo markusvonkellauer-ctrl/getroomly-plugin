@@ -75,11 +75,24 @@ export function RoomVisualizationFlow({
   // pending clear.
   const [feedbackState, setFeedbackState] = useState<'open' | 'thanks' | 'gone'>('open');
   const feedbackTimerRef = useRef<number | null>(null);
-  // Transient confirmation shown under the disclaimer for 2400ms after a
-  // successful download -- kept as its own element (see render) so it
-  // never covers the permanent disclaimer text.
-  const [downloadStatusVisible, setDownloadStatusVisible] = useState(false);
-  const downloadStatusTimerRef = useRef<number | null>(null);
+  // Transient confirmations shown ON the button that triggered them, for
+  // 2400ms, then reverted -- replaces an earlier design where a separate
+  // status line under the disclaimer carried this instead (empty almost
+  // all the time, permanently reserving space for that). Three
+  // independent buttons, three independent pieces of state: each can be
+  // triggered without affecting the others.
+  const [downloadButtonConfirmed, setDownloadButtonConfirmed] = useState(false);
+  const downloadButtonTimerRef = useRef<number | null>(null);
+  const [addedToBasketVisible, setAddedToBasketVisible] = useState(false);
+  const addedToBasketTimerRef = useRef<number | null>(null);
+  // 'copied' when handleShareWithFriends's clipboard fallback succeeds,
+  // 'downloaded' when even that fails and it falls through to a plain
+  // download -- two different confirmations on the SAME button, since
+  // "Kopierad" would be a lie if what actually happened was a download.
+  const [shareButtonStatus, setShareButtonStatus] = useState<'idle' | 'copied' | 'downloaded'>(
+    'idle'
+  );
+  const shareButtonTimerRef = useRef<number | null>(null);
 
   // The result image's own maxHeight can't be a plain CSS percentage: its
   // flex ancestor (resultContentRef below) has overflow:hidden + minHeight:0,
@@ -331,8 +344,14 @@ export function RoomVisualizationFlow({
       if (feedbackTimerRef.current) {
         clearTimeout(feedbackTimerRef.current);
       }
-      if (downloadStatusTimerRef.current) {
-        clearTimeout(downloadStatusTimerRef.current);
+      if (downloadButtonTimerRef.current) {
+        clearTimeout(downloadButtonTimerRef.current);
+      }
+      if (addedToBasketTimerRef.current) {
+        clearTimeout(addedToBasketTimerRef.current);
+      }
+      if (shareButtonTimerRef.current) {
+        clearTimeout(shareButtonTimerRef.current);
       }
     };
   }, []);
@@ -598,19 +617,29 @@ export function RoomVisualizationFlow({
     setGenerationId(null);
     setShowOriginalImage(false);
 
-    // Reset both feedback and download-status timers so a pending one from
-    // the previous result can't fire after this reset and clear state that
-    // belongs to the next photo's own feedback row.
+    // Reset every transient timer so a pending one from the previous
+    // result can't fire after this reset and clear confirmation state
+    // that belongs to the next photo's own buttons.
     if (feedbackTimerRef.current) {
       clearTimeout(feedbackTimerRef.current);
       feedbackTimerRef.current = null;
     }
     setFeedbackState('open');
-    if (downloadStatusTimerRef.current) {
-      clearTimeout(downloadStatusTimerRef.current);
-      downloadStatusTimerRef.current = null;
+    if (downloadButtonTimerRef.current) {
+      clearTimeout(downloadButtonTimerRef.current);
+      downloadButtonTimerRef.current = null;
     }
-    setDownloadStatusVisible(false);
+    setDownloadButtonConfirmed(false);
+    if (addedToBasketTimerRef.current) {
+      clearTimeout(addedToBasketTimerRef.current);
+      addedToBasketTimerRef.current = null;
+    }
+    setAddedToBasketVisible(false);
+    if (shareButtonTimerRef.current) {
+      clearTimeout(shareButtonTimerRef.current);
+      shareButtonTimerRef.current = null;
+    }
+    setShareButtonStatus('idle');
   };
 
   const handleOpenTerms = () => {
@@ -1285,7 +1314,17 @@ export function RoomVisualizationFlow({
     uploadedImage,
     showOriginal,
     showFeedback,
-    downloadStatusVisible,
+    downloadButtonConfirmed,
+    // Same reason as downloadButtonConfirmed just above: the share
+    // button's own confirmation label ("Kopierad ✓" / "Nedladdad ✓") can
+    // be longer than "Dela" in some languages, wrapping to a second line
+    // within the tertiary row's flex:1 1 0 columns (see tertiaryButtonStyle)
+    // -- which grows the row's height (minHeight, not a fixed height,
+    // specifically so it CAN grow) and therefore the footer's, the same
+    // class of shift downloadButtonConfirmed already covers. Not
+    // addedToBasketVisible: that button has a fixed height (54px, doesn't
+    // grow with content) so its own label swap can't affect footer height.
+    shareButtonStatus,
     // useEmbedConfig re-reads window.GetRoomlyEmbedConfig on every
     // 'getroomly-open-modal' event without remounting the modal (see its
     // own comment) -- a host page can call GetRoomly.open() again for a
@@ -1334,6 +1373,16 @@ export function RoomVisualizationFlow({
         },
       })
     );
+
+    setAddedToBasketVisible(true);
+    if (addedToBasketTimerRef.current) {
+      clearTimeout(addedToBasketTimerRef.current);
+    }
+    addedToBasketTimerRef.current = window.setTimeout(() => {
+      if (isMountedRef.current) {
+        setAddedToBasketVisible(false);
+      }
+    }, 2400);
   };
 
   const handleFavorite = () => {
@@ -1424,8 +1473,12 @@ export function RoomVisualizationFlow({
     config?.callbacks?.onShowOriginal?.(imageToShow || '', productId);
   };
 
-  const handleDownloadToDevice = () => {
-    const imageToDownload = showOriginalImage ? uploadedImage : resultImage;
+  // Core download mechanics + the host-page callback -- shared by the
+  // download button's own click handler and the share button's tier-3
+  // fallback below. Deliberately does NOT touch either button's own
+  // confirmation state: which button shows "Nedladdad ✓" depends on which
+  // one the user actually clicked, not on what physically happened.
+  const triggerDownload = (imageToDownload: string | null) => {
     config?.callbacks?.onSaveShare?.(imageToDownload || '', productId);
     if (!imageToDownload) {
       return;
@@ -1464,25 +1517,63 @@ export function RoomVisualizationFlow({
       link.href = imageToDownload;
       link.click();
     }
+  };
 
-    setDownloadStatusVisible(true);
-    if (downloadStatusTimerRef.current) {
-      clearTimeout(downloadStatusTimerRef.current);
+  const handleDownloadToDevice = () => {
+    triggerDownload(showOriginalImage ? uploadedImage : resultImage);
+
+    setDownloadButtonConfirmed(true);
+    if (downloadButtonTimerRef.current) {
+      clearTimeout(downloadButtonTimerRef.current);
     }
-    downloadStatusTimerRef.current = window.setTimeout(() => {
+    downloadButtonTimerRef.current = window.setTimeout(() => {
       if (isMountedRef.current) {
-        setDownloadStatusVisible(false);
+        setDownloadButtonConfirmed(false);
       }
     }, 2400);
   };
 
+  // Three-tier chain, tried in order:
+  //   1. Native share sheet (most common) -- the menu itself is the
+  //      confirmation, the button's own label never changes. Cancelling
+  //      the sheet (AbortError) isn't a failure -- it's a deliberate
+  //      choice not to share, so nothing falls through from there either.
+  //   2. Clipboard -- writes the image as a ClipboardItem, button label
+  //      swaps to copiedLabel ("Kopierad ✓") for 2400ms. Silent download
+  //      after a "Dela" click was misleading in the old two-tier version:
+  //      nothing was actually SHARED, so a file quietly landing in
+  //      Downloads didn't match what the user asked for. "Kopierad ✓" is
+  //      true and lets them paste the image directly into whatever app
+  //      they meant to share it through -- closer to the original intent
+  //      than a downloads-folder file.
+  //   3. Download -- reuses triggerDownload (the same mechanics the
+  //      download button itself uses), but sets THIS button's own status
+  //      to 'downloaded' rather than calling handleDownloadToDevice
+  //      directly, which would wrongly confirm on the download button
+  //      instead of the one actually clicked.
+  //
+  // Deliberately no custom share sheet with app icons (WhatsApp,
+  // Telegram, SMS, ...): the browser already knows which apps the user
+  // has installed, we'd only be guessing. Tier 1 already does that job.
   const handleShareWithFriends = async () => {
     if (!resultImage) {
       return;
     }
 
-    try {
-      if (navigator.share) {
+    const showShareConfirmation = (status: 'copied' | 'downloaded') => {
+      setShareButtonStatus(status);
+      if (shareButtonTimerRef.current) {
+        clearTimeout(shareButtonTimerRef.current);
+      }
+      shareButtonTimerRef.current = window.setTimeout(() => {
+        if (isMountedRef.current) {
+          setShareButtonStatus('idle');
+        }
+      }, 2400);
+    };
+
+    if (navigator.share) {
+      try {
         const response = await fetch(resultImage);
         const blob = await response.blob();
         const file = new File([blob], `getroomly-design-${Date.now()}.png`, { type: 'image/png' });
@@ -1493,13 +1584,38 @@ export function RoomVisualizationFlow({
           text: `Check out how the ${productName} looks in a room!`,
         });
         return;
-      }
-      handleDownloadToDevice();
-    } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        handleDownloadToDevice();
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          // User cancelled the share sheet -- not a failure, don't fall
+          // through to the clipboard/download tiers below.
+          return;
+        }
+        // A real failure (share API present but the call itself failed) --
+        // fall through to tier 2.
       }
     }
+
+    // Tier 2: clipboard. ClipboardItem is unavailable in some browsers
+    // (most notably Firefox, which doesn't support writing images to the
+    // clipboard via this API) -- typeof-checked the same way ResizeObserver
+    // is elsewhere in this file, rather than assuming support.
+    try {
+      if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+        const response = await fetch(resultImage);
+        const blob = await response.blob();
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+        showShareConfirmation('copied');
+        return;
+      }
+    } catch {
+      // Clipboard write failed (unsupported MIME type, permission denied,
+      // document not focused, ...) -- fall through to tier 3 below,
+      // regardless of the specific reason.
+    }
+
+    // Tier 3: download.
+    triggerDownload(showOriginalImage ? uploadedImage : resultImage);
+    showShareConfirmation('downloaded');
   };
 
   const renderResultStep = () => {
@@ -2045,6 +2161,17 @@ export function RoomVisualizationFlow({
     // to two lines — a fixed height would clip that text. Letting the pill
     // grow keeps the ≥44px touch target (WCAG 2.5.8) without ever clipping.
     minHeight: '44px',
+    // flex:1 1 0 + minWidth:0, not the earlier per-button min-width --
+    // found in review that min-width only sets a FLOOR, it doesn't cap
+    // growth, so a longer confirmation label (e.g. "Nedladdad ✓" swapped
+    // in after a download) still grew that one button's own natural width
+    // and pushed its siblings sideways. flex:1 1 0 gives all three an
+    // EQUAL share of the row instead, determined by the row's own width,
+    // not by whichever button's text happens to be longest at that
+    // moment -- a language wrapping to a second line now grows that
+    // button's HEIGHT (via minHeight above), never its neighbors' widths.
+    flex: '1 1 0',
+    minWidth: 0,
     borderRadius: '999px',
     cursor: 'pointer',
     display: 'flex',
@@ -2129,17 +2256,49 @@ export function RoomVisualizationFlow({
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
               }}
             >
-              {t.addToBasket}
+              {addedToBasketVisible ? t.addedToBasketLabel : t.addToBasket}
             </button>
           )}
         </div>
       )}
+      {/* Visually-hidden, always-mounted (not conditionally rendered) so
+          it exists before its text changes -- a live region that mounts
+          with its text already set isn't reliably announced, only one
+          that already existed and then changed (same reasoning as the
+          feedback thumbs' own live region in renderPhotoOverlay). A
+          label change on a button that already has focus (the user just
+          clicked it) isn't reliably announced by all screen readers on
+          its own, so this full-sentence node carries the confirmation
+          instead of relying on the visible "Tillagt ✓" swap alone. */}
+      {showAddToBasket && (
+        <span
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            margin: '-1px',
+            padding: 0,
+            overflow: 'hidden',
+            clip: 'rect(0 0 0 0)',
+            whiteSpace: 'nowrap',
+            border: 0,
+          }}
+        >
+          {addedToBasketVisible ? t.addedToBasketAnnouncement : ''}
+        </span>
+      )}
 
       {/* Permanent measurement-accuracy disclaimer -- never replaced by a
-          transient message, and never moved on top of the photo. */}
+          transient message, and never moved on top of the photo.
+          margin-bottom:-4px (not 0) pulls the tertiary row slightly
+          closer without touching the gap between any of the OTHER rows
+          in this stack (that's controlled by the outer flex column's own
+          gap, set once, above). */}
       <p
         style={{
-          margin: 0,
+          margin: '0 0 -4px',
           textAlign: 'center',
           fontSize: '12px',
           lineHeight: 1.45,
@@ -2148,38 +2307,28 @@ export function RoomVisualizationFlow({
       >
         {t.disclaimer}
       </p>
-      {/* Its own element, not shared with the disclaimer above, so a
-          download confirmation can never hide the permanent text. No
-          minHeight -- collapses to 0 when empty instead of permanently
-          reserving space that's only actually used for 2400ms after a
-          download, so the image gets that space back the rest of the
-          time. Stays mounted (not conditionally rendered) rather than
-          appearing/disappearing from the DOM: an aria-live region needs
-          to already exist before its text changes for assistive tech to
-          reliably announce it -- a region that mounts with its text
-          already set is not guaranteed to be announced. */}
-      <p
-        role="status"
-        aria-live="polite"
-        style={{
-          margin: 0,
-          textAlign: 'center',
-          fontSize: '12px',
-          fontWeight: '600',
-          color: 'var(--getroomly-primary-deep)',
-        }}
-      >
-        {downloadStatusVisible ? t.downloadedStatus : ''}
-      </p>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px' }}>
+      {/* gap:4px, not the row's earlier 6px -- tightened to match the
+          tertiary buttons' own flex:1 1 0 change above (see
+          tertiaryButtonStyle): three equal-width columns read better
+          slightly closer together than three auto-width buttons did.
+          flexWrap is no longer needed here -- flex:1 1 0 + minWidth:0 on
+          every button guarantees all three always fit on one row
+          (shrinking, never wrapping the ROW itself; a button's own TEXT
+          still wraps to a second line internally via tertiaryButtonStyle's
+          minHeight when needed). */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
         {showSaveShare && (
           <>
             <button onClick={handleDownloadToDevice} style={tertiaryButtonStyle}>
-              {t.downloadToDevice}
+              {downloadButtonConfirmed ? t.downloadedLabel : t.downloadToDevice}
             </button>
             <button onClick={handleShareWithFriends} style={tertiaryButtonStyle}>
-              {t.shareWithFriends}
+              {shareButtonStatus === 'copied'
+                ? t.copiedLabel
+                : shareButtonStatus === 'downloaded'
+                  ? t.downloadedLabel
+                  : t.shareWithFriends}
             </button>
           </>
         )}
