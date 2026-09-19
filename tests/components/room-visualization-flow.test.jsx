@@ -1337,16 +1337,22 @@ describe('RoomVisualizationFlow', () => {
       }
     });
 
-    // Found in review: without ResizeObserver at all (older browsers),
-    // the effect observing bottomControlRef used to leave
-    // bottomControlHeight permanently null, which the toggle's maxHeight
-    // formula reads as "not yet measured" -- meaning the collision cap
-    // never applied for the WHOLE session there, not just a brief
-    // first-frame flash the way it does in browsers that do have
-    // ResizeObserver. Fixed with a conservative static fallback (96px,
-    // the thumb group's own known worst-case wrapped height) that only
-    // ever activates in this specific no-ResizeObserver branch.
-    test('without ResizeObserver at all, the toggle still gets a conservative fallback cap instead of none', async () => {
+    // Found in review: without ResizeObserver at all (older browsers), the
+    // effect observing bottomControlRef used to leave bottomControlHeight
+    // permanently null, which the toggle's maxHeight formula reads as
+    // "not yet measured" -- meaning the collision cap never applied for
+    // the WHOLE session there. A static fallback constant (96px, the
+    // thumb group's own worst-case wrapped height) was tried next and
+    // ALSO found wrong in review: it clips the toggle's ordinary
+    // single-line case on any normal wide image (which only needs 44px,
+    // not 96) and never releases the reservation once feedbackState
+    // reaches 'gone' and the wrapper is empty (needing 0px). Fixed
+    // properly: getBoundingClientRect() needs no ResizeObserver at all, so
+    // it's used as a real, always-correct measurement in every browser --
+    // this test mocks a specific height on the real bottom-control wrapper
+    // element and confirms the toggle's cap reflects THAT real value, not
+    // a guess, even with ResizeObserver entirely absent.
+    test('without ResizeObserver at all, the toggle still gets a real measurement, not a static guess', async () => {
       const originalResizeObserver = global.ResizeObserver;
       delete global.ResizeObserver;
 
@@ -1356,6 +1362,10 @@ describe('RoomVisualizationFlow', () => {
         const beforeButton = screen.getByRole('button', { name: 'Before' });
         const toggleGroup = beforeButton.closest('[role="group"]');
         const imageContainerEl = screen.getByAltText('New Design').parentElement;
+        const likeButton = screen.getByRole('button', { name: 'Yes, it looks realistic' });
+        // bottomControlRef's own stable wrapper -- the immediate parent of
+        // the thumb group's role="group" div (see renderPhotoOverlay).
+        const bottomControlEl = likeButton.closest('[role="group"]').parentElement;
 
         jest.spyOn(imageContainerEl, 'getBoundingClientRect').mockReturnValue({
           top: 0,
@@ -1368,17 +1378,33 @@ describe('RoomVisualizationFlow', () => {
           y: 0,
           toJSON() {},
         });
-        // measureOverlayAnchor is also wired to window resize
-        // unconditionally (see its own effect), independent of
-        // ResizeObserver entirely -- the same trigger production uses on
-        // an actual orientation change.
+        // A distinct, deliberately-chosen value (96, matching what a
+        // genuinely-wrapped thumb group measures at 84px width in the
+        // Puppeteer suite) -- confirms the toggle's cap comes from THIS
+        // specific mocked measurement, not a coincidentally-matching
+        // constant baked into the source.
+        jest.spyOn(bottomControlEl, 'getBoundingClientRect').mockReturnValue({
+          top: 0,
+          left: 0,
+          width: 56,
+          height: 96,
+          bottom: 96,
+          right: 56,
+          x: 0,
+          y: 0,
+          toJSON() {},
+        });
         act(() => {
           window.dispatchEvent(new Event('resize'));
         });
+        // Re-runs the bottomControlRef effect (its deps include
+        // feedbackState) via a real state transition -- clicking the like
+        // button swaps the thumb group for the confirmation pill, exactly
+        // the kind of change this effect needs to react to even without
+        // ResizeObserver's own continuous observation.
+        fireEvent.click(likeButton);
 
-        // maxHeight = overlayHeight(150) - 14 - fallbackBottomHeight(96) - 14 - 8 = 18
-        // Same result as the real-measurement test above, by design: the
-        // fallback constant IS the thumb group's own worst-case height.
+        // maxHeight = overlayHeight(150) - 14 - bottomControlHeight(96) - 14 - 8 = 18
         expect(toggleGroup.style.maxHeight).toBe('18px');
         expect(toggleGroup.style.overflow).toBe('hidden');
       } finally {

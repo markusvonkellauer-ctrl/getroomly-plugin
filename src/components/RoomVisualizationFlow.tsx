@@ -1211,34 +1211,46 @@ export function RoomVisualizationFlow({
   const showOriginal = resultButtons.showOriginal !== false;
   const showSaveShare = resultButtons.saveShare !== false;
 
-  // Depends on `step` AND `showFeedback`: bottomControlRef's wrapper only
-  // renders when both `step === 'result'` and `showFeedback` are true
-  // (see renderPhotoOverlay's call site). `step` alone isn't enough --
-  // found in review: useEmbedConfig re-reads config.buttons on every
-  // 'getroomly-open-modal' event without remounting (same mechanism as
-  // the config.language case below), so a host toggling feedback on/off
-  // while the SAME result stays mounted changes showFeedback without
-  // changing step at all. Without showFeedback here too: turning feedback
-  // ON would mount an unobserved wrapper (the toggle's collision cap
-  // never applies to it); turning it OFF leaves the last-measured height
-  // stale in state, potentially clipping the toggle unnecessarily on a
-  // later remount. The `!el` branch explicitly clears that stale value
-  // instead of just leaving it, so it can't linger past the wrapper's own
-  // lifetime.
+  // Depends on `step`, `showFeedback`, AND `feedbackState`: bottomControlRef's
+  // wrapper only renders when both `step === 'result'` and `showFeedback`
+  // are true (see renderPhotoOverlay's call site), but WHAT'S inside it
+  // (thumb group / confirmation pill / nothing, once feedbackState reaches
+  // 'gone') changes independently of either. `step`/`showFeedback` alone
+  // isn't enough -- found in review: useEmbedConfig re-reads
+  // config.buttons on every 'getroomly-open-modal' event without
+  // remounting (same mechanism as the config.language case below), so a
+  // host toggling feedback on/off while the SAME result stays mounted
+  // changes showFeedback without changing step at all. Without
+  // showFeedback here too: turning feedback ON would mount an unobserved
+  // wrapper (the toggle's collision cap never applies to it); turning it
+  // OFF leaves the last-measured height stale in state, potentially
+  // clipping the toggle unnecessarily on a later remount. The `!el`
+  // branch explicitly clears that stale value instead of just leaving it,
+  // so it can't linger past the wrapper's own lifetime.
+  //
+  // Always takes an immediate real measurement via getBoundingClientRect
+  // -- unlike ResizeObserver, this needs no special browser support at
+  // all, so it's used as the baseline in EVERY browser, not just a
+  // fallback for the ones lacking ResizeObserver. An earlier version used
+  // a static 96px guess as that fallback instead (the thumb group's own
+  // worst-case wrapped height) -- found in review to be wrong in
+  // practice: reserving the WORST case unconditionally clips the toggle's
+  // ordinary single-line case on any normal wide image (which only needs
+  // 44px, not 96), and never releases the reservation at all once
+  // feedbackState reaches 'gone' and the wrapper renders empty (needing
+  // 0px, not 96). A real measurement costs nothing extra to get right in
+  // either case, so there's no reason to guess. Also closes a smaller
+  // pre-existing gap: in browsers WITH ResizeObserver, this used to stay
+  // null (no cap at all) for one frame until the observer's first
+  // callback -- now correct from the very first synchronous measurement.
   useEffect(() => {
     const el = bottomControlRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') {
-      // Also covers the no-ResizeObserver case: this effect only ever
-      // subscribes to a real observer, so bottomControlHeight simply
-      // never gets a real measurement there. The fallback for that case
-      // (a conservative constant, not a live measurement) is applied at
-      // the point of use instead -- see effectiveBottomControlHeight --
-      // specifically so this effect body only ever calls setState from
-      // an actual subscription callback, not synchronously as part of
-      // its own setup (eslint's react-hooks/set-state-in-effect: calling
-      // setState directly in an effect body causes an avoidable extra
-      // render).
+    if (!el) {
       setBottomControlHeight(null);
+      return;
+    }
+    setBottomControlHeight(el.getBoundingClientRect().height);
+    if (typeof ResizeObserver === 'undefined') {
       return;
     }
     const observer = new ResizeObserver(entries => {
@@ -1249,27 +1261,7 @@ export function RoomVisualizationFlow({
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [step, showFeedback]);
-  // Found in review: without ResizeObserver at all (older browsers),
-  // bottomControlHeight above never becomes non-null, so the toggle's
-  // maxHeight cap (which requires a real measurement, deliberately -- see
-  // bottomControlHeight's own comment on why a static guess was rejected
-  // for the general case) would never apply for the entire session there,
-  // not just a brief flash. A static WORST-CASE fallback (96px, the thumb
-  // group's own known wrapped-height constant: 2x44px circles + 8px gap,
-  // independent of language) is the right trade-off specifically here,
-  // unlike the general static-reservation approach: it only ever applies
-  // in a browser that can't measure at all, so it can't wrongly clip the
-  // toggle's ordinary case anywhere a real measurement is possible.
-  // Computed here (derived from render-time state), not inside the effect
-  // above, so setting it never needs a synchronous setState call in an
-  // effect body.
-  const effectiveBottomControlHeight =
-    bottomControlHeight !== null
-      ? bottomControlHeight
-      : showFeedback && typeof ResizeObserver === 'undefined'
-        ? 96
-        : null;
+  }, [step, showFeedback, feedbackState]);
 
   // Guaranteed post-commit measurement for the overlay's anchor -- the
   // other triggers (attachImageContainerRef's inline call, the
@@ -1755,19 +1747,17 @@ export function RoomVisualizationFlow({
               // Caps the toggle's own height so its wrapped text can never
               // grow down far enough to visually overlap the bottom-right
               // corner (thumbs / confirmation pill) -- see
-              // bottomControlHeight's own declaration for why this has to
-              // be a real measurement (or, lacking ResizeObserver, a
-              // conservative fallback -- see effectiveBottomControlHeight),
-              // not a static guess used unconditionally. undefined (no
-              // cap) until both the overlay's real height AND the bottom
-              // corner's height are known, matching the same "undefined
-              // until measured" convention overlayAnchor itself uses -- a
-              // one-frame gap before the ResizeObserver's first callback
-              // fires, not worth extra complexity to close for a
-              // narrow-case-only, single-frame flash.
+              // bottomControlHeight's own declaration for why this is
+              // always a real measurement now, in every browser, not a
+              // static guess. undefined (no cap) until both the overlay's
+              // real height AND the bottom corner's height are known,
+              // matching the same "undefined until measured" convention
+              // overlayAnchor itself uses -- true only for the first
+              // render, before either effect's initial synchronous
+              // measurement lands.
               maxHeight:
-                overlayAnchor && effectiveBottomControlHeight !== null
-                  ? `${Math.max(0, overlayAnchor.height - 14 - effectiveBottomControlHeight - 14 - 8)}px`
+                overlayAnchor && bottomControlHeight !== null
+                  ? `${Math.max(0, overlayAnchor.height - 14 - bottomControlHeight - 14 - 8)}px`
                   : undefined,
               overflow: 'hidden',
             }}
