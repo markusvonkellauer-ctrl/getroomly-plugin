@@ -61,6 +61,34 @@ const isColor = (colorString, [r, g, b, a]) => {
   return cr === r && cg === g && cb === b && Math.abs(ca - a) < 0.001;
 };
 
+// Walks up from an element looking for the photo overlay -- identified by
+// its real inline styles, not a selector or test id, since the component
+// has none. The overlay renders outside imageContainerRef (see
+// renderPhotoOverlay's comment in RoomVisualizationFlow.tsx --
+// resultContentRef could clip it at short viewports otherwise),
+// positioned via overlayAnchor with its top/left/width/height matching
+// the image exactly -- those are dynamic pixel values, not a fixed
+// fingerprint, so unlike the old shared-band version of this helper, this
+// identifies the overlay via its STATIC styles instead: position:absolute
+// + zIndex:10 + pointerEvents:'none' together are unique in this
+// component (zIndex:10 appears nowhere else; see a `grep -n zIndex` on
+// the source file). Shared at module scope since both the "photo
+// overlay" and "feedback buttons" describe blocks need it.
+const findOverlayAncestor = el => {
+  let node = el.parentElement;
+  while (node) {
+    if (
+      node.style.position === 'absolute' &&
+      node.style.zIndex === '10' &&
+      node.style.pointerEvents === 'none'
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+};
+
 describe('RoomVisualizationFlow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -998,6 +1026,393 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  // ─── Photo overlay: status badge removed, toggle + thumbs on the image ──
+  //
+  // ANDRING-5b-bildkontroller.md moved the Before/After toggle and the
+  // feedback thumbs onto the image itself and removed the status badge
+  // entirely (it duplicated what the toggle's own fill/text/aria-pressed
+  // already say), originally sharing one row. That shared-row layout was
+  // later replaced (decided directly with the user, after measuring that
+  // it could make the thumb group entirely invisible on narrow photos --
+  // see the PR conversation) with two independently corner-anchored
+  // controls: toggle top-left, thumbs bottom-right. These read the real
+  // rendered DOM's inline styles/ancestry directly, the same way the
+  // ResizeObserver-wiring and footer-spacing tests above do, so a
+  // regression is caught even if it never touches the Puppeteer fixtures
+  // in tests/visual/overflow.test.js.
+  describe('photo overlay: toggle top-left, thumbs bottom-right, independently corner-anchored', () => {
+    const renderAtResult = async (generationResult, props = {}) => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    // findOverlayAncestor is shared at module scope (top of this file) --
+    // the "feedback buttons" describe block below uses it too, to verify
+    // the confirmation pill actually relocated into the overlay.
+
+    test('the status badge no longer renders, though the image alt text still conveys the same information', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+
+      expect(screen.queryByText('New Design')).not.toBeInTheDocument();
+      expect(screen.queryByText('Original Room')).not.toBeInTheDocument();
+      // alt text isn't matched by getByText (it's an attribute, not
+      // rendered text) -- confirms the accessible description survives
+      // the badge's removal rather than this test being a false negative.
+      expect(screen.getByAltText('New Design')).toBeInTheDocument();
+    });
+
+    test('the toggle and the feedback thumbs are independently corner-anchored, but share the same overlay ancestor', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result', generationId: 'gen-1' });
+
+      const beforeButton = screen.getByRole('button', { name: 'Before' });
+      const likeButton = screen.getByRole('button', { name: 'Yes, it looks realistic' });
+
+      const toggleOverlay = findOverlayAncestor(beforeButton);
+      const thumbsOverlay = findOverlayAncestor(likeButton);
+
+      // Same outer overlay (one absolutely-positioned box matching the
+      // image), but NOT the same immediate parent -- each control has its
+      // own position:absolute wrapper (top-left for the toggle,
+      // bottom-right for the thumbs) nested directly inside that shared
+      // overlay, rather than being flex siblings in one shared row.
+      expect(toggleOverlay).not.toBeNull();
+      expect(toggleOverlay).toBe(thumbsOverlay);
+      expect(beforeButton.closest('[role="group"]')).not.toBe(likeButton.closest('[role="group"]'));
+    });
+
+    test('the favorite button (still in the footer) is not inside the photo overlay', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+
+      const favoriteButton = screen.getByRole('button', { name: 'Save to favourites' });
+      expect(findOverlayAncestor(favoriteButton)).toBeNull();
+    });
+
+    // Found in review: the overlay is a DOM sibling of imageContainerRef,
+    // not a descendant -- the pinch/double-tap handlers are attached
+    // directly to imageContainerRef's own element (see
+    // attachImageContainerRef), so an event that lands on the overlay's
+    // own box (including the empty space between the toggle, top-left,
+    // and the thumb group, bottom-right) can never bubble to those
+    // handlers, regardless of what's visually beneath it. Without
+    // pointerEvents:'none' on the overlay and 'auto' restored on each
+    // real control, a pinch or double-tap starting in that empty space
+    // (visually just "the photo" to the user) would be silently swallowed
+    // instead of reaching the image's own zoom gestures.
+    test('the overlay itself ignores pointer events so empty space falls through to the image; the real controls do not', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result', generationId: 'gen-1' });
+
+      const beforeButton = screen.getByRole('button', { name: 'Before' });
+      const likeButton = screen.getByRole('button', { name: 'Yes, it looks realistic' });
+
+      const overlay = findOverlayAncestor(beforeButton);
+      expect(overlay.style.pointerEvents).toBe('none');
+
+      const toggleGroup = beforeButton.closest('[role="group"]');
+      const thumbGroup = likeButton.closest('[role="group"]');
+      expect(toggleGroup.style.pointerEvents).toBe('auto');
+      expect(thumbGroup.style.pointerEvents).toBe('auto');
+    });
+
+    // Found in review: every other test in this describe block checks
+    // WHERE the overlay sits in the DOM or what its static styles are,
+    // not the actual arithmetic in measureOverlayAnchor -- and
+    // tests/visual/overflow.test.js's Puppeteer suite re-implements that
+    // arithmetic independently in hand-authored HTML rather than calling
+    // the real component, so a regression in the real getBoundingClientRect
+    // subtraction could pass both suites. This mocks getBoundingClientRect
+    // on the real imageContainerRef element (jsdom returns all-zero rects
+    // by default, which is why nothing else in this file relies on it)
+    // and asserts the overlay's own rendered top/left/width/height against
+    // values computed by hand from the same formula -- if
+    // measureOverlayAnchor's real implementation changes, this fails
+    // independently of the Puppeteer fixture.
+    test('measureOverlayAnchor positions the real overlay from real element rects (mocked, not a fixture)', async () => {
+      class MockResizeObserver {
+        constructor(callback) {
+          this.callback = callback;
+        }
+        observe(element) {
+          this.element = element;
+          MockResizeObserver.instances.push(this);
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      MockResizeObserver.instances = [];
+      const originalResizeObserver = global.ResizeObserver;
+      global.ResizeObserver = MockResizeObserver;
+
+      try {
+        await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result', generationId: 'gen-1' });
+
+        const beforeButton = screen.getByRole('button', { name: 'Before' });
+        const overlay = findOverlayAncestor(beforeButton);
+        const imageContainerObserver = MockResizeObserver.instances.find(
+          i => i.element.style.display === 'inline-block'
+        );
+        const imageContainerEl = imageContainerObserver.element;
+
+        jest.spyOn(imageContainerEl, 'getBoundingClientRect').mockReturnValue({
+          top: 100,
+          left: 20,
+          width: 300,
+          height: 150,
+          bottom: 250,
+          right: 320,
+          x: 20,
+          y: 100,
+          toJSON() {},
+        });
+
+        // Re-runs measureOverlayAnchor with the mocked rect now in place
+        // -- the observer's callback ignores its own argument and always
+        // re-measures (see attachImageContainerRef), so any value works
+        // here; what matters is that it fires after the mock above.
+        act(() => {
+          imageContainerObserver.callback([{ contentRect: { height: 150 } }]);
+        });
+
+        // overlayEl.offsetParent is always null in jsdom (no real layout
+        // engine), so measureOverlayAnchor's fallback -- document.body --
+        // is the real containing element here, and jsdom's own default
+        // getBoundingClientRect for it is {top:0, left:0, ...}, left
+        // unmocked deliberately: this is the same fallback production
+        // takes whenever the overlay's real offsetParent isn't
+        // resolvable. The overlay's own box now matches the image's box
+        // EXACTLY (no +14/-28 inset baked in here -- each control applies
+        // its own inset from its own corner instead), so this is a direct
+        // getBoundingClientRect subtraction with no further arithmetic:
+        //   top = imageRect.top(100) - containingRect.top(0) = 100
+        //   left = imageRect.left(20) - containingRect.left(0) = 20
+        expect(overlay.style.top).toBe('100px');
+        expect(overlay.style.left).toBe('20px');
+        expect(overlay.style.width).toBe('300px');
+        expect(overlay.style.height).toBe('150px');
+      } finally {
+        global.ResizeObserver = originalResizeObserver;
+      }
+    });
+
+    // Found in review: getBoundingClientRect() is measured from the
+    // containing element's BORDER box, but a position:absolute child's
+    // top/left resolve against its PADDING box -- .getroomly-modal-
+    // container (the real containingEl in production) has a real 1px
+    // border (index.css's .border class), which the previous test above
+    // can't catch at all, since document.body (its containingEl, the
+    // jsdom fallback) has no border and clientTop/clientLeft of 0 either
+    // way. This mocks a nonzero clientTop/clientLeft on that same
+    // fallback element specifically to exercise the correction itself,
+    // independent of which real element ends up being containingEl.
+    test('measureOverlayAnchor corrects for a bordered containing element (clientTop/clientLeft), not just its border-box origin', async () => {
+      class MockResizeObserver {
+        constructor(callback) {
+          this.callback = callback;
+        }
+        observe(element) {
+          this.element = element;
+          MockResizeObserver.instances.push(this);
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      MockResizeObserver.instances = [];
+      const originalResizeObserver = global.ResizeObserver;
+      global.ResizeObserver = MockResizeObserver;
+
+      const clientTopSpy = jest.spyOn(document.body, 'clientTop', 'get').mockReturnValue(1);
+      const clientLeftSpy = jest.spyOn(document.body, 'clientLeft', 'get').mockReturnValue(1);
+
+      try {
+        await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result', generationId: 'gen-1' });
+
+        const beforeButton = screen.getByRole('button', { name: 'Before' });
+        const overlay = findOverlayAncestor(beforeButton);
+        const imageContainerObserver = MockResizeObserver.instances.find(
+          i => i.element.style.display === 'inline-block'
+        );
+
+        jest.spyOn(imageContainerObserver.element, 'getBoundingClientRect').mockReturnValue({
+          top: 100,
+          left: 20,
+          width: 300,
+          height: 150,
+          bottom: 250,
+          right: 320,
+          x: 20,
+          y: 100,
+          toJSON() {},
+        });
+        act(() => {
+          imageContainerObserver.callback([{ contentRect: { height: 150 } }]);
+        });
+
+        // containingRect (document.body's own getBoundingClientRect,
+        // unmocked) is still {top:0, left:0, ...} in jsdom -- only
+        // clientTop/clientLeft are mocked here, isolating the correction
+        // this test targets: top = 100 - 0 - 1 = 99, left = 20 - 0 - 1 = 19.
+        expect(overlay.style.top).toBe('99px');
+        expect(overlay.style.left).toBe('19px');
+      } finally {
+        global.ResizeObserver = originalResizeObserver;
+        clientTopSpy.mockRestore();
+        clientLeftSpy.mockRestore();
+      }
+    });
+
+    // Found in review (caught by actually screenshotting the narrowest
+    // case, not by numeric-only checks): two independently, correctly
+    // positioned controls (toggle top-left, thumbs bottom-right) can
+    // still visually overlap if the toggle's own wrapped text grows tall
+    // enough to reach the thumb group underneath it. Fixed by measuring
+    // the bottom-right corner's real rendered height and capping the
+    // toggle's own maxHeight to whatever's left above it -- this
+    // exercises that real formula directly (bottomControlHeight in
+    // RoomVisualizationFlow.tsx), independent of the Puppeteer fixture in
+    // tests/visual/overflow.test.js, which re-implements it separately.
+    test("the toggle group's maxHeight is capped by the bottom-right corner's real measured height, not a static guess", async () => {
+      class MockResizeObserver {
+        constructor(callback) {
+          this.callback = callback;
+        }
+        observe(element) {
+          this.element = element;
+          MockResizeObserver.instances.push(this);
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      MockResizeObserver.instances = [];
+      const originalResizeObserver = global.ResizeObserver;
+      global.ResizeObserver = MockResizeObserver;
+
+      try {
+        await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result', generationId: 'gen-1' });
+
+        const beforeButton = screen.getByRole('button', { name: 'Before' });
+        const toggleGroup = beforeButton.closest('[role="group"]');
+        const imageContainerObserver = MockResizeObserver.instances.find(
+          i => i.element.style.display === 'inline-block'
+        );
+        // bottomControlRef's own wrapper -- position:absolute + bottom:
+        // 14px + right:14px together are unique to it in this component
+        // (the toggle group uses top+left, not bottom+right).
+        const bottomControlObserver = MockResizeObserver.instances.find(
+          i => i.element.style.bottom === '14px' && i.element.style.right === '14px'
+        );
+        expect(bottomControlObserver).toBeDefined();
+
+        jest.spyOn(imageContainerObserver.element, 'getBoundingClientRect').mockReturnValue({
+          top: 0,
+          left: 0,
+          width: 84,
+          height: 150,
+          bottom: 150,
+          right: 84,
+          x: 0,
+          y: 0,
+          toJSON() {},
+        });
+        act(() => {
+          imageContainerObserver.callback([{ contentRect: { height: 150 } }]);
+        });
+
+        // The mock ResizeObserver's callback takes contentRect directly
+        // (not derived from getBoundingClientRect) -- this is the real
+        // measured height a genuinely-wrapped thumb group would report at
+        // an extremely narrow width (see the Puppeteer suite's own
+        // measured ~96px for that case).
+        act(() => {
+          bottomControlObserver.callback([{ contentRect: { height: 96 } }]);
+        });
+
+        // maxHeight = overlayHeight(150) - 14 - bottomControlHeight(96) - 14 - 8 = 18
+        expect(toggleGroup.style.maxHeight).toBe('18px');
+        expect(toggleGroup.style.overflow).toBe('hidden');
+      } finally {
+        global.ResizeObserver = originalResizeObserver;
+      }
+    });
+
+    // Found in review: without ResizeObserver at all (older browsers), the
+    // effect observing bottomControlRef used to leave bottomControlHeight
+    // permanently null, which the toggle's maxHeight formula reads as
+    // "not yet measured" -- meaning the collision cap never applied for
+    // the WHOLE session there. A static fallback constant (96px, the
+    // thumb group's own worst-case wrapped height) was tried next and
+    // ALSO found wrong in review: it clips the toggle's ordinary
+    // single-line case on any normal wide image (which only needs 44px,
+    // not 96) and never releases the reservation once feedbackState
+    // reaches 'gone' and the wrapper is empty (needing 0px). Fixed
+    // properly: getBoundingClientRect() needs no ResizeObserver at all, so
+    // it's used as a real, always-correct measurement in every browser --
+    // this test mocks a specific height on the real bottom-control wrapper
+    // element and confirms the toggle's cap reflects THAT real value, not
+    // a guess, even with ResizeObserver entirely absent.
+    test('without ResizeObserver at all, the toggle still gets a real measurement, not a static guess', async () => {
+      const originalResizeObserver = global.ResizeObserver;
+      delete global.ResizeObserver;
+
+      try {
+        await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result', generationId: 'gen-1' });
+
+        const beforeButton = screen.getByRole('button', { name: 'Before' });
+        const toggleGroup = beforeButton.closest('[role="group"]');
+        const imageContainerEl = screen.getByAltText('New Design').parentElement;
+        const likeButton = screen.getByRole('button', { name: 'Yes, it looks realistic' });
+        // bottomControlRef's own stable wrapper -- the immediate parent of
+        // the thumb group's role="group" div (see renderPhotoOverlay).
+        const bottomControlEl = likeButton.closest('[role="group"]').parentElement;
+
+        jest.spyOn(imageContainerEl, 'getBoundingClientRect').mockReturnValue({
+          top: 0,
+          left: 0,
+          width: 84,
+          height: 150,
+          bottom: 150,
+          right: 84,
+          x: 0,
+          y: 0,
+          toJSON() {},
+        });
+        // A distinct, deliberately-chosen value (96, matching what a
+        // genuinely-wrapped thumb group measures at 84px width in the
+        // Puppeteer suite) -- confirms the toggle's cap comes from THIS
+        // specific mocked measurement, not a coincidentally-matching
+        // constant baked into the source.
+        jest.spyOn(bottomControlEl, 'getBoundingClientRect').mockReturnValue({
+          top: 0,
+          left: 0,
+          width: 56,
+          height: 96,
+          bottom: 96,
+          right: 56,
+          x: 0,
+          y: 0,
+          toJSON() {},
+        });
+        act(() => {
+          window.dispatchEvent(new Event('resize'));
+        });
+        // Re-runs the bottomControlRef effect (its deps include
+        // feedbackState) via a real state transition -- clicking the like
+        // button swaps the thumb group for the confirmation pill, exactly
+        // the kind of change this effect needs to react to even without
+        // ResizeObserver's own continuous observation.
+        fireEvent.click(likeButton);
+
+        // maxHeight = overlayHeight(150) - 14 - bottomControlHeight(96) - 14 - 8 = 18
+        expect(toggleGroup.style.maxHeight).toBe('18px');
+        expect(toggleGroup.style.overflow).toBe('hidden');
+      } finally {
+        global.ResizeObserver = originalResizeObserver;
+      }
+    });
+  });
+
   // ─── Double-tap-to-reset-zoom must ignore taps on overlay controls ────────
 
   describe('double-tap zoom vs. the Before/After toggle', () => {
@@ -1198,9 +1613,14 @@ describe('RoomVisualizationFlow', () => {
       await renderAtResult({ imageUrl: 'blob:result' });
 
       const img = screen.getByAltText('New Design');
-      expect(MockResizeObserver.instances).toHaveLength(1);
-      const observer = MockResizeObserver.instances[0];
-      expect(observer.element).not.toBeNull();
+      // Two observers exist now: this one (resultContentRef, identified by
+      // its own real inline style below) and a second one on
+      // imageContainerRef driving the photo overlay's position -- see the
+      // next test. Both elements contain the img (imageContainerRef is nested
+      // inside resultContentRef), so .contains() alone can't disambiguate
+      // them; resultContentRef's flex:'1 1 auto' is unique to it.
+      const observer = MockResizeObserver.instances.find(i => i.element.style.flex === '1 1 auto');
+      expect(observer).toBeDefined();
       expect(observer.element.contains(img)).toBe(true);
 
       act(() => {
@@ -1208,6 +1628,29 @@ describe('RoomVisualizationFlow', () => {
       });
 
       expect(img.style.maxHeight).toBe('234px');
+    });
+
+    test('a second ResizeObserver observes imageContainerRef itself, separate from resultContentRef', async () => {
+      await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
+
+      // imageContainerRef's own inline style (distinct from
+      // resultContentRef's flex:'1 1 auto' above) -- display:inline-block
+      // is unique to it in this component. Its existence, observing the
+      // right element, is what this test actually connects to the real
+      // component: jsdom has no real layout engine, so offsetTop/Left/
+      // Width/Height all read 0 regardless of what this callback receives
+      // -- the resulting position math is only meaningfully verified in
+      // the real-browser suite (tests/visual/overflow.test.js).
+      const imageContainerObserver = MockResizeObserver.instances.find(
+        i => i.element.style.display === 'inline-block'
+      );
+      const wrapperObserver = MockResizeObserver.instances.find(
+        i => i.element.style.flex === '1 1 auto'
+      );
+      expect(imageContainerObserver).toBeDefined();
+      expect(imageContainerObserver).not.toBe(wrapperObserver);
+      expect(imageContainerObserver.element).not.toBe(wrapperObserver.element);
+      expect(wrapperObserver.element.contains(imageContainerObserver.element)).toBe(true);
     });
   });
 
@@ -1286,7 +1729,7 @@ describe('RoomVisualizationFlow', () => {
       expect(submitFeedback).not.toHaveBeenCalled();
     });
 
-    test('after one click, both feedback buttons unmount and are replaced by a thank-you message', async () => {
+    test('after one click, both feedback circle buttons unmount and a confirmation pill appears on the image', async () => {
       await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
 
       fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
@@ -1301,26 +1744,71 @@ describe('RoomVisualizationFlow', () => {
         screen.queryByRole('button', { name: "No, it doesn't look realistic" })
       ).not.toBeInTheDocument();
       expect(submitFeedback).toHaveBeenCalledTimes(1);
-      expect(screen.getByText('Thanks for your feedback.')).toBeInTheDocument();
+
+      // Two elements now carry this text: the visible confirmation pill on
+      // the image, and a visually-hidden aria-live region carrying the same
+      // string so screen readers get an announcement too (a region that
+      // only appears once its text is already set isn't reliably announced
+      // — this one instead stays mounted the whole time and only its text
+      // content changes, see the comment in RoomVisualizationFlow.tsx).
+      const matches = screen.getAllByText('Thanks for your feedback.');
+      expect(matches).toHaveLength(2);
+
+      // Not just that two matches exist somewhere -- the visible one (the
+      // <div>, not the hidden <span role="status">) must actually be
+      // inside the photo overlay. A regression that left the pill
+      // rendering in the footer (with the hidden live region supplying
+      // the other match) would still pass the length check above.
+      const visiblePill = matches.find(el => el.tagName === 'DIV');
+      expect(visiblePill).toBeDefined();
+      expect(findOverlayAncestor(visiblePill)).not.toBeNull();
     });
 
-    test('the thank-you message clears after 2200ms, leaving an empty (height-preserving) row', async () => {
+    test('the confirmation pill and its live-region announcement both clear after 2200ms', async () => {
       jest.useFakeTimers();
       try {
         await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
 
         fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
-        expect(screen.getByText('Thanks for your feedback.')).toBeInTheDocument();
+        expect(screen.getAllByText('Thanks for your feedback.')).toHaveLength(2);
 
         act(() => {
           jest.advanceTimersByTime(2200);
         });
 
+        // Spec: "Inget visas på platsen därefter" -- nothing shown there
+        // afterwards, not an empty placeholder (there's no footer row left
+        // to preserve height for; this now lives on the image, where a
+        // vanished element doesn't shift anything else).
         expect(screen.queryByText('Thanks for your feedback.')).not.toBeInTheDocument();
-        expect(screen.queryByText('Does it look realistic?')).not.toBeInTheDocument();
       } finally {
         jest.useRealTimers();
       }
+    });
+
+    test('the confirmation pill can wrap its own text at narrow widths (real inline styles, not a fixture)', async () => {
+      await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, it looks realistic' }));
+
+      // maxWidth alone only caps the pill's own box -- it doesn't let the
+      // TEXT inside wrap, so an unbreakable word can still overflow the
+      // box and get clipped by the overlay's own overflow:hidden one level
+      // up (found in review, verified with Puppeteer in
+      // tests/visual/overflow.test.js, which can't itself read these
+      // real inline styles off the actual component the way this can).
+      // Two elements carry this text (the visible pill and the hidden
+      // live-region span, see the earlier test) -- the pill is the <div>,
+      // the live region is a <span role="status">.
+      const pill = screen
+        .getAllByText('Thanks for your feedback.')
+        .find(el => el.tagName === 'DIV');
+      expect(pill).toBeDefined();
+      // jsdom's CSSOM normalizes the numeric 0 without a unit suffix
+      // (real browsers report '0px') -- '0' either way confirms the
+      // style is actually set, which is what this test is checking.
+      expect(pill.style.minWidth).toBe('0');
+      expect(pill.style.overflowWrap).toBe('break-word');
     });
 
     test('a rejected submitFeedback call does not throw or crash the component', async () => {

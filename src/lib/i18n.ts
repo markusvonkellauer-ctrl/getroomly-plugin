@@ -55,13 +55,13 @@ export interface TranslationStrings {
   labelOriginal: string;
   labelNew: string;
   addToBasket: string;
-  /** Before/After toggle pill on the result image (short, e.g. "Före"/"Efter") -- distinct from labelOriginal/labelNew, which label the floating badge and need to work as full sentence fragments in alt text too. */
+  /** Before/After toggle pill on the result image (short, e.g. "Före"/"Efter") -- distinct from labelOriginal/labelNew, which are the base/overlay images' alt text and need to work as full sentence fragments there too. */
   toggleBefore: string;
   toggleAfter: string;
   toggleGroupLabel: string;
-  /** Visible question next to the like/dislike buttons in the control stack's feedback row (not just an aria-label). */
+  /** aria-label on the feedback thumb group (bottom-right of the result image) -- not visible text; there's no written question on the image itself, a deliberate tradeoff (see ANDRING-5b-bildkontroller.md, "Ändring 4"). */
   feedbackQuestion: string;
-  /** Replaces feedbackQuestion for 2200ms after either feedback button is clicked, then clears -- see the feedback-row timing note in RoomVisualizationFlow.tsx. */
+  /** Shown in a confirmation pill on the image, replacing the two thumb circles in place, for 2200ms after either is clicked, then clears -- see thankForFeedback in RoomVisualizationFlow.tsx. */
   feedbackThanks: string;
   feedbackLikeLabel: string;
   feedbackDislikeLabel: string;
