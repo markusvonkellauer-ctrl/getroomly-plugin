@@ -92,6 +92,7 @@ export function RoomVisualizationFlow({
   const [shareButtonStatus, setShareButtonStatus] = useState<'idle' | 'copied' | 'downloaded'>(
     'idle'
   );
+  const [supportsNativeShare, setSupportsNativeShare] = useState(false);
   const shareButtonTimerRef = useRef<number | null>(null);
   // Guards against a second Share click while the first is still in
   // flight -- found in review: the native share sheet (tier 1) stays open
@@ -1295,7 +1296,7 @@ export function RoomVisualizationFlow({
   // right MIME type is an accurate, cheap capability test. Either
   // canShare being unavailable, or it rejecting this image's own MIME
   // type, correctly leaves Download visible.
-  const supportsNativeShare = useMemo(() => {
+  useEffect(() => {
     if (
       typeof navigator === 'undefined' ||
       typeof navigator.share !== 'function' ||
@@ -1303,13 +1304,14 @@ export function RoomVisualizationFlow({
       !currentResultBlob ||
       !currentResultFile
     ) {
-      return false;
+      setSupportsNativeShare(false);
+      return;
     }
 
     try {
-      return navigator.canShare({ files: [currentResultFile] });
+      setSupportsNativeShare(navigator.canShare({ files: [currentResultFile] }));
     } catch {
-      return false;
+      setSupportsNativeShare(false);
     }
   }, [currentResultBlob, currentResultFile]);
 
