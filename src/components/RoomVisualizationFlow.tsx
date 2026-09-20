@@ -1435,6 +1435,17 @@ export function RoomVisualizationFlow({
     showAddToBasket,
     showFavorite,
     showSaveShare,
+    // Same class of gap as showSaveShare just above, one level more
+    // specific -- found in review: supportsNativeShare hides just the
+    // Download button (not the whole save/share row) when the CURRENT
+    // image can be shared as a file, and it's derived from
+    // currentResultMimeType, which follows the Before/After toggle. If
+    // the uploaded photo and the generated result ever have different
+    // MIME types with different canShare support (jpeg vs webp, say),
+    // toggling Before/After can show/hide Download without showSaveShare
+    // itself changing, shifting the tertiary row's height the same way
+    // showSaveShare's own toggle already does.
+    supportsNativeShare,
     measureOverlayAnchor,
   ]);
 
