@@ -945,7 +945,7 @@ export function RoomVisualizationFlow({
             fontSize: '9px',
             textTransform: 'uppercase',
             letterSpacing: '0.1em',
-            color: 'rgba(107, 114, 126, 0.5)', // text-muted-foreground/50
+            color: 'var(--getroomly-upload-hint)', // text-muted-foreground/50
             fontWeight: '500',
           }}
         >
@@ -973,7 +973,7 @@ export function RoomVisualizationFlow({
           style={{
             fontSize: '10px', // text-[10px]
             fontWeight: 'bold', // font-bold
-            color: 'hsla(176, 51%, 36%, 0.8)', // text-primary/80
+            color: 'var(--getroomly-tips-heading)', // text-primary/80
             marginBottom: '12px', // mb-3
             textTransform: 'uppercase', // uppercase
             letterSpacing: '0.15em', // tracking-[0.15em]
@@ -1014,7 +1014,7 @@ export function RoomVisualizationFlow({
               1
             </span>
             <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
-              <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
+              <span style={{ fontWeight: '600', color: 'var(--getroomly-tip-label)' }}>
                 {t.tip1Label}
               </span>
               <span> {t.tip1Body}</span>
@@ -1040,7 +1040,7 @@ export function RoomVisualizationFlow({
               2
             </span>
             <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
-              <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
+              <span style={{ fontWeight: '600', color: 'var(--getroomly-tip-label)' }}>
                 {t.tip2Label}
               </span>
               <span> {t.tip2Body}</span>
@@ -1066,7 +1066,7 @@ export function RoomVisualizationFlow({
               3
             </span>
             <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
-              <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
+              <span style={{ fontWeight: '600', color: 'var(--getroomly-tip-label)' }}>
                 {t.tip3Label}
               </span>
               <span> {t.tip3Body}</span>
@@ -2020,7 +2020,7 @@ export function RoomVisualizationFlow({
                 fontWeight: '600',
                 cursor: 'pointer',
                 background: showOriginalImage ? 'var(--getroomly-primary-deep)' : 'transparent',
-                color: showOriginalImage ? '#fff' : '#605d5d',
+                color: showOriginalImage ? '#fff' : 'var(--getroomly-toggle-inactive)',
                 transition: 'all 0.2s',
                 // Falls back to breaking mid-word only when there's
                 // truly no word-boundary room left (e.g. "Nachher" alone
@@ -2047,7 +2047,7 @@ export function RoomVisualizationFlow({
                 fontWeight: '600',
                 cursor: 'pointer',
                 background: !showOriginalImage ? 'var(--getroomly-primary-deep)' : 'transparent',
-                color: !showOriginalImage ? '#fff' : '#605d5d',
+                color: !showOriginalImage ? '#fff' : 'var(--getroomly-toggle-inactive)',
                 transition: 'all 0.2s',
                 overflowWrap: 'break-word',
                 minWidth: 0,
@@ -2139,7 +2139,7 @@ export function RoomVisualizationFlow({
                       background: 'rgba(255, 255, 255, 0.94)',
                       backdropFilter: 'blur(12px)',
                       boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
-                      color: '#201e1d',
+                      color: 'var(--getroomly-icon-default)',
                     }}
                   >
                     <svg
@@ -2182,7 +2182,7 @@ export function RoomVisualizationFlow({
                       background: 'rgba(255, 255, 255, 0.94)',
                       backdropFilter: 'blur(12px)',
                       boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
-                      color: '#201e1d',
+                      color: 'var(--getroomly-icon-default)',
                     }}
                   >
                     <svg
@@ -2231,7 +2231,7 @@ export function RoomVisualizationFlow({
                   fontWeight: 600,
                   fontSize: '11.5px',
                   lineHeight: 1.25,
-                  color: '#201e1d',
+                  color: 'var(--getroomly-icon-default)',
                   padding: '11px 14px',
                   borderRadius: '999px',
                   background: 'rgba(255, 255, 255, 0.94)',
@@ -2310,7 +2310,7 @@ export function RoomVisualizationFlow({
     fontSize: '14px',
     padding: '10px 16px',
     background: 'none',
-    color: '#6b7280',
+    color: 'var(--getroomly-tertiary-text)',
     fontWeight: '500',
     border: 'none',
   };
@@ -2389,7 +2389,9 @@ export function RoomVisualizationFlow({
                 height="19"
                 viewBox="0 0 24 24"
                 fill={isFavorited ? 'var(--getroomly-primary-deep)' : 'none'}
-                stroke={isFavorited ? 'var(--getroomly-primary-deep)' : '#201e1d'}
+                stroke={
+                  isFavorited ? 'var(--getroomly-primary-deep)' : 'var(--getroomly-icon-default)'
+                }
                 strokeWidth="2"
               >
                 <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
@@ -2450,7 +2452,7 @@ export function RoomVisualizationFlow({
           textAlign: 'center',
           fontSize: '12px',
           lineHeight: 1.45,
-          color: '#444141',
+          color: 'var(--getroomly-disclaimer)',
         }}
       >
         {t.disclaimer}
@@ -2563,7 +2565,7 @@ export function RoomVisualizationFlow({
         onClick={handleOpenTerms}
         style={{
           fontSize: '10px',
-          color: 'hsla(20, 8%, 45%, 0.6)',
+          color: 'var(--getroomly-terms-link)',
           textDecoration: 'underline',
           fontStyle: 'italic',
           background: 'none',
@@ -2573,10 +2575,10 @@ export function RoomVisualizationFlow({
           transition: 'color 0.2s ease',
         }}
         onMouseEnter={e => {
-          e.currentTarget.style.color = 'hsla(20, 8%, 45%, 0.8)';
+          e.currentTarget.style.color = 'var(--getroomly-terms-link-hover)';
         }}
         onMouseLeave={e => {
-          e.currentTarget.style.color = 'hsla(20, 8%, 45%, 0.6)';
+          e.currentTarget.style.color = 'var(--getroomly-terms-link)';
         }}
       >
         {t.termsLink}
@@ -2635,7 +2637,14 @@ export function RoomVisualizationFlow({
               alignItems: 'center',
             }}
           >
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: '#374151' }}>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: '20px',
+                fontWeight: '600',
+                color: 'var(--getroomly-dialog-heading)',
+              }}
+            >
               {t.termsTitle}
             </h2>
             <button
@@ -2650,7 +2659,7 @@ export function RoomVisualizationFlow({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#6b7280',
+                color: 'var(--getroomly-tertiary-text)',
                 fontSize: '16px',
                 fontWeight: 'bold',
                 flexShrink: 0,
@@ -2668,7 +2677,7 @@ export function RoomVisualizationFlow({
               padding: '16px 20px',
               fontSize: '14px',
               lineHeight: '1.6',
-              color: '#4b5563',
+              color: 'var(--getroomly-dialog-body)',
             }}
           >
             <div style={{ marginBottom: '16px' }}>
@@ -2676,7 +2685,7 @@ export function RoomVisualizationFlow({
                 style={{
                   fontSize: '16px',
                   fontWeight: '600',
-                  color: '#374151',
+                  color: 'var(--getroomly-dialog-heading)',
                   marginBottom: '8px',
                 }}
               >
@@ -2690,7 +2699,7 @@ export function RoomVisualizationFlow({
                 style={{
                   fontSize: '16px',
                   fontWeight: '600',
-                  color: '#374151',
+                  color: 'var(--getroomly-dialog-heading)',
                   marginBottom: '8px',
                 }}
               >
@@ -2710,7 +2719,7 @@ export function RoomVisualizationFlow({
                 style={{
                   fontSize: '16px',
                   fontWeight: '600',
-                  color: '#374151',
+                  color: 'var(--getroomly-dialog-heading)',
                   marginBottom: '8px',
                 }}
               >
@@ -2724,7 +2733,7 @@ export function RoomVisualizationFlow({
                 style={{
                   fontSize: '16px',
                   fontWeight: '600',
-                  color: '#374151',
+                  color: 'var(--getroomly-dialog-heading)',
                   marginBottom: '8px',
                 }}
               >
@@ -2795,7 +2804,7 @@ export function RoomVisualizationFlow({
             fontWeight: 'bold',
             letterSpacing: '-0.025em',
             margin: '0',
-            color: 'rgba(0, 0, 0, 0.8)',
+            color: 'var(--getroomly-header-title)',
           }}
         >
           {step === 'upload' && t.stepUpload}
@@ -2818,7 +2827,7 @@ export function RoomVisualizationFlow({
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: 'rgba(0, 0, 0, 0.06)',
-              color: '#374151',
+              color: 'var(--getroomly-dialog-heading)',
               transition: 'all var(--getroomly-transition-fast)',
             }}
             onMouseEnter={e => {
