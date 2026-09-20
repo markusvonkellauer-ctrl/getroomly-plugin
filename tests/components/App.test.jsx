@@ -213,6 +213,44 @@ describe('App — trigger button visibility', () => {
     }
   });
 
+  it('the loading state sets no inline fontFamily, so it can inherit a brand override', () => {
+    // Found in review: an inline fontFamily here always beat brand.ts's
+    // font-family:inherit override (inline styles win over any injected
+    // <style> rule), and defaultLanguage is only ever 'en'/'sv' -- both
+    // Latin-script -- so there was never a real non-Latin-glyph-coverage
+    // reason to keep it. Invalid config (missing required fields beyond
+    // apiKey) keeps isReady false, so this renders the loading branch.
+    window.GetRoomlyEmbedConfig = { apiKey: 'grm_pub_test' };
+
+    const { container } = render(<App />);
+
+    const loadingText = screen.getByText(/loading configuration/i);
+    // The loading branch's own root div (its immediate parent) is what
+    // used to carry the inline override -- not container itself, which is
+    // React Testing Library's own outer wrapper.
+    expect(loadingText.parentElement.style.fontFamily).toBe('');
+    expect(container).toBeTruthy(); // sanity: something actually rendered
+  });
+
+  it('the "Configuration Error" state sets no inline fontFamily, so it can inherit a brand override', async () => {
+    // Reached when a previously-valid config becomes invalid on a re-check
+    // (e.g. the host page swaps in bad data and re-opens) -- isReady stays
+    // true from the earlier successful load, config stays the last valid
+    // object, but error is freshly set, which is what actually renders
+    // App.tsx's dedicated error screen (not the generic loading one).
+    checkPartnerAvailability.mockResolvedValueOnce(true);
+    render(<App />);
+    await waitForAvailability();
+
+    window.GetRoomlyEmbedConfig = { apiKey: 'grm_pub_test' };
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+
+    const errorHeading = screen.getByText(/GetRoomly Configuration Error/i);
+    expect(errorHeading.parentElement.style.fontFamily).toBe('');
+  });
+
   it('still respects config.hideButton regardless of availability', async () => {
     checkPartnerAvailability.mockResolvedValueOnce(true);
     window.GetRoomlyEmbedConfig = { ...baseEmbedConfig, hideButton: true };

@@ -1,6 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AppConfig } from '@/config/app-config';
 import { useEmbedConfig } from '@/hooks/use-embed-config';
 import { EmbedButton } from '@/components/EmbedButton';
 import { RoomVisualizationFlow } from '@/components/RoomVisualizationFlow';
@@ -225,11 +224,17 @@ function App() {
   // Show loading state while config is being loaded
   if (!isReady) {
     return (
+      // No explicit fontFamily -- found in review: an inline value here
+      // always beat brand.ts's font-family:inherit override (inline
+      // styles win over any injected <style> rule), and defaultLanguage is
+      // only ever 'en'/'sv' (both Latin-script -- see app-config.ts), so
+      // the 'en'-vs-other split never had a real non-Latin-glyph-coverage
+      // reason to preserve. index.css's own :root, :host rule already
+      // supplies the same system font stack by default.
       <div
         style={{
           padding: '20px',
           textAlign: 'center',
-          fontFamily: AppConfig.ui.defaultLanguage === 'en' ? 'system-ui' : 'sans-serif',
         }}
       >
         <p>GetRoomly: Loading configuration...</p>
@@ -246,7 +251,6 @@ function App() {
           padding: '20px',
           textAlign: 'center',
           color: '#e74c3c',
-          fontFamily: AppConfig.ui.defaultLanguage === 'en' ? 'system-ui' : 'sans-serif',
         }}
       >
         <p>⚠️ GetRoomly Configuration Error</p>
