@@ -1265,6 +1265,17 @@ export function RoomVisualizationFlow({
     () => (currentResultImage ? dataUrlToBlob(currentResultImage) : null),
     [currentResultImage]
   );
+  const currentResultFile = useMemo(
+    () =>
+      currentResultBlob && typeof File !== 'undefined'
+        ? new File(
+            [currentResultBlob],
+            `getroomly-design.${extensionForMimeType(currentResultBlob.type)}`,
+            { type: currentResultBlob.type }
+          )
+        : null,
+    [currentResultBlob]
+  );
   // On a browser with the Web Share API, "Download Image" saves into the
   // Files app, not the Photos library -- Dela already covers everything
   // Download does (its own tier-3 fallback IS a plain download) plus a
@@ -1289,23 +1300,18 @@ export function RoomVisualizationFlow({
       typeof navigator === 'undefined' ||
       typeof navigator.share !== 'function' ||
       typeof navigator.canShare !== 'function' ||
-      !currentResultBlob
+      !currentResultBlob ||
+      !currentResultFile
     ) {
       return false;
     }
 
     try {
-      return navigator.canShare({
-        files: [
-          new File([currentResultBlob], `probe.${extensionForMimeType(currentResultBlob.type)}`, {
-            type: currentResultBlob.type,
-          }),
-        ],
-      });
+      return navigator.canShare({ files: [currentResultFile] });
     } catch {
       return false;
     }
-  }, [currentResultBlob]);
+  }, [currentResultBlob, currentResultFile]);
 
   // Depends on `step`, `showFeedback`, AND `feedbackState`: bottomControlRef's
   // wrapper only renders when both `step === 'result'` and `showFeedback`
@@ -1649,15 +1655,10 @@ export function RoomVisualizationFlow({
       // toggle now -- found in review: this used to always send
       // resultImage regardless of which image was on screen.
       const blob = currentResultBlob;
+      const file = currentResultFile;
 
-      if (navigator.share && blob) {
+      if (navigator.share && blob && file) {
         try {
-          const file = new File(
-            [blob],
-            `getroomly-design-${Date.now()}.${extensionForMimeType(blob.type)}`,
-            { type: blob.type }
-          );
-
           await navigator.share({
             files: [file],
             title: `${productName} Room Visualization`,
