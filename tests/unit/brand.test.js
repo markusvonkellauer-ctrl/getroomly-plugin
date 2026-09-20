@@ -160,4 +160,15 @@ describe('brandThemeCss', () => {
     expect(css).toMatch(/:host\s*\{[^}]*font-family:\s*inherit/);
     expect(css).toMatch(/h1,\s*h2,\s*:host\s*\{\s*font-family:\s*inherit/);
   });
+
+  it('also makes form controls (button, input, select, textarea) inherit the host font', () => {
+    // Found in review: browsers' UA stylesheets commonly give form controls
+    // their own font-family that doesn't reliably inherit from an ancestor
+    // by default (the classic "why does my button ignore my font-family"
+    // problem) -- without this, every button's label would stay in the
+    // browser's default UI font even though headings/plain text correctly
+    // picked up the host's.
+    const css = brandThemeCss('nordicnest');
+    expect(css).toMatch(/button,\s*input,\s*select,\s*textarea\s*\{\s*font-family:\s*inherit/);
+  });
 });

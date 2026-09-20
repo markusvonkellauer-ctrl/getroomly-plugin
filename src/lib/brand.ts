@@ -124,12 +124,20 @@ const BRAND_THEMES: Readonly<Record<PluginBrand, Readonly<Record<string, string>
  * family (which would need a name/URL from the partner and a maintained
  * @font-face), this lets the plugin pick up whatever font is already active
  * on the host page at the point the <getroomly-plugin> element sits, no
- * partner-supplied font name needed. Two rules, not one: `:host` alone
- * would be beaten by index.css's own `h1, h2 { font-family: var(--heading) }`
- * rule, which has higher selector specificity -- matching that exact
- * selector here, at equal specificity, wins on cascade order (this style
- * element is appended after the base one) the same way the :host colour
- * overrides above do.
+ * partner-supplied font name needed. Three selector groups, not one:
+ * `:host` alone would be beaten by index.css's own
+ * `h1, h2 { font-family: var(--heading) }` rule, which has higher selector
+ * specificity -- matching that exact selector here, at equal specificity,
+ * wins on cascade order (this style element is appended after the base
+ * one) the same way the :host colour overrides above do. `button, input,
+ * select, textarea` is its own separate group for the same reason, found
+ * in review: browsers' UA stylesheets commonly give form controls their
+ * own font-family that does NOT reliably inherit from an ancestor by
+ * default (the classic "why does my button ignore my font-family"
+ * problem, historically inconsistent across browsers) -- without this,
+ * every button's label (Upload Photo, Add to Basket, Share, ...) would
+ * stay in the browser's default UI font even though headings and plain
+ * text correctly picked up the host's.
  */
 export function brandThemeCss(brand: PluginBrand | null): string {
   if (!brand) {
@@ -139,5 +147,9 @@ export function brandThemeCss(brand: PluginBrand | null): string {
   const declarations = Object.entries(theme)
     .map(([property, value]) => `  ${property}: ${value};`)
     .join('\n');
-  return `:host {\n${declarations}\n}\nh1, h2, :host {\n  font-family: inherit;\n}`;
+  return (
+    `:host {\n${declarations}\n}\n` +
+    `h1, h2, :host {\n  font-family: inherit;\n}\n` +
+    `button, input, select, textarea {\n  font-family: inherit;\n}`
+  );
 }
