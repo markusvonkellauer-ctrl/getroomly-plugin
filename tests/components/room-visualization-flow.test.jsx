@@ -2028,6 +2028,16 @@ describe('RoomVisualizationFlow', () => {
       expect(newPhotoButton.style.flexGrow).toBe('1');
     });
 
+    test('uses MIME-only probing for canShare (no full base64 decode needed to hide Download)', async () => {
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,###invalid-base64###' });
+
+      expect(screen.queryByText('Download Image')).not.toBeInTheDocument();
+      expect(screen.getByText('Share')).toBeInTheDocument();
+    });
+
     test('a hidden Download button does not stop Share from working', async () => {
       const user = userEvent.setup();
       navigator.share = jest.fn().mockResolvedValue(undefined);

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import {
   AIGenerationError,
   generateRoomVisualization,
@@ -1259,24 +1259,13 @@ export function RoomVisualizationFlow({
   // about which image is "the current one" (found in review: Share used
   // to always send resultImage regardless of the toggle).
   const currentResultImage = showOriginalImage ? uploadedImage : resultImage;
-  // Decoded once per image, not per click and not on every render --
-  // reused by both the capability probe below and handleShareWithFriends
-  // itself, so it only recomputes when the image actually changes.
-  const currentResultBlob = useMemo(
-    () => (currentResultImage ? dataUrlToBlob(currentResultImage) : null),
-    [currentResultImage]
-  );
-  const currentResultFile = useMemo(
-    () =>
-      currentResultBlob && typeof File !== 'undefined'
-        ? new File(
-            [currentResultBlob],
-            `getroomly-design.${extensionForMimeType(currentResultBlob.type)}`,
-            { type: currentResultBlob.type }
-          )
-        : null,
-    [currentResultBlob]
-  );
+  // MIME type only (for canShare probing) -- extracted from the data URL
+  // header without decoding the full base64 payload, so this stays cheap
+  // even for large generated images.
+  const currentResultMimeType = (() => {
+    const match = currentResultImage?.match(/^data:([^;,]+);base64,/);
+    return match?.[1] || null;
+  })();
   // On a browser with the Web Share API, "Download Image" saves into the
   // Files app, not the Photos library -- Dela already covers everything
   // Download does (its own tier-3 fallback IS a plain download) plus a
@@ -1301,19 +1290,24 @@ export function RoomVisualizationFlow({
       typeof navigator === 'undefined' ||
       typeof navigator.share !== 'function' ||
       typeof navigator.canShare !== 'function' ||
-      !currentResultBlob ||
-      !currentResultFile
+      typeof File === 'undefined' ||
+      !currentResultMimeType
     ) {
       setSupportsNativeShare(false);
       return;
     }
 
     try {
-      setSupportsNativeShare(navigator.canShare({ files: [currentResultFile] }));
+      const probeFile = new File(
+        [],
+        `probe.${extensionForMimeType(currentResultMimeType)}`,
+        { type: currentResultMimeType }
+      );
+      setSupportsNativeShare(navigator.canShare({ files: [probeFile] }));
     } catch {
       setSupportsNativeShare(false);
     }
-  }, [currentResultBlob, currentResultFile]);
+  }, [currentResultMimeType]);
 
   // Depends on `step`, `showFeedback`, AND `feedbackState`: bottomControlRef's
   // wrapper only renders when both `step === 'result'` and `showFeedback`
@@ -1649,15 +1643,17 @@ export function RoomVisualizationFlow({
     };
 
     try {
-      // currentResultBlob, computed once per image above (not re-decoded
-      // here) -- reuses the exact same blob the capability check
-      // (supportsNativeShare) already probed with, so what Share attempts
-      // to send is guaranteed to be the same image, in the same shape, as
-      // what was tested for shareability. Also respects the Before/After
-      // toggle now -- found in review: this used to always send
-      // resultImage regardless of which image was on screen.
-      const blob = currentResultBlob;
-      const file = currentResultFile;
+      // Decoded lazily on click -- capability probing above only needs MIME
+      // type, so it intentionally does not decode the full payload during
+      // render. Still respects the Before/After toggle for the actual shared
+      // file.
+      const blob = dataUrlToBlob(currentResultImage);
+      const file =
+        blob && typeof File !== 'undefined'
+          ? new File([blob], `getroomly-design-${Date.now()}.${extensionForMimeType(blob.type)}`, {
+              type: blob.type,
+            })
+          : null;
 
       if (navigator.share && blob && file) {
         try {
