@@ -84,6 +84,17 @@ const NORDIC_NEST_THEME: Readonly<Record<string, string>> = {
   // mid-tone, so it doesn't stay teal while the rest of the processing UI
   // has already switched to black/tint.
   '--getroomly-progress-fill': '#000000',
+  // Square corners on every rectangular/pill element -- NOT applied to any
+  // circular element (favourite button, feedback thumbs, close buttons, tip/
+  // step number badges), which stay literal border-radius:50%/999px-on-a-
+  // square in the component itself, untouched by these tokens entirely (see
+  // index.css's own comment on this token group for why: a circle is a
+  // different shape language, not "very rounded corners").
+  '--getroomly-radius-pill': '0',
+  '--getroomly-radius-card': '0',
+  '--getroomly-radius-image': '0',
+  '--getroomly-radius-sm': '0',
+  '--getroomly-radius-xs': '0',
 };
 
 const SVENSSON_THEME: Readonly<Record<string, string>> = {
@@ -106,6 +117,18 @@ const BRAND_THEMES: Readonly<Record<PluginBrand, Readonly<Record<string, string>
  * wins without needing !important. Returns '' for `null` (no known brand
  * matched -- inject nothing, the default theme already in the base
  * stylesheet applies unchanged).
+ *
+ * Also switches the typeface to `inherit` for both brands ("gärna våra
+ * native typsnitt om möjligt") -- rather than hardcoding a specific font
+ * family (which would need a name/URL from the partner and a maintained
+ * @font-face), this lets the plugin pick up whatever font is already active
+ * on the host page at the point the <getroomly-plugin> element sits, no
+ * partner-supplied font name needed. Two rules, not one: `:host` alone
+ * would be beaten by index.css's own `h1, h2 { font-family: var(--heading) }`
+ * rule, which has higher selector specificity -- matching that exact
+ * selector here, at equal specificity, wins on cascade order (this style
+ * element is appended after the base one) the same way the :host colour
+ * overrides above do.
  */
 export function brandThemeCss(brand: PluginBrand | null): string {
   if (!brand) {
@@ -115,5 +138,5 @@ export function brandThemeCss(brand: PluginBrand | null): string {
   const declarations = Object.entries(theme)
     .map(([property, value]) => `  ${property}: ${value};`)
     .join('\n');
-  return `:host {\n${declarations}\n}`;
+  return `:host {\n${declarations}\n}\nh1, h2, :host {\n  font-family: inherit;\n}`;
 }

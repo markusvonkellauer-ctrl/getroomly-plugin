@@ -846,7 +846,7 @@ export function RoomVisualizationFlow({
         justifyContent: 'space-between',
         padding: '24px',
         backgroundColor: 'rgba(0, 0, 0, 0.02)',
-        borderRadius: '8px',
+        borderRadius: 'var(--getroomly-radius-card)',
         position: 'relative',
         overflow: 'hidden',
         fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -925,7 +925,7 @@ export function RoomVisualizationFlow({
             backgroundColor: 'var(--getroomly-primary-deep)', // bg-primary, white text needs the AA-safe deep tone
             color: '#ffffff', // text-primary-foreground
             border: 'none',
-            borderRadius: '6px',
+            borderRadius: 'var(--getroomly-radius-sm)',
             padding: '8px 12px',
             fontWeight: 'bold',
             letterSpacing: '0.025em',
@@ -964,7 +964,7 @@ export function RoomVisualizationFlow({
           padding: '16px', // p-4
           backgroundColor: 'hsla(30, 20%, 98%, 0.4)', // bg-background/40
           backdropFilter: 'blur(2px)', // backdrop-blur-[2px]
-          borderRadius: '8px', // rounded-lg
+          borderRadius: 'var(--getroomly-radius-card)', // rounded-lg
           border: '1px solid hsla(176, 51%, 36%, 0.05)', // border border-primary/5
           boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)', // shadow-sm
         }}
@@ -1130,7 +1130,7 @@ export function RoomVisualizationFlow({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: '8px',
+        borderRadius: 'var(--getroomly-radius-card)',
         overflow: 'hidden',
       }}
     >
@@ -1777,7 +1777,7 @@ export function RoomVisualizationFlow({
             position: 'relative',
             display: 'inline-block',
             maxWidth: '100%',
-            borderRadius: '18px',
+            borderRadius: 'var(--getroomly-radius-image)',
             overflow: 'hidden',
             // Design's dark image-well background -- visible in any gap
             // between the image's actual rendered box and its container
@@ -1987,7 +1987,7 @@ export function RoomVisualizationFlow({
               boxSizing: 'border-box',
               gap: '4px',
               padding: '4px',
-              borderRadius: '999px',
+              borderRadius: 'var(--getroomly-radius-pill)',
               background: 'rgba(255, 255, 255, 0.94)',
               backdropFilter: 'blur(12px)',
               boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
@@ -2014,7 +2014,7 @@ export function RoomVisualizationFlow({
               onClick={() => handleSetShowOriginal(true)}
               style={{
                 border: 0,
-                borderRadius: '999px',
+                borderRadius: 'var(--getroomly-radius-pill)',
                 padding: '9px 16px',
                 fontSize: '12px',
                 fontWeight: '600',
@@ -2041,7 +2041,7 @@ export function RoomVisualizationFlow({
               onClick={() => handleSetShowOriginal(false)}
               style={{
                 border: 0,
-                borderRadius: '999px',
+                borderRadius: 'var(--getroomly-radius-pill)',
                 padding: '9px 16px',
                 fontSize: '12px',
                 fontWeight: '600',
@@ -2233,7 +2233,7 @@ export function RoomVisualizationFlow({
                   lineHeight: 1.25,
                   color: 'var(--getroomly-icon-default)',
                   padding: '11px 14px',
-                  borderRadius: '999px',
+                  borderRadius: 'var(--getroomly-radius-pill)',
                   background: 'rgba(255, 255, 255, 0.94)',
                   backdropFilter: 'blur(12px)',
                   boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
@@ -2304,7 +2304,7 @@ export function RoomVisualizationFlow({
     // button's HEIGHT (via minHeight above), never its neighbors' widths.
     flex: '1 1 0',
     minWidth: 0,
-    borderRadius: '999px',
+    borderRadius: 'var(--getroomly-radius-pill)',
     cursor: 'pointer',
     display: 'flex',
     fontSize: '14px',
@@ -2408,7 +2408,7 @@ export function RoomVisualizationFlow({
                 textAlign: 'center',
                 fontWeight: '700',
                 height: '54px',
-                borderRadius: '999px',
+                borderRadius: 'var(--getroomly-radius-pill)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -2758,7 +2758,7 @@ export function RoomVisualizationFlow({
                 backgroundColor: 'var(--getroomly-primary-deep)',
                 color: 'white',
                 border: 'none',
-                borderRadius: '6px',
+                borderRadius: 'var(--getroomly-radius-sm)',
                 padding: '10px 20px',
                 fontSize: '14px',
                 fontWeight: '600',
