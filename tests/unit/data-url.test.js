@@ -1,8 +1,8 @@
 /**
- * dataUrlToBlob tests
+ * dataUrlToBlob / mimeTypeFromDataUrl tests
  */
 
-import { dataUrlToBlob } from '../../src/lib/data-url';
+import { dataUrlToBlob, mimeTypeFromDataUrl } from '../../src/lib/data-url';
 
 describe('dataUrlToBlob', () => {
   test('decodes a base64 data: URI into a Blob of the right type and size', () => {
@@ -35,5 +35,27 @@ describe('dataUrlToBlob', () => {
     // decode) and would otherwise silently decode this to a wrong,
     // truncated 'fake' instead of throwing or being rejected.
     expect(dataUrlToBlob('data:image/jpeg;base64,ZmFrZS')).toBeNull();
+  });
+});
+
+describe('mimeTypeFromDataUrl', () => {
+  test('reads the declared MIME type without decoding the payload', () => {
+    expect(mimeTypeFromDataUrl('data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=')).toBe(
+      'image/jpeg'
+    );
+    expect(mimeTypeFromDataUrl('data:image/webp;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=')).toBe(
+      'image/webp'
+    );
+  });
+
+  test('never runs atob() -- returns instantly on a payload too large/malformed for atob to survive', () => {
+    // A deliberately invalid base64 payload (atob() would throw on this)
+    // -- if mimeTypeFromDataUrl decoded anything, this would throw instead
+    // of returning cleanly, proving it only reads the header.
+    expect(mimeTypeFromDataUrl('data:image/jpeg;base64,not-valid-base64!!!')).toBe('image/jpeg');
+  });
+
+  test('returns null for a plain http(s) URL', () => {
+    expect(mimeTypeFromDataUrl('https://cdn.example.com/result.jpg')).toBeNull();
   });
 });

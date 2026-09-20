@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import {
   AIGenerationError,
   generateRoomVisualization,
@@ -9,7 +9,7 @@ import {
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
-import { dataUrlToBlob, extensionForMimeType } from '@/lib/data-url';
+import { dataUrlToBlob, extensionForMimeType, mimeTypeFromDataUrl } from '@/lib/data-url';
 
 interface RoomVisualizationFlowProps {
   productImages: string[];
@@ -93,6 +93,19 @@ export function RoomVisualizationFlow({
     'idle'
   );
   const shareButtonTimerRef = useRef<number | null>(null);
+  // Guards against a second Share click while the first is still in
+  // flight -- found in review: the native share sheet (tier 1) stays open
+  // for as long as the user takes to choose, during which
+  // navigator.share()'s own promise is still pending. A second click
+  // during that window starts a SECOND, independent call; the Web Share
+  // API only allows one share at a time, so that second call's own
+  // navigator.share() rejects with InvalidStateError -- a different error
+  // name than AbortError, so it wasn't caught by the "user cancelled"
+  // check and fell through to the clipboard/download tiers, silently
+  // downloading the image on what the user experienced as a double-tap. A
+  // ref, not state -- this never needs to trigger a re-render, only to be
+  // read/written synchronously inside the handler.
+  const isSharingRef = useRef(false);
 
   // The result image's own maxHeight can't be a plain CSS percentage: its
   // flex ancestor (resultContentRef below) has overflow:hidden + minHeight:0,
@@ -1239,6 +1252,75 @@ export function RoomVisualizationFlow({
   const showFeedback = resultButtons.feedback !== false;
   const showOriginal = resultButtons.showOriginal !== false;
   const showSaveShare = resultButtons.saveShare !== false;
+  // The image Download/Share act on right now -- respects the Before/After
+  // toggle, matching triggerDownload's own selection (see
+  // handleDownloadToDevice below) so Share and Download never disagree
+  // about which image is "the current one" (found in review: Share used
+  // to always send resultImage regardless of the toggle).
+  const currentResultImage = showOriginalImage ? uploadedImage : resultImage;
+  // Only the declared MIME type, not the full decoded Blob -- found in
+  // review: dataUrlToBlob's atob() + per-byte Uint8Array copy running on
+  // every render (whenever the result image or Before/After selection
+  // changes) just to read a type was real, avoidable work for the
+  // multi-megabyte images this app accepts. mimeTypeFromDataUrl never
+  // touches the payload, so this stays cheap regardless of image size --
+  // the real decode stays lazy, inside handleShareWithFriends, only run
+  // when the user actually clicks Share.
+  const currentResultMimeType = currentResultImage ? mimeTypeFromDataUrl(currentResultImage) : null;
+  // On a browser with the Web Share API, "Download Image" saves into the
+  // Files app, not the Photos library -- Dela already covers everything
+  // Download does (its own tier-3 fallback IS a plain download) plus a
+  // native share sheet where "Save Image" saves into Photos directly. So
+  // where the share sheet is available, showing a redundant Download
+  // button that produces a worse-for-the-user result buys nothing.
+  // Capability-checked, not device/viewport-checked -- this doesn't rely
+  // on guessing "mobile" from a breakpoint or user-agent string, which
+  // the codebase avoids elsewhere.
+  //
+  // navigator.share alone isn't enough -- found in review: some browsers
+  // expose it for URL/text sharing only, with no file-sharing support at
+  // all. navigator.canShare({files}) (the Level 2 addition) is what
+  // actually gates whether a File can be shared, so this probes it with
+  // an EMPTY File of the SAME type as the real image -- canShare only
+  // inspects the File's own `type`, not its content, so no decode is
+  // needed for the probe either (see currentResultMimeType above).
+  // typeof navigator.share === 'function' and typeof File === 'undefined'
+  // are also required explicitly -- found in review: canShare present
+  // without a callable share() is a real (if unusual) partial-API case,
+  // and without either check Download could be hidden for a Share button
+  // that could never actually open the native sheet. Computed in useMemo
+  // (synchronously, during render), not useEffect+useState -- canShare()
+  // is a pure, side-effect-free capability read (same class of operation
+  // as reading window.innerWidth), so deferring it into an effect would
+  // only introduce an extra render where Download briefly shows before
+  // disappearing on mount, with no actual correctness benefit. Wrapped in
+  // try/catch and memoized on currentResultMimeType -- found in review:
+  // canShare isn't guaranteed not to throw on every implementation, and
+  // re-running it on every render (not just when the image's type
+  // actually changes) is unnecessary work.
+  const supportsNativeShare = useMemo(() => {
+    if (
+      typeof navigator === 'undefined' ||
+      typeof navigator.share !== 'function' ||
+      typeof navigator.canShare !== 'function' ||
+      typeof File === 'undefined' ||
+      !currentResultMimeType
+    ) {
+      return false;
+    }
+
+    try {
+      return navigator.canShare({
+        files: [
+          new File([], `probe.${extensionForMimeType(currentResultMimeType)}`, {
+            type: currentResultMimeType,
+          }),
+        ],
+      });
+    } catch {
+      return false;
+    }
+  }, [currentResultMimeType]);
 
   // Depends on `step`, `showFeedback`, AND `feedbackState`: bottomControlRef's
   // wrapper only renders when both `step === 'result'` and `showFeedback`
@@ -1353,6 +1435,17 @@ export function RoomVisualizationFlow({
     showAddToBasket,
     showFavorite,
     showSaveShare,
+    // Same class of gap as showSaveShare just above, one level more
+    // specific -- found in review: supportsNativeShare hides just the
+    // Download button (not the whole save/share row) when the CURRENT
+    // image can be shared as a file, and it's derived from
+    // currentResultMimeType, which follows the Before/After toggle. If
+    // the uploaded photo and the generated result ever have different
+    // MIME types with different canShare support (jpeg vs webp, say),
+    // toggling Before/After can show/hide Download without showSaveShare
+    // itself changing, shifting the tertiary row's height the same way
+    // showSaveShare's own toggle already does.
+    supportsNativeShare,
     measureOverlayAnchor,
   ]);
 
@@ -1520,7 +1613,7 @@ export function RoomVisualizationFlow({
   };
 
   const handleDownloadToDevice = () => {
-    triggerDownload(showOriginalImage ? uploadedImage : resultImage);
+    triggerDownload(currentResultImage);
 
     setDownloadButtonConfirmed(true);
     if (downloadButtonTimerRef.current) {
@@ -1556,9 +1649,10 @@ export function RoomVisualizationFlow({
   // Telegram, SMS, ...): the browser already knows which apps the user
   // has installed, we'd only be guessing. Tier 1 already does that job.
   const handleShareWithFriends = async () => {
-    if (!resultImage) {
+    if (!currentResultImage || isSharingRef.current) {
       return;
     }
+    isSharingRef.current = true;
 
     const showShareConfirmation = (status: 'copied' | 'downloaded') => {
       setShareButtonStatus(status);
@@ -1572,82 +1666,87 @@ export function RoomVisualizationFlow({
       }, 2400);
     };
 
-    // Synchronous, not fetch()+blob() -- resultImage is always a data: URI
-    // (see ai-generation.ts and dataUrlToBlob's own comment above), so this
-    // avoids two unnecessary await hops per tier before navigator.share()/
-    // clipboard.write() are even called, shortening the async chain that
-    // can run before a possible tier-3 triggerDownload -- the same
-    // activation-loss risk handleDownloadToDevice's own synchronous
-    // dataUrlToBlob conversion is deliberately avoiding above.
-    const blob = dataUrlToBlob(resultImage);
+    try {
+      // Decoded lazily on click -- capability probing above only needs MIME
+      // type, so it intentionally does not decode the full payload during
+      // render. Still respects the Before/After toggle for the actual shared
+      // file.
+      const blob = currentResultImage ? dataUrlToBlob(currentResultImage) : null;
+      const file =
+        blob && typeof File !== 'undefined'
+          ? new File([blob], `getroomly-design-${Date.now()}.${extensionForMimeType(blob.type)}`, {
+              type: blob.type,
+            })
+          : null;
 
-    if (navigator.share && blob) {
+      if (navigator.share && blob && file) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: `${productName} Room Visualization`,
+            text: `Check out how the ${productName} looks in a room!`,
+          });
+          return;
+        } catch (error) {
+          // Checked structurally, not via `instanceof Error` -- the Web
+          // Share API rejects with a DOMException, which doesn't reliably
+          // satisfy `instanceof Error` across browsers/realms, so that
+          // check could silently fail and fall through even on a plain
+          // user cancellation. Also covers InvalidStateError (a second
+          // share attempted while isSharingRef should already have
+          // blocked it, or a rare race) the same way -- neither name is a
+          // real failure worth falling through the tiers for.
+          const errorName = (error as { name?: string } | null)?.name;
+          if (errorName === 'AbortError' || errorName === 'InvalidStateError') {
+            return;
+          }
+          // A real failure (share API present but the call itself failed) --
+          // fall through to tier 2.
+        }
+      }
+
+      // Tier 2: clipboard. ClipboardItem is unavailable in some browsers
+      // (most notably Firefox, which doesn't support writing images to the
+      // clipboard via this API) -- typeof-checked the same way
+      // ResizeObserver is elsewhere in this file, rather than assuming
+      // support.
       try {
-        const file = new File(
-          [blob],
-          `getroomly-design-${Date.now()}.${extensionForMimeType(blob.type)}`,
-          { type: blob.type }
-        );
-
-        await navigator.share({
-          files: [file],
-          title: `${productName} Room Visualization`,
-          text: `Check out how the ${productName} looks in a room!`,
-        });
-        return;
-      } catch (error) {
-        // Checked structurally, not via `instanceof Error` -- the Web
-        // Share API rejects with a DOMException, which doesn't reliably
-        // satisfy `instanceof Error` across browsers/realms, so that check
-        // could silently fail and fall through even on a plain user
-        // cancellation.
-        if ((error as { name?: string } | null)?.name === 'AbortError') {
-          // User cancelled the share sheet -- not a failure, don't fall
-          // through to the clipboard/download tiers below.
+        if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined' && blob) {
+          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+          showShareConfirmation('copied');
           return;
         }
-        // A real failure (share API present but the call itself failed) --
-        // fall through to tier 2.
+      } catch {
+        // Clipboard write failed (unsupported MIME type, permission denied,
+        // document not focused, ...) -- fall through to tier 3 below,
+        // regardless of the specific reason.
       }
-    }
 
-    // Tier 2: clipboard. ClipboardItem is unavailable in some browsers
-    // (most notably Firefox, which doesn't support writing images to the
-    // clipboard via this API) -- typeof-checked the same way ResizeObserver
-    // is elsewhere in this file, rather than assuming support.
-    try {
-      if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined' && blob) {
-        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-        showShareConfirmation('copied');
-        return;
-      }
-    } catch {
-      // Clipboard write failed (unsupported MIME type, permission denied,
-      // document not focused, ...) -- fall through to tier 3 below,
-      // regardless of the specific reason.
+      // Tier 3: download. Known limitation, accepted rather than solved:
+      // triggerDownload's own click() is synchronous, but by the time
+      // execution reaches here it has already resumed after tier 1's
+      // `await navigator.share(...)` and/or tier 2's
+      // `await navigator.clipboard.write(...)` rejecting -- both are real,
+      // unavoidable browser API calls this three-tier design has to
+      // attempt before it can know tier 3 is needed, so (unlike
+      // handleDownloadToDevice's direct click, which truly never awaits
+      // anything first) this path can't guarantee the click still lands
+      // inside the original user gesture on browsers with strict
+      // transient-activation rules. In practice this only matters for the
+      // narrow combination of: native share unavailable or declined by
+      // the browser, AND the clipboard tier available but failing at
+      // runtime (not just unsupported) -- on a browser strict enough for
+      // activation loss to silently drop the download. Fully closing this
+      // would mean not auto-triggering tier 3 at all and instead
+      // surfacing a manual "tap to download" affordance, which trades the
+      // silent three-tier fallback this was explicitly designed around
+      // for an extra tap in this one edge case -- decided against for
+      // now.
+      triggerDownload(currentResultImage);
+      showShareConfirmation('downloaded');
+    } finally {
+      isSharingRef.current = false;
     }
-
-    // Tier 3: download. Known limitation, accepted rather than solved:
-    // triggerDownload's own click() is synchronous, but by the time
-    // execution reaches here it has already resumed after tier 1's
-    // `await navigator.share(...)` and/or tier 2's
-    // `await navigator.clipboard.write(...)` rejecting -- both are real,
-    // unavoidable browser API calls this three-tier design has to attempt
-    // before it can know tier 3 is needed, so (unlike
-    // handleDownloadToDevice's direct click, which truly never awaits
-    // anything first) this path can't guarantee the click still lands
-    // inside the original user gesture on browsers with strict transient-
-    // activation rules. In practice this only matters for the narrow
-    // combination of: native share unavailable or declined by the browser,
-    // AND the clipboard tier available but failing at runtime (not just
-    // unsupported) -- on a browser strict enough for activation loss to
-    // silently drop the download. Fully closing this would mean not
-    // auto-triggering tier 3 at all and instead surfacing a manual
-    // "tap to download" affordance, which trades the silent three-tier
-    // fallback this was explicitly designed around for an extra tap in
-    // this one edge case -- decided against for now.
-    triggerDownload(showOriginalImage ? uploadedImage : resultImage);
-    showShareConfirmation('downloaded');
   };
 
   const renderResultStep = () => {
@@ -2359,27 +2458,29 @@ export function RoomVisualizationFlow({
 
       {/* gap:4px, not the row's earlier 6px -- tightened to match the
           tertiary buttons' own flex:1 1 0 change above (see
-          tertiaryButtonStyle): three equal-width columns read better
-          slightly closer together than three auto-width buttons did.
-          flexWrap is no longer needed here -- flex:1 1 0 + minWidth:0 on
-          every button guarantees all three always fit on one row
-          (shrinking, never wrapping the ROW itself; a button's own TEXT
-          still wraps to a second line internally via tertiaryButtonStyle's
-          minHeight when needed). */}
+          tertiaryButtonStyle): equal-width columns read better slightly
+          closer together than auto-width buttons did. flexWrap is no
+          longer needed here -- flex:1 1 0 + minWidth:0 on every button
+          guarantees they always fit on one row (shrinking, never wrapping
+          the ROW itself; a button's own TEXT still wraps to a second line
+          internally via tertiaryButtonStyle's minHeight when needed), and
+          re-splits evenly across however many buttons are actually
+          present -- see supportsNativeShare above for why that count can
+          be two, not just three or one. */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
+        {showSaveShare && !supportsNativeShare && (
+          <button onClick={handleDownloadToDevice} style={tertiaryButtonStyle}>
+            {downloadButtonConfirmed ? t.downloadedLabel : t.downloadToDevice}
+          </button>
+        )}
         {showSaveShare && (
-          <>
-            <button onClick={handleDownloadToDevice} style={tertiaryButtonStyle}>
-              {downloadButtonConfirmed ? t.downloadedLabel : t.downloadToDevice}
-            </button>
-            <button onClick={handleShareWithFriends} style={tertiaryButtonStyle}>
-              {shareButtonStatus === 'copied'
-                ? t.copiedLabel
-                : shareButtonStatus === 'downloaded'
-                  ? t.downloadedLabel
-                  : t.shareWithFriends}
-            </button>
-          </>
+          <button onClick={handleShareWithFriends} style={tertiaryButtonStyle}>
+            {shareButtonStatus === 'copied'
+              ? t.copiedLabel
+              : shareButtonStatus === 'downloaded'
+                ? t.downloadedLabel
+                : t.shareWithFriends}
+          </button>
         )}
         <button
           onClick={handleNewPhoto}

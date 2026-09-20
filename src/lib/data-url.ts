@@ -44,6 +44,21 @@ export function dataUrlToBlob(dataUrl: string): Blob | null {
   }
 }
 
+/**
+ * Reads just the declared MIME type from a data: URI's header -- unlike
+ * dataUrlToBlob, this never touches the base64 payload, so it stays cheap
+ * regardless of how large the actual image is (found in review:
+ * dataUrlToBlob's full decode -- atob() plus a per-byte Uint8Array copy --
+ * running on every render just to read a MIME type could block the UI for
+ * the multi-megabyte images this app accepts). Use this wherever only the
+ * type is needed and defer the real decode to the point the bytes
+ * themselves are actually used.
+ */
+export function mimeTypeFromDataUrl(dataUrl: string): string | null {
+  const match = dataUrl.match(/^data:([^;,]+)/);
+  return match ? match[1] : null;
+}
+
 // generateRoomVisualization's backend response can hand back any of these
 // (see ai-generation.ts's blobToInline/urlToInline) -- named per a Blob's
 // own .type, not assumed, so a shared image's filename extension always

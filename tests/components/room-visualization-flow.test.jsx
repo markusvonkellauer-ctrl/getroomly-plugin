@@ -1948,6 +1948,133 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  describe('tertiary row: Download hidden when the Web Share API is available', () => {
+    const renderAtResult = async (generationResult, props = {}) => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    afterEach(() => {
+      delete navigator.share;
+      delete navigator.canShare;
+    });
+
+    test('shows all three tertiary buttons when navigator.share is unavailable (typical desktop)', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      expect(screen.getByText('Download Image')).toBeInTheDocument();
+      expect(screen.getByText('Share')).toBeInTheDocument();
+      expect(screen.getByText('New Photo')).toBeInTheDocument();
+    });
+
+    test('shows Download too when navigator.share exists but navigator.canShare does not -- URL/text-only share support, not file support', async () => {
+      // Found in review: some browsers expose navigator.share for
+      // URL/text sharing without any file-sharing support at all.
+      // navigator.canShare (the Level 2 addition) is what actually gates
+      // whether a File can be shared -- its absence must NOT be treated
+      // the same as file-sharing being available.
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      expect(screen.getByText('Download Image')).toBeInTheDocument();
+    });
+
+    test('shows Download too when navigator.canShare exists but rejects this image (e.g. an unsupported MIME type)', async () => {
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(false);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      expect(screen.getByText('Download Image')).toBeInTheDocument();
+      // The probe was actually asked about this image's own type, not
+      // called blindly.
+      expect(navigator.canShare).toHaveBeenCalledWith(
+        expect.objectContaining({
+          files: [expect.objectContaining({ type: 'image/jpeg' })],
+        })
+      );
+    });
+
+    test('shows Download too when navigator.canShare exists but navigator.share is not callable (partial API)', async () => {
+      // Found in review: canShare present without a callable share() is a
+      // real, if unusual, partial-API case. Without an explicit check,
+      // Download could be hidden for a Share button that can never
+      // actually open the native sheet -- the user would be left with
+      // only the clipboard/download fallback tiers and no direct
+      // one-click download.
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      expect(screen.getByText('Download Image')).toBeInTheDocument();
+    });
+
+    test('hides Download and shows only Share + New Photo when the browser can actually share this image as a file', async () => {
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      expect(screen.queryByText('Download Image')).not.toBeInTheDocument();
+      const shareButton = screen.getByText('Share');
+      const newPhotoButton = screen.getByText('New Photo');
+      expect(shareButton).toBeInTheDocument();
+      expect(newPhotoButton).toBeInTheDocument();
+      // Two-button case, not the solo one-button case -- both still get
+      // the row's equal-share flex-grow, not soloTertiaryButtonStyle's
+      // flex-grow:0 (that's specifically for when showSaveShare is false
+      // and New Photo is the ONLY button; here showSaveShare is still
+      // true, only Download's own visibility is capability-gated).
+      expect(shareButton.style.flexGrow).toBe('1');
+      expect(newPhotoButton.style.flexGrow).toBe('1');
+    });
+
+    test('uses MIME-only probing for canShare (no full base64 decode needed to hide Download)', async () => {
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,###invalid-base64###' });
+
+      expect(screen.queryByText('Download Image')).not.toBeInTheDocument();
+      expect(screen.getByText('Share')).toBeInTheDocument();
+    });
+
+    test('a hidden Download button does not stop Share from working', async () => {
+      const user = userEvent.setup();
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+      await user.click(screen.getByText('Share'));
+
+      expect(navigator.share).toHaveBeenCalledTimes(1);
+    });
+
+    test('Share sends the image currently selected via the Before/After toggle, not always the result image', async () => {
+      const user = userEvent.setup();
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+      // Switch to "Before" -- Download is hidden, so Share is the only
+      // way to save/share the currently-displayed image.
+      await user.click(screen.getByRole('button', { name: 'Before' }));
+      await user.click(screen.getByText('Share'));
+
+      const shareArg = navigator.share.mock.calls[0][0];
+      // makeFile()'s upload content, decoded via the same
+      // uploadedImage/resultImage data: URL path -- what matters here is
+      // that it's NOT the generated result image, matching what the
+      // toggle is currently showing.
+      expect(shareArg.files[0].size).not.toBe('fake-result-image'.length);
+    });
+  });
+
   describe('download to device (Safari data: URI download fix)', () => {
     // generateRoomVisualization always resolves imageUrl as a base64 data:
     // URI (see ai-generation.ts) — real production traffic never hands
@@ -2251,6 +2378,59 @@ describe('RoomVisualizationFlow', () => {
       await user.click(screen.getByText('Share'));
 
       expect(clickSpy).not.toHaveBeenCalled();
+      clickSpy.mockRestore();
+    });
+
+    test('an InvalidStateError from navigator.share() (a second share already in flight) is also treated as a no-op, not a real failure', async () => {
+      const user = userEvent.setup();
+      // What the Web Share API actually rejects with when a second
+      // share() is called while a first one is still pending (the native
+      // share sheet is open) -- a different error name than AbortError, so
+      // it needs its own check rather than being caught incidentally.
+      const invalidStateError = { name: 'InvalidStateError', message: 'already sharing' };
+      navigator.share = jest.fn().mockRejectedValue(invalidStateError);
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      await user.click(screen.getByText('Share'));
+
+      expect(clickSpy).not.toHaveBeenCalled();
+      clickSpy.mockRestore();
+    });
+
+    test('a second click while the first navigator.share() call is still pending does nothing (no fall-through to clipboard/download)', async () => {
+      const user = userEvent.setup();
+      let resolveShare;
+      navigator.share = jest.fn(
+        () =>
+          new Promise(resolve => {
+            resolveShare = resolve;
+          })
+      );
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({ imageUrl: RESULT_DATA_URL });
+      const shareButton = screen.getByText('Share');
+
+      // First click opens the (mocked) native share sheet -- its promise
+      // stays pending, simulating the sheet still being open.
+      await user.click(shareButton);
+      expect(navigator.share).toHaveBeenCalledTimes(1);
+
+      // Second click while the sheet is still "open" -- found in review:
+      // without a concurrency guard, this started a SECOND, independent
+      // handleShareWithFriends() call, whose own navigator.share()
+      // rejected with InvalidStateError and silently fell all the way
+      // through to a download.
+      await user.click(shareButton);
+      expect(navigator.share).toHaveBeenCalledTimes(1);
+      expect(clickSpy).not.toHaveBeenCalled();
+
+      resolveShare();
       clickSpy.mockRestore();
     });
 
