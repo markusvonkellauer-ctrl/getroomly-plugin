@@ -11,14 +11,13 @@ export const pl: TranslationStrings = {
   uploadButton: 'Prześlij zdjęcie',
   uploadHint: 'JPEG, PNG • MAKS. 10 MB',
   tipsHeading: 'Aby uzyskać najlepszy wynik:',
-  tip1Label: 'Kąt i odległość:',
+  tip1Label: 'Kąt:',
   tip1Body:
-    'Stań w odległości 1–2 metrów i skieruj aparat w stronę podłogi. Uwzględnij meble jako punkt odniesienia dla skali.',
-  tip2Label: 'Oświetlenie:',
-  tip2Body:
-    'Upewnij się, że pomieszczenie jest dobrze oświetlone. Unikaj głębokich cieni i ciemnych kątów.',
-  tip3Label: 'Wolna przestrzeń:',
-  tip3Body: 'Usuń drobne przedmioty z podłogi w miejscu, gdzie ma zostać ułożony dywan.',
+    'Fotografuj z odległości 1–2 metrów. Warto uchwycić meble jako punkt odniesienia dla skali.',
+  tip2Label: 'Światło:',
+  tip2Body: 'Upewnij się, że pomieszczenie jest jasne, i unikaj głębokich cieni.',
+  tip3Label: 'Wolna podłoga:',
+  tip3Body: 'Usuń przedmioty z powierzchni, na której ma być ułożony dywan.',
   termsLink: 'Warunki korzystania i prywatność',
   loadingMessages: [
     'Analizowanie geometrii pomieszczenia...',

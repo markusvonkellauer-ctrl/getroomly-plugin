@@ -11,13 +11,13 @@ export const fr: TranslationStrings = {
   uploadButton: 'Téléverser une photo',
   uploadHint: 'JPEG, PNG • MAX 10 Mo',
   tipsHeading: 'Pour de meilleurs résultats :',
-  tip1Label: 'Angle & distance :',
-  tip1Body: "Reculez de 1 à 2 mètres et pointez vers le sol. Incluez des meubles pour l'échelle.",
-  tip2Label: 'Éclairage :',
-  tip2Body:
-    'Assurez-vous que la pièce est bien éclairée. Évitez les ombres profondes ou les coins sombres.',
+  tip1Label: 'Angle :',
+  tip1Body:
+    "Photographiez à 1–2 mètres de distance. Laissez les meubles visibles pour donner l'échelle.",
+  tip2Label: 'Lumière :',
+  tip2Body: 'Veillez à ce que la pièce soit lumineuse et évitez les ombres profondes.',
   tip3Label: 'Espace dégagé :',
-  tip3Body: 'Retirez les petits objets de la zone du sol où le tapis sera placé.',
+  tip3Body: 'Retirez les objets de la zone où le tapis sera placé.',
   termsLink: "Conditions d'utilisation & Confidentialité",
   loadingMessages: [
     'Analyse de la géométrie de la pièce...',
