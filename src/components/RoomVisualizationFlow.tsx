@@ -849,7 +849,14 @@ export function RoomVisualizationFlow({
         borderRadius: 'var(--getroomly-radius-card)',
         position: 'relative',
         overflow: 'hidden',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        // No explicit fontFamily here -- found in review: it redundantly
+        // repeated the exact same stack index.css's own :root, :host rule
+        // already sets by default, but being an inline style, it also
+        // unconditionally beat brand.ts's font-family:inherit override
+        // (inline styles always win over injected <style> rules), so the
+        // entire upload step silently kept the system font stack on a
+        // branded page while every other step correctly inherited the
+        // host's own font.
         textAlign: 'center',
       }}
     >
