@@ -1960,6 +1960,7 @@ describe('RoomVisualizationFlow', () => {
 
     afterEach(() => {
       delete navigator.share;
+      delete navigator.canShare;
     });
 
     test('shows all three tertiary buttons when navigator.share is unavailable (typical desktop)', async () => {
@@ -1970,8 +1971,38 @@ describe('RoomVisualizationFlow', () => {
       expect(screen.getByText('New Photo')).toBeInTheDocument();
     });
 
-    test('hides Download and shows only Share + New Photo when navigator.share is available -- Share already covers everything Download does, plus Save to Photos', async () => {
+    test('shows Download too when navigator.share exists but navigator.canShare does not -- URL/text-only share support, not file support', async () => {
+      // Found in review: some browsers expose navigator.share for
+      // URL/text sharing without any file-sharing support at all.
+      // navigator.canShare (the Level 2 addition) is what actually gates
+      // whether a File can be shared -- its absence must NOT be treated
+      // the same as file-sharing being available.
       navigator.share = jest.fn().mockResolvedValue(undefined);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      expect(screen.getByText('Download Image')).toBeInTheDocument();
+    });
+
+    test('shows Download too when navigator.canShare exists but rejects this image (e.g. an unsupported MIME type)', async () => {
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(false);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      expect(screen.getByText('Download Image')).toBeInTheDocument();
+      // The probe was actually asked about this image's own type, not
+      // called blindly.
+      expect(navigator.canShare).toHaveBeenCalledWith(
+        expect.objectContaining({
+          files: [expect.objectContaining({ type: 'image/jpeg' })],
+        })
+      );
+    });
+
+    test('hides Download and shows only Share + New Photo when the browser can actually share this image as a file', async () => {
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
 
       await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
 
@@ -1992,11 +2023,31 @@ describe('RoomVisualizationFlow', () => {
     test('a hidden Download button does not stop Share from working', async () => {
       const user = userEvent.setup();
       navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
 
       await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
       await user.click(screen.getByText('Share'));
 
       expect(navigator.share).toHaveBeenCalledTimes(1);
+    });
+
+    test('Share sends the image currently selected via the Before/After toggle, not always the result image', async () => {
+      const user = userEvent.setup();
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+      // Switch to "Before" -- Download is hidden, so Share is the only
+      // way to save/share the currently-displayed image.
+      await user.click(screen.getByRole('button', { name: 'Before' }));
+      await user.click(screen.getByText('Share'));
+
+      const shareArg = navigator.share.mock.calls[0][0];
+      // makeFile()'s upload content, decoded via the same
+      // uploadedImage/resultImage data: URL path -- what matters here is
+      // that it's NOT the generated result image, matching what the
+      // toggle is currently showing.
+      expect(shareArg.files[0].size).not.toBe('fake-result-image'.length);
     });
   });
 

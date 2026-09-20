@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import {
   AIGenerationError,
   generateRoomVisualization,
@@ -1252,17 +1252,49 @@ export function RoomVisualizationFlow({
   const showFeedback = resultButtons.feedback !== false;
   const showOriginal = resultButtons.showOriginal !== false;
   const showSaveShare = resultButtons.saveShare !== false;
+  // The image Download/Share act on right now -- respects the Before/After
+  // toggle, matching triggerDownload's own selection (see
+  // handleDownloadToDevice below) so Share and Download never disagree
+  // about which image is "the current one" (found in review: Share used
+  // to always send resultImage regardless of the toggle).
+  const currentResultImage = showOriginalImage ? uploadedImage : resultImage;
+  // Decoded once per image, not per click and not on every render --
+  // reused by both the capability probe below and handleShareWithFriends
+  // itself, so it only recomputes when the image actually changes.
+  const currentResultBlob = useMemo(
+    () => (currentResultImage ? dataUrlToBlob(currentResultImage) : null),
+    [currentResultImage]
+  );
   // On a browser with the Web Share API, "Download Image" saves into the
   // Files app, not the Photos library -- Dela already covers everything
   // Download does (its own tier-3 fallback IS a plain download) plus a
   // native share sheet where "Save Image" saves into Photos directly. So
   // where the share sheet is available, showing a redundant Download
   // button that produces a worse-for-the-user result buys nothing.
-  // Capability-checked, not device/viewport-checked -- this is the exact
-  // feature that actually determines whether Dela can do more than a
-  // plain download, so it doesn't rely on guessing "mobile" from a
-  // breakpoint or user-agent string, which the codebase avoids elsewhere.
-  const supportsNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+  // Capability-checked, not device/viewport-checked -- this doesn't rely
+  // on guessing "mobile" from a breakpoint or user-agent string, which
+  // the codebase avoids elsewhere.
+  //
+  // navigator.share alone isn't enough -- found in review: some browsers
+  // expose it for URL/text sharing only, with no file-sharing support at
+  // all. navigator.canShare({files}) (the Level 2 addition) is what
+  // actually gates whether a File can be shared, so this probes it with
+  // a File of the SAME type as the real image -- canShare only inspects
+  // the File's own `type`, not its content, so an empty probe with the
+  // right MIME type is an accurate, cheap capability test. Either
+  // canShare being unavailable, or it rejecting this image's own MIME
+  // type, correctly leaves Download visible.
+  const supportsNativeShare =
+    typeof navigator !== 'undefined' &&
+    typeof navigator.canShare === 'function' &&
+    !!currentResultBlob &&
+    navigator.canShare({
+      files: [
+        new File([currentResultBlob], `probe.${extensionForMimeType(currentResultBlob.type)}`, {
+          type: currentResultBlob.type,
+        }),
+      ],
+    });
 
   // Depends on `step`, `showFeedback`, AND `feedbackState`: bottomControlRef's
   // wrapper only renders when both `step === 'result'` and `showFeedback`
@@ -1544,7 +1576,7 @@ export function RoomVisualizationFlow({
   };
 
   const handleDownloadToDevice = () => {
-    triggerDownload(showOriginalImage ? uploadedImage : resultImage);
+    triggerDownload(currentResultImage);
 
     setDownloadButtonConfirmed(true);
     if (downloadButtonTimerRef.current) {
@@ -1580,7 +1612,7 @@ export function RoomVisualizationFlow({
   // Telegram, SMS, ...): the browser already knows which apps the user
   // has installed, we'd only be guessing. Tier 1 already does that job.
   const handleShareWithFriends = async () => {
-    if (!resultImage || isSharingRef.current) {
+    if (!currentResultImage || isSharingRef.current) {
       return;
     }
     isSharingRef.current = true;
@@ -1598,15 +1630,14 @@ export function RoomVisualizationFlow({
     };
 
     try {
-      // Synchronous, not fetch()+blob() -- resultImage is always a data:
-      // URI (see ai-generation.ts and dataUrlToBlob's own comment above),
-      // so this avoids two unnecessary await hops per tier before
-      // navigator.share()/clipboard.write() are even called, shortening
-      // the async chain that can run before a possible tier-3
-      // triggerDownload -- the same activation-loss risk
-      // handleDownloadToDevice's own synchronous dataUrlToBlob conversion
-      // is deliberately avoiding above.
-      const blob = dataUrlToBlob(resultImage);
+      // currentResultBlob, computed once per image above (not re-decoded
+      // here) -- reuses the exact same blob the capability check
+      // (supportsNativeShare) already probed with, so what Share attempts
+      // to send is guaranteed to be the same image, in the same shape, as
+      // what was tested for shareability. Also respects the Before/After
+      // toggle now -- found in review: this used to always send
+      // resultImage regardless of which image was on screen.
+      const blob = currentResultBlob;
 
       if (navigator.share && blob) {
         try {
@@ -1677,7 +1708,7 @@ export function RoomVisualizationFlow({
       // silent three-tier fallback this was explicitly designed around
       // for an extra tap in this one edge case -- decided against for
       // now.
-      triggerDownload(showOriginalImage ? uploadedImage : resultImage);
+      triggerDownload(currentResultImage);
       showShareConfirmation('downloaded');
     } finally {
       isSharingRef.current = false;
