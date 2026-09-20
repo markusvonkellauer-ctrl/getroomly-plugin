@@ -32,6 +32,37 @@
   --getroomly-success: hsl(140, 30%, 50%);
   --getroomly-modal-backdrop: rgba(0, 0, 0, 0.5);
 
+  /* Text-role tokens -- one per distinct grey/tinted shade RoomVisualizationFlow.tsx
+   * used to hardcode inline (icons, dialog copy, hints, ...), split out so a
+   * per-partner brand theme (see src/lib/brand.ts) can override them without
+   * touching component code. Values below are exactly what was already
+   * hardcoded at each call site, so this introduction is a no-op for the
+   * default (no brand match) theme -- only a brand override changes anything. */
+  --getroomly-icon-default: #201e1d;
+  --getroomly-tip-label: hsla(20, 10%, 15%, 0.8);
+  --getroomly-tips-heading: hsla(176, 51%, 36%, 0.8);
+  --getroomly-toggle-inactive: #605d5d;
+  --getroomly-tertiary-text: #6b7280;
+  --getroomly-disclaimer: #444141;
+  --getroomly-terms-link: hsla(20, 8%, 45%, 0.6);
+  --getroomly-terms-link-hover: hsla(20, 8%, 45%, 0.8);
+  --getroomly-dialog-heading: #374151;
+  --getroomly-dialog-body: #4b5563;
+  --getroomly-header-title: rgba(0, 0, 0, 0.8);
+  --getroomly-upload-hint: rgba(107, 114, 126, 0.5);
+  /* Processing-step spinner gradient (see loading-spinner.css) -- 3 stops,
+   * light to dark, same as the default teal so a brand override only needs
+   * to redefine these three, not touch the animation/shape rules. */
+  --getroomly-spinner-start: #6ff3dc;
+  --getroomly-spinner-mid: #00c9a7;
+  --getroomly-spinner-end: #00806e;
+  /* Processing-step linear progress bar fill -- same teal as the spinner's
+   * mid stop today, but its own variable (not a var(--getroomly-spinner-mid)
+   * reference) since it's a brand accent element like a button, not part of
+   * the spinner's own gradient -- a brand override maps it to the primary
+   * black, not the spinner's interpolated grey mid-tone. */
+  --getroomly-progress-fill: #00c9a7;
+
   /* Spacing */
   --getroomly-space-xs: 8px;
   --getroomly-space-sm: 16px;
