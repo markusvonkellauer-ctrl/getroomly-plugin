@@ -12,10 +12,10 @@ export const en: TranslationStrings = {
   uploadHint: 'JPEG, PNG • MAX 10MB',
   tipsHeading: 'For best results:',
   tip1Label: 'Angle:',
-  tip1Body: 'Photograph from 1–2 metres away. Let furniture stay in shot for scale.',
+  tip1Body: 'Photograph from 1–2 metres away. Keep furniture in the shot for scale.',
   tip2Label: 'Light:',
   tip2Body: 'Make sure the room is bright and avoid deep shadows.',
-  tip3Label: 'Clear floor:',
+  tip3Label: 'Clear Floor:',
   tip3Body: 'Remove items from the area where the rug will be placed.',
   termsLink: 'Terms of Use & Privacy',
   loadingMessages: [
