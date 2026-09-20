@@ -1284,7 +1284,7 @@ export function RoomVisualizationFlow({
   // right MIME type is an accurate, cheap capability test. Either
   // canShare being unavailable, or it rejecting this image's own MIME
   // type, correctly leaves Download visible.
-  const supportsNativeShare = (() => {
+  const supportsNativeShare = useMemo(() => {
     if (
       typeof navigator === 'undefined' ||
       typeof navigator.share !== 'function' ||
@@ -1305,7 +1305,7 @@ export function RoomVisualizationFlow({
     } catch {
       return false;
     }
-  })();
+  }, [currentResultBlob]);
 
   // Depends on `step`, `showFeedback`, AND `feedbackState`: bottomControlRef's
   // wrapper only renders when both `step === 'result'` and `showFeedback`
