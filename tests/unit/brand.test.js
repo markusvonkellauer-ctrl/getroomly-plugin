@@ -123,4 +123,14 @@ describe('brandThemeCss', () => {
     expect(svensson).toContain('--getroomly-spinner-start: #F1EFED;');
     expect(svensson).toContain('--getroomly-spinner-end: #000000;');
   });
+
+  it('overrides the 0-100% processing progress bar fill to the primary black, not left teal', () => {
+    // Found in review: this is a separate variable from the spinner's own
+    // gradient stops, since it's a brand accent element (like a button),
+    // not part of the spinner blob's decorative gradient -- a version of
+    // this PR shipped without it, leaving the progress bar the only
+    // still-teal element on an otherwise fully black/tint processing screen.
+    expect(brandThemeCss('nordicnest')).toContain('--getroomly-progress-fill: #000000;');
+    expect(brandThemeCss('svensson')).toContain('--getroomly-progress-fill: #000000;');
+  });
 });

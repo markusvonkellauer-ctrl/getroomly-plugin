@@ -1224,7 +1224,7 @@ export function RoomVisualizationFlow({
               top: 0,
               left: 0,
               height: '100%',
-              background: '#00c9a7',
+              background: 'var(--getroomly-progress-fill)',
               // Raw (fractional) progress, not Math.floor — progress advances
               // ~0.64 points per 100ms tick, so flooring only changes the
               // rendered width every 1-2 ticks (100-200ms, unevenly), which

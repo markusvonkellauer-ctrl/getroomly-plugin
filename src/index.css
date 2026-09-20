@@ -56,6 +56,12 @@
   --getroomly-spinner-start: #6ff3dc;
   --getroomly-spinner-mid: #00c9a7;
   --getroomly-spinner-end: #00806e;
+  /* Processing-step linear progress bar fill -- same teal as the spinner's
+   * mid stop today, but its own variable (not a var(--getroomly-spinner-mid)
+   * reference) since it's a brand accent element like a button, not part of
+   * the spinner's own gradient -- a brand override maps it to the primary
+   * black, not the spinner's interpolated grey mid-tone. */
+  --getroomly-progress-fill: #00c9a7;
 
   /* Spacing */
   --getroomly-space-xs: 8px;

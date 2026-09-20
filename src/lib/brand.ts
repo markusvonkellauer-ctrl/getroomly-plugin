@@ -78,6 +78,12 @@ const NORDIC_NEST_THEME: Readonly<Record<string, string>> = {
   '--getroomly-spinner-start': '#F3F3F3',
   '--getroomly-spinner-mid': '#868686',
   '--getroomly-spinner-end': '#000000',
+  // Found in review: the linear progress bar's fill is a brand accent
+  // element (like a button), not part of the spinner's own gradient --
+  // maps to the primary black, not the spinner's interpolated grey
+  // mid-tone, so it doesn't stay teal while the rest of the processing UI
+  // has already switched to black/tint.
+  '--getroomly-progress-fill': '#000000',
 };
 
 const SVENSSON_THEME: Readonly<Record<string, string>> = {
