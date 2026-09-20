@@ -93,6 +93,19 @@ export function RoomVisualizationFlow({
     'idle'
   );
   const shareButtonTimerRef = useRef<number | null>(null);
+  // Guards against a second Share click while the first is still in
+  // flight -- found in review: the native share sheet (tier 1) stays open
+  // for as long as the user takes to choose, during which
+  // navigator.share()'s own promise is still pending. A second click
+  // during that window starts a SECOND, independent call; the Web Share
+  // API only allows one share at a time, so that second call's own
+  // navigator.share() rejects with InvalidStateError -- a different error
+  // name than AbortError, so it wasn't caught by the "user cancelled"
+  // check and fell through to the clipboard/download tiers, silently
+  // downloading the image on what the user experienced as a double-tap. A
+  // ref, not state -- this never needs to trigger a re-render, only to be
+  // read/written synchronously inside the handler.
+  const isSharingRef = useRef(false);
 
   // The result image's own maxHeight can't be a plain CSS percentage: its
   // flex ancestor (resultContentRef below) has overflow:hidden + minHeight:0,
@@ -1239,6 +1252,17 @@ export function RoomVisualizationFlow({
   const showFeedback = resultButtons.feedback !== false;
   const showOriginal = resultButtons.showOriginal !== false;
   const showSaveShare = resultButtons.saveShare !== false;
+  // On a browser with the Web Share API, "Download Image" saves into the
+  // Files app, not the Photos library -- Dela already covers everything
+  // Download does (its own tier-3 fallback IS a plain download) plus a
+  // native share sheet where "Save Image" saves into Photos directly. So
+  // where the share sheet is available, showing a redundant Download
+  // button that produces a worse-for-the-user result buys nothing.
+  // Capability-checked, not device/viewport-checked -- this is the exact
+  // feature that actually determines whether Dela can do more than a
+  // plain download, so it doesn't rely on guessing "mobile" from a
+  // breakpoint or user-agent string, which the codebase avoids elsewhere.
+  const supportsNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
 
   // Depends on `step`, `showFeedback`, AND `feedbackState`: bottomControlRef's
   // wrapper only renders when both `step === 'result'` and `showFeedback`
@@ -1556,9 +1580,10 @@ export function RoomVisualizationFlow({
   // Telegram, SMS, ...): the browser already knows which apps the user
   // has installed, we'd only be guessing. Tier 1 already does that job.
   const handleShareWithFriends = async () => {
-    if (!resultImage) {
+    if (!resultImage || isSharingRef.current) {
       return;
     }
+    isSharingRef.current = true;
 
     const showShareConfirmation = (status: 'copied' | 'downloaded') => {
       setShareButtonStatus(status);
@@ -1572,82 +1597,91 @@ export function RoomVisualizationFlow({
       }, 2400);
     };
 
-    // Synchronous, not fetch()+blob() -- resultImage is always a data: URI
-    // (see ai-generation.ts and dataUrlToBlob's own comment above), so this
-    // avoids two unnecessary await hops per tier before navigator.share()/
-    // clipboard.write() are even called, shortening the async chain that
-    // can run before a possible tier-3 triggerDownload -- the same
-    // activation-loss risk handleDownloadToDevice's own synchronous
-    // dataUrlToBlob conversion is deliberately avoiding above.
-    const blob = dataUrlToBlob(resultImage);
+    try {
+      // Synchronous, not fetch()+blob() -- resultImage is always a data:
+      // URI (see ai-generation.ts and dataUrlToBlob's own comment above),
+      // so this avoids two unnecessary await hops per tier before
+      // navigator.share()/clipboard.write() are even called, shortening
+      // the async chain that can run before a possible tier-3
+      // triggerDownload -- the same activation-loss risk
+      // handleDownloadToDevice's own synchronous dataUrlToBlob conversion
+      // is deliberately avoiding above.
+      const blob = dataUrlToBlob(resultImage);
 
-    if (navigator.share && blob) {
+      if (navigator.share && blob) {
+        try {
+          const file = new File(
+            [blob],
+            `getroomly-design-${Date.now()}.${extensionForMimeType(blob.type)}`,
+            { type: blob.type }
+          );
+
+          await navigator.share({
+            files: [file],
+            title: `${productName} Room Visualization`,
+            text: `Check out how the ${productName} looks in a room!`,
+          });
+          return;
+        } catch (error) {
+          // Checked structurally, not via `instanceof Error` -- the Web
+          // Share API rejects with a DOMException, which doesn't reliably
+          // satisfy `instanceof Error` across browsers/realms, so that
+          // check could silently fail and fall through even on a plain
+          // user cancellation. Also covers InvalidStateError (a second
+          // share attempted while isSharingRef should already have
+          // blocked it, or a rare race) the same way -- neither name is a
+          // real failure worth falling through the tiers for.
+          const errorName = (error as { name?: string } | null)?.name;
+          if (errorName === 'AbortError' || errorName === 'InvalidStateError') {
+            return;
+          }
+          // A real failure (share API present but the call itself failed) --
+          // fall through to tier 2.
+        }
+      }
+
+      // Tier 2: clipboard. ClipboardItem is unavailable in some browsers
+      // (most notably Firefox, which doesn't support writing images to the
+      // clipboard via this API) -- typeof-checked the same way
+      // ResizeObserver is elsewhere in this file, rather than assuming
+      // support.
       try {
-        const file = new File(
-          [blob],
-          `getroomly-design-${Date.now()}.${extensionForMimeType(blob.type)}`,
-          { type: blob.type }
-        );
-
-        await navigator.share({
-          files: [file],
-          title: `${productName} Room Visualization`,
-          text: `Check out how the ${productName} looks in a room!`,
-        });
-        return;
-      } catch (error) {
-        // Checked structurally, not via `instanceof Error` -- the Web
-        // Share API rejects with a DOMException, which doesn't reliably
-        // satisfy `instanceof Error` across browsers/realms, so that check
-        // could silently fail and fall through even on a plain user
-        // cancellation.
-        if ((error as { name?: string } | null)?.name === 'AbortError') {
-          // User cancelled the share sheet -- not a failure, don't fall
-          // through to the clipboard/download tiers below.
+        if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined' && blob) {
+          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+          showShareConfirmation('copied');
           return;
         }
-        // A real failure (share API present but the call itself failed) --
-        // fall through to tier 2.
+      } catch {
+        // Clipboard write failed (unsupported MIME type, permission denied,
+        // document not focused, ...) -- fall through to tier 3 below,
+        // regardless of the specific reason.
       }
-    }
 
-    // Tier 2: clipboard. ClipboardItem is unavailable in some browsers
-    // (most notably Firefox, which doesn't support writing images to the
-    // clipboard via this API) -- typeof-checked the same way ResizeObserver
-    // is elsewhere in this file, rather than assuming support.
-    try {
-      if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined' && blob) {
-        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-        showShareConfirmation('copied');
-        return;
-      }
-    } catch {
-      // Clipboard write failed (unsupported MIME type, permission denied,
-      // document not focused, ...) -- fall through to tier 3 below,
-      // regardless of the specific reason.
+      // Tier 3: download. Known limitation, accepted rather than solved:
+      // triggerDownload's own click() is synchronous, but by the time
+      // execution reaches here it has already resumed after tier 1's
+      // `await navigator.share(...)` and/or tier 2's
+      // `await navigator.clipboard.write(...)` rejecting -- both are real,
+      // unavoidable browser API calls this three-tier design has to
+      // attempt before it can know tier 3 is needed, so (unlike
+      // handleDownloadToDevice's direct click, which truly never awaits
+      // anything first) this path can't guarantee the click still lands
+      // inside the original user gesture on browsers with strict
+      // transient-activation rules. In practice this only matters for the
+      // narrow combination of: native share unavailable or declined by
+      // the browser, AND the clipboard tier available but failing at
+      // runtime (not just unsupported) -- on a browser strict enough for
+      // activation loss to silently drop the download. Fully closing this
+      // would mean not auto-triggering tier 3 at all and instead
+      // surfacing a manual "tap to download" affordance, which trades the
+      // silent three-tier fallback this was explicitly designed around
+      // for an extra tap in this one edge case -- decided against for
+      // now.
+      triggerDownload(showOriginalImage ? uploadedImage : resultImage);
+      showShareConfirmation('downloaded');
+    } finally {
+      isSharingRef.current = false;
     }
-
-    // Tier 3: download. Known limitation, accepted rather than solved:
-    // triggerDownload's own click() is synchronous, but by the time
-    // execution reaches here it has already resumed after tier 1's
-    // `await navigator.share(...)` and/or tier 2's
-    // `await navigator.clipboard.write(...)` rejecting -- both are real,
-    // unavoidable browser API calls this three-tier design has to attempt
-    // before it can know tier 3 is needed, so (unlike
-    // handleDownloadToDevice's direct click, which truly never awaits
-    // anything first) this path can't guarantee the click still lands
-    // inside the original user gesture on browsers with strict transient-
-    // activation rules. In practice this only matters for the narrow
-    // combination of: native share unavailable or declined by the browser,
-    // AND the clipboard tier available but failing at runtime (not just
-    // unsupported) -- on a browser strict enough for activation loss to
-    // silently drop the download. Fully closing this would mean not
-    // auto-triggering tier 3 at all and instead surfacing a manual
-    // "tap to download" affordance, which trades the silent three-tier
-    // fallback this was explicitly designed around for an extra tap in
-    // this one edge case -- decided against for now.
-    triggerDownload(showOriginalImage ? uploadedImage : resultImage);
-    showShareConfirmation('downloaded');
   };
 
   const renderResultStep = () => {
@@ -2359,27 +2393,29 @@ export function RoomVisualizationFlow({
 
       {/* gap:4px, not the row's earlier 6px -- tightened to match the
           tertiary buttons' own flex:1 1 0 change above (see
-          tertiaryButtonStyle): three equal-width columns read better
-          slightly closer together than three auto-width buttons did.
-          flexWrap is no longer needed here -- flex:1 1 0 + minWidth:0 on
-          every button guarantees all three always fit on one row
-          (shrinking, never wrapping the ROW itself; a button's own TEXT
-          still wraps to a second line internally via tertiaryButtonStyle's
-          minHeight when needed). */}
+          tertiaryButtonStyle): equal-width columns read better slightly
+          closer together than auto-width buttons did. flexWrap is no
+          longer needed here -- flex:1 1 0 + minWidth:0 on every button
+          guarantees they always fit on one row (shrinking, never wrapping
+          the ROW itself; a button's own TEXT still wraps to a second line
+          internally via tertiaryButtonStyle's minHeight when needed), and
+          re-splits evenly across however many buttons are actually
+          present -- see supportsNativeShare above for why that count can
+          be two, not just three or one. */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
+        {showSaveShare && !supportsNativeShare && (
+          <button onClick={handleDownloadToDevice} style={tertiaryButtonStyle}>
+            {downloadButtonConfirmed ? t.downloadedLabel : t.downloadToDevice}
+          </button>
+        )}
         {showSaveShare && (
-          <>
-            <button onClick={handleDownloadToDevice} style={tertiaryButtonStyle}>
-              {downloadButtonConfirmed ? t.downloadedLabel : t.downloadToDevice}
-            </button>
-            <button onClick={handleShareWithFriends} style={tertiaryButtonStyle}>
-              {shareButtonStatus === 'copied'
-                ? t.copiedLabel
-                : shareButtonStatus === 'downloaded'
-                  ? t.downloadedLabel
-                  : t.shareWithFriends}
-            </button>
-          </>
+          <button onClick={handleShareWithFriends} style={tertiaryButtonStyle}>
+            {shareButtonStatus === 'copied'
+              ? t.copiedLabel
+              : shareButtonStatus === 'downloaded'
+                ? t.downloadedLabel
+                : t.shareWithFriends}
+          </button>
         )}
         <button
           onClick={handleNewPhoto}
