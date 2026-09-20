@@ -303,6 +303,7 @@ function App() {
                 zIndex: 50,
                 width: '100%',
                 maxWidth: '520px',
+                borderRadius: 'var(--getroomly-radius-modal)',
               }}
               onClick={e => e.stopPropagation()}
             >

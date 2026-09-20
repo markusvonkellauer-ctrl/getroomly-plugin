@@ -139,6 +139,7 @@ describe('brandThemeCss', () => {
       '--getroomly-radius-pill',
       '--getroomly-radius-card',
       '--getroomly-radius-image',
+      '--getroomly-radius-modal',
       '--getroomly-radius-sm',
       '--getroomly-radius-xs',
     ];

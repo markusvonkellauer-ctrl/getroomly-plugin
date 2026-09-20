@@ -251,6 +251,18 @@ describe('App — trigger button visibility', () => {
     expect(errorHeading.parentElement.style.fontFamily).toBe('');
   });
 
+  it('the modal container uses the brand radius token, so branded pages can flatten its shell too', async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(true);
+    render(<App />);
+    await waitForAvailability();
+
+    act(() => {
+      screen.getByRole('button', { name: /visualize in your room/i }).click();
+    });
+
+    expect(screen.getByRole('dialog').style.borderRadius).toBe('var(--getroomly-radius-modal)');
+  });
+
   it('still respects config.hideButton regardless of availability', async () => {
     checkPartnerAvailability.mockResolvedValueOnce(true);
     window.GetRoomlyEmbedConfig = { ...baseEmbedConfig, hideButton: true };

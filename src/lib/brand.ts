@@ -93,6 +93,7 @@ const NORDIC_NEST_THEME: Readonly<Record<string, string>> = {
   '--getroomly-radius-pill': '0',
   '--getroomly-radius-card': '0',
   '--getroomly-radius-image': '0',
+  '--getroomly-radius-modal': '0',
   '--getroomly-radius-sm': '0',
   '--getroomly-radius-xs': '0',
 };
