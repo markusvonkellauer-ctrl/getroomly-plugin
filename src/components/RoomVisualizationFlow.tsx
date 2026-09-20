@@ -1627,7 +1627,25 @@ export function RoomVisualizationFlow({
       // regardless of the specific reason.
     }
 
-    // Tier 3: download.
+    // Tier 3: download. Known limitation, accepted rather than solved:
+    // triggerDownload's own click() is synchronous, but by the time
+    // execution reaches here it has already resumed after tier 1's
+    // `await navigator.share(...)` and/or tier 2's
+    // `await navigator.clipboard.write(...)` rejecting -- both are real,
+    // unavoidable browser API calls this three-tier design has to attempt
+    // before it can know tier 3 is needed, so (unlike
+    // handleDownloadToDevice's direct click, which truly never awaits
+    // anything first) this path can't guarantee the click still lands
+    // inside the original user gesture on browsers with strict transient-
+    // activation rules. In practice this only matters for the narrow
+    // combination of: native share unavailable or declined by the browser,
+    // AND the clipboard tier available but failing at runtime (not just
+    // unsupported) -- on a browser strict enough for activation loss to
+    // silently drop the download. Fully closing this would mean not
+    // auto-triggering tier 3 at all and instead surfacing a manual
+    // "tap to download" affordance, which trades the silent three-tier
+    // fallback this was explicitly designed around for an extra tap in
+    // this one edge case -- decided against for now.
     triggerDownload(showOriginalImage ? uploadedImage : resultImage);
     showShareConfirmation('downloaded');
   };
