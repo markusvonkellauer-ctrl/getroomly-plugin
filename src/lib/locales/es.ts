@@ -11,14 +11,13 @@ export const es: TranslationStrings = {
   uploadButton: 'Subir foto',
   uploadHint: 'JPEG, PNG • MÁX 10 MB',
   tipsHeading: 'Para obtener los mejores resultados:',
-  tip1Label: 'Ángulo y distancia:',
+  tip1Label: 'Ángulo:',
   tip1Body:
-    'Retrocede 1–2 metros y apunta hacia el suelo. Incluye muebles para tener una referencia de escala.',
-  tip2Label: 'Iluminación:',
-  tip2Body:
-    'Asegúrate de que la habitación esté bien iluminada. Evita sombras profundas o rincones oscuros.',
-  tip3Label: 'Espacio despejado:',
-  tip3Body: 'Retira objetos pequeños del área del suelo donde se colocará la alfombra.',
+    'Fotografía desde una distancia de 1–2 metros. Deja que se vean los muebles como referencia de escala.',
+  tip2Label: 'Luz:',
+  tip2Body: 'Asegúrate de que la habitación esté luminosa y evita las sombras profundas.',
+  tip3Label: 'Suelo despejado:',
+  tip3Body: 'Retira los objetos de la zona donde se colocará la alfombra.',
   termsLink: 'Condiciones de uso y privacidad',
   loadingMessages: [
     'Analizando la geometría de la habitación...',

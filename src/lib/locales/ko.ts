@@ -11,13 +11,12 @@ export const ko: TranslationStrings = {
   uploadButton: '사진 업로드',
   uploadHint: 'JPEG, PNG • 최대 10MB',
   tipsHeading: '최상의 결과를 위한 팁:',
-  tip1Label: '각도 및 거리:',
-  tip1Body:
-    '1~2미터 뒤로 물러나 바닥을 향해 촬영하세요. 크기 비교를 위해 가구가 함께 보이도록 하세요.',
+  tip1Label: '각도:',
+  tip1Body: '1~2미터 거리에서 촬영하세요. 크기 비교를 위해 가구가 함께 보이도록 두세요.',
   tip2Label: '조명:',
-  tip2Body: '방이 충분히 밝은지 확인하세요. 깊은 그림자나 어두운 구석은 피해 주세요.',
-  tip3Label: '깔끔한 공간:',
-  tip3Body: '러그가 놓일 바닥 영역의 작은 물건들을 치워 주세요.',
+  tip2Body: '방이 밝은지 확인하고 짙은 그림자는 피해 주세요.',
+  tip3Label: '바닥 정리:',
+  tip3Body: '러그가 놓일 바닥 영역의 물건을 치워 주세요.',
   termsLink: '이용약관 및 개인정보처리방침',
   loadingMessages: [
     '방의 구조를 분석하는 중...',

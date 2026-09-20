@@ -12,14 +12,13 @@ export const pt: TranslationStrings = {
   uploadButton: 'Carregar fotografia',
   uploadHint: 'JPEG, PNG • MÁX 10MB',
   tipsHeading: 'Para obter os melhores resultados:',
-  tip1Label: 'Ângulo e distância:',
+  tip1Label: 'Ângulo:',
   tip1Body:
-    'Afaste-se 1–2 metros e aponte para o chão. Inclua mobiliário como referência de escala.',
-  tip2Label: 'Iluminação:',
-  tip2Body:
-    'Certifique-se de que a divisão está bem iluminada. Evite sombras profundas ou cantos escuros.',
-  tip3Label: 'Espaço livre:',
-  tip3Body: 'Retire pequenos objetos da área do chão onde o tapete será colocado.',
+    'Fotografe a uma distância de 1–2 metros. Deixe o mobiliário visível como referência de escala.',
+  tip2Label: 'Luz:',
+  tip2Body: 'Certifique-se de que a divisão está bem iluminada e evite sombras profundas.',
+  tip3Label: 'Piso livre:',
+  tip3Body: 'Retire objetos da área onde o tapete será colocado.',
   termsLink: 'Termos de utilização e privacidade',
   loadingMessages: [
     'A analisar a geometria da divisão...',

@@ -11,15 +11,13 @@ export const de: TranslationStrings = {
   uploadButton: 'Foto hochladen',
   uploadHint: 'JPEG, PNG • MAX. 10 MB',
   tipsHeading: 'Für beste Ergebnisse:',
-  tip1Label: 'Winkel & Abstand:',
+  tip1Label: 'Winkel:',
   tip1Body:
-    'Stellen Sie sich 1–2 Meter zurück und richten Sie die Kamera auf den Boden. Erfassen Sie Möbel zur Maßstabsreferenz.',
-  tip2Label: 'Beleuchtung:',
-  tip2Body:
-    'Stellen Sie sicher, dass der Raum gut beleuchtet ist. Vermeiden Sie tiefe Schatten oder dunkle Ecken.',
+    'Fotografieren Sie aus 1–2 Metern Entfernung. Lassen Sie ruhig Möbel im Bild, als Maßstab.',
+  tip2Label: 'Licht:',
+  tip2Body: 'Achten Sie darauf, dass der Raum hell ist, und vermeiden Sie tiefe Schatten.',
   tip3Label: 'Freie Fläche:',
-  tip3Body:
-    'Entfernen Sie kleine Gegenstände von der Bodenfläche, auf der der Teppich platziert werden soll.',
+  tip3Body: 'Entfernen Sie Gegenstände von der Fläche, auf der der Teppich platziert werden soll.',
   termsLink: 'Nutzungsbedingungen & Datenschutz',
   loadingMessages: [
     'Raumgeometrie wird analysiert...',
