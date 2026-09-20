@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import {
   AIGenerationError,
   generateRoomVisualization,
@@ -9,7 +9,7 @@ import {
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
-import { dataUrlToBlob, extensionForMimeType } from '@/lib/data-url';
+import { dataUrlToBlob, extensionForMimeType, mimeTypeFromDataUrl } from '@/lib/data-url';
 
 interface RoomVisualizationFlowProps {
   productImages: string[];
@@ -92,7 +92,6 @@ export function RoomVisualizationFlow({
   const [shareButtonStatus, setShareButtonStatus] = useState<'idle' | 'copied' | 'downloaded'>(
     'idle'
   );
-  const [supportsNativeShare, setSupportsNativeShare] = useState(false);
   const shareButtonTimerRef = useRef<number | null>(null);
   // Guards against a second Share click while the first is still in
   // flight -- found in review: the native share sheet (tier 1) stays open
@@ -1259,13 +1258,15 @@ export function RoomVisualizationFlow({
   // about which image is "the current one" (found in review: Share used
   // to always send resultImage regardless of the toggle).
   const currentResultImage = showOriginalImage ? uploadedImage : resultImage;
-  // MIME type only (for canShare probing) -- extracted from the data URL
-  // header without decoding the full base64 payload, so this stays cheap
-  // even for large generated images.
-  const currentResultMimeType = (() => {
-    const match = currentResultImage?.match(/^data:([^;,]+);base64,/);
-    return match?.[1] || null;
-  })();
+  // Only the declared MIME type, not the full decoded Blob -- found in
+  // review: dataUrlToBlob's atob() + per-byte Uint8Array copy running on
+  // every render (whenever the result image or Before/After selection
+  // changes) just to read a type was real, avoidable work for the
+  // multi-megabyte images this app accepts. mimeTypeFromDataUrl never
+  // touches the payload, so this stays cheap regardless of image size --
+  // the real decode stays lazy, inside handleShareWithFriends, only run
+  // when the user actually clicks Share.
+  const currentResultMimeType = currentResultImage ? mimeTypeFromDataUrl(currentResultImage) : null;
   // On a browser with the Web Share API, "Download Image" saves into the
   // Files app, not the Photos library -- Dela already covers everything
   // Download does (its own tier-3 fallback IS a plain download) plus a
@@ -1280,12 +1281,24 @@ export function RoomVisualizationFlow({
   // expose it for URL/text sharing only, with no file-sharing support at
   // all. navigator.canShare({files}) (the Level 2 addition) is what
   // actually gates whether a File can be shared, so this probes it with
-  // a File of the SAME type as the real image -- canShare only inspects
-  // the File's own `type`, not its content, so an empty probe with the
-  // right MIME type is an accurate, cheap capability test. Either
-  // canShare being unavailable, or it rejecting this image's own MIME
-  // type, correctly leaves Download visible.
-  useEffect(() => {
+  // an EMPTY File of the SAME type as the real image -- canShare only
+  // inspects the File's own `type`, not its content, so no decode is
+  // needed for the probe either (see currentResultMimeType above).
+  // typeof navigator.share === 'function' and typeof File === 'undefined'
+  // are also required explicitly -- found in review: canShare present
+  // without a callable share() is a real (if unusual) partial-API case,
+  // and without either check Download could be hidden for a Share button
+  // that could never actually open the native sheet. Computed in useMemo
+  // (synchronously, during render), not useEffect+useState -- canShare()
+  // is a pure, side-effect-free capability read (same class of operation
+  // as reading window.innerWidth), so deferring it into an effect would
+  // only introduce an extra render where Download briefly shows before
+  // disappearing on mount, with no actual correctness benefit. Wrapped in
+  // try/catch and memoized on currentResultMimeType -- found in review:
+  // canShare isn't guaranteed not to throw on every implementation, and
+  // re-running it on every render (not just when the image's type
+  // actually changes) is unnecessary work.
+  const supportsNativeShare = useMemo(() => {
     if (
       typeof navigator === 'undefined' ||
       typeof navigator.share !== 'function' ||
@@ -1293,19 +1306,19 @@ export function RoomVisualizationFlow({
       typeof File === 'undefined' ||
       !currentResultMimeType
     ) {
-      setSupportsNativeShare(false);
-      return;
+      return false;
     }
 
     try {
-      const probeFile = new File(
-        [],
-        `probe.${extensionForMimeType(currentResultMimeType)}`,
-        { type: currentResultMimeType }
-      );
-      setSupportsNativeShare(navigator.canShare({ files: [probeFile] }));
+      return navigator.canShare({
+        files: [
+          new File([], `probe.${extensionForMimeType(currentResultMimeType)}`, {
+            type: currentResultMimeType,
+          }),
+        ],
+      });
     } catch {
-      setSupportsNativeShare(false);
+      return false;
     }
   }, [currentResultMimeType]);
 
@@ -1647,7 +1660,7 @@ export function RoomVisualizationFlow({
       // type, so it intentionally does not decode the full payload during
       // render. Still respects the Before/After toggle for the actual shared
       // file.
-      const blob = dataUrlToBlob(currentResultImage);
+      const blob = currentResultImage ? dataUrlToBlob(currentResultImage) : null;
       const file =
         blob && typeof File !== 'undefined'
           ? new File([blob], `getroomly-design-${Date.now()}.${extensionForMimeType(blob.type)}`, {

@@ -1971,14 +1971,6 @@ describe('RoomVisualizationFlow', () => {
       expect(screen.getByText('New Photo')).toBeInTheDocument();
     });
 
-    test('shows Download when navigator.canShare exists but navigator.share is unavailable', async () => {
-      navigator.canShare = jest.fn().mockReturnValue(true);
-
-      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
-
-      expect(screen.getByText('Download Image')).toBeInTheDocument();
-    });
-
     test('shows Download too when navigator.share exists but navigator.canShare does not -- URL/text-only share support, not file support', async () => {
       // Found in review: some browsers expose navigator.share for
       // URL/text sharing without any file-sharing support at all.
@@ -2006,6 +1998,20 @@ describe('RoomVisualizationFlow', () => {
           files: [expect.objectContaining({ type: 'image/jpeg' })],
         })
       );
+    });
+
+    test('shows Download too when navigator.canShare exists but navigator.share is not callable (partial API)', async () => {
+      // Found in review: canShare present without a callable share() is a
+      // real, if unusual, partial-API case. Without an explicit check,
+      // Download could be hidden for a Share button that can never
+      // actually open the native sheet -- the user would be left with
+      // only the clipboard/download fallback tiers and no direct
+      // one-click download.
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      expect(screen.getByText('Download Image')).toBeInTheDocument();
     });
 
     test('hides Download and shows only Share + New Photo when the browser can actually share this image as a file', async () => {
