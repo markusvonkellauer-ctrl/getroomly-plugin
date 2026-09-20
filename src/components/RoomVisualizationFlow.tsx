@@ -9,7 +9,7 @@ import {
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
-import { dataUrlToBlob } from '@/lib/data-url';
+import { dataUrlToBlob, extensionForMimeType } from '@/lib/data-url';
 
 interface RoomVisualizationFlowProps {
   productImages: string[];
@@ -1583,7 +1583,11 @@ export function RoomVisualizationFlow({
 
     if (navigator.share && blob) {
       try {
-        const file = new File([blob], `getroomly-design-${Date.now()}.png`, { type: blob.type });
+        const file = new File(
+          [blob],
+          `getroomly-design-${Date.now()}.${extensionForMimeType(blob.type)}`,
+          { type: blob.type }
+        );
 
         await navigator.share({
           files: [file],
@@ -2208,6 +2212,22 @@ export function RoomVisualizationFlow({
     minWidth: 'auto',
   };
 
+  // Shared by every visually-hidden role="status" aria-live="polite" node
+  // in this footer (addedToBasketAnnouncement, downloadedAnnouncement,
+  // copiedAnnouncement below) -- the standard clip-rect pattern, kept in
+  // one place so all three stay in sync.
+  const visuallyHiddenStyle: React.CSSProperties = {
+    position: 'absolute',
+    width: '1px',
+    height: '1px',
+    margin: '-1px',
+    padding: 0,
+    overflow: 'hidden',
+    clip: 'rect(0 0 0 0)',
+    whiteSpace: 'nowrap',
+    border: 0,
+  };
+
   const renderResultFooter = () => (
     <div
       style={{
@@ -2296,21 +2316,7 @@ export function RoomVisualizationFlow({
           its own, so this full-sentence node carries the confirmation
           instead of relying on the visible "Tillagt ✓" swap alone. */}
       {showAddToBasket && (
-        <span
-          role="status"
-          aria-live="polite"
-          style={{
-            position: 'absolute',
-            width: '1px',
-            height: '1px',
-            margin: '-1px',
-            padding: 0,
-            overflow: 'hidden',
-            clip: 'rect(0 0 0 0)',
-            whiteSpace: 'nowrap',
-            border: 0,
-          }}
-        >
+        <span role="status" aria-live="polite" style={visuallyHiddenStyle}>
           {addedToBasketVisible ? t.addedToBasketAnnouncement : ''}
         </span>
       )}
@@ -2367,32 +2373,27 @@ export function RoomVisualizationFlow({
       {/* Same reasoning as addedToBasketAnnouncement above -- a label
           change on the Download/Share buttons, which already have focus
           from the click that triggered it, isn't reliably announced by all
-          screen readers on its own. One shared node covers both buttons:
-          only one of them can show a confirmation at a time. */}
+          screen readers on its own. Two SEPARATE nodes, not one shared
+          node -- downloadButtonConfirmed and shareButtonStatus are
+          independent states (found in review: downloading, then sharing
+          via the clipboard tier before the download's own 2400ms
+          confirmation expires, is a real sequence a shopper can trigger),
+          so a shared node with one state taking precedence could silently
+          drop the other's announcement, or fail to re-announce at all if
+          the winning state's text happened to stay the same. */}
       {showSaveShare && (
-        <span
-          role="status"
-          aria-live="polite"
-          style={{
-            position: 'absolute',
-            width: '1px',
-            height: '1px',
-            margin: '-1px',
-            padding: 0,
-            overflow: 'hidden',
-            clip: 'rect(0 0 0 0)',
-            whiteSpace: 'nowrap',
-            border: 0,
-          }}
-        >
-          {downloadButtonConfirmed
-            ? t.downloadedAnnouncement
-            : shareButtonStatus === 'copied'
+        <>
+          <span role="status" aria-live="polite" style={visuallyHiddenStyle}>
+            {downloadButtonConfirmed ? t.downloadedAnnouncement : ''}
+          </span>
+          <span role="status" aria-live="polite" style={visuallyHiddenStyle}>
+            {shareButtonStatus === 'copied'
               ? t.copiedAnnouncement
               : shareButtonStatus === 'downloaded'
                 ? t.downloadedAnnouncement
                 : ''}
-        </span>
+          </span>
+        </>
       )}
     </div>
   );

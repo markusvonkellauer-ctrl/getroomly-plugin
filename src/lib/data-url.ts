@@ -43,3 +43,19 @@ export function dataUrlToBlob(dataUrl: string): Blob | null {
     return null;
   }
 }
+
+// generateRoomVisualization's backend response can hand back any of these
+// (see ai-generation.ts's blobToInline/urlToInline) -- named per a Blob's
+// own .type, not assumed, so a shared image's filename extension always
+// matches what's actually inside it. 'jpg', not 'jpeg': matches the
+// extension triggerDownload already uses in RoomVisualizationFlow.tsx.
+const MIME_TYPE_EXTENSIONS: Readonly<Record<string, string>> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+/** Falls back to 'jpg' -- the backend's own default format (see ai-generation.ts) -- for a MIME type not in the table above, rather than an extension-less or "undefined" filename. */
+export function extensionForMimeType(mimeType: string): string {
+  return MIME_TYPE_EXTENSIONS[mimeType] ?? 'jpg';
+}

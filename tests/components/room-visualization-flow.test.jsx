@@ -2047,10 +2047,13 @@ describe('RoomVisualizationFlow', () => {
 
       await renderAtResult({ imageUrl: RESULT_DATA_URL });
       const downloadButton = screen.getByText('Download Image');
-      // Disambiguated from the add-to-basket live region (and the feedback
-      // thumbs' own one) via DOM position, the same technique used for
+      // Disambiguated from the add-to-basket, share, and feedback-thumbs
+      // live regions via DOM position, the same technique used for
       // addedToBasketAnnouncement above -- there are multiple
-      // role="status" aria-live="polite" nodes mounted simultaneously.
+      // role="status" aria-live="polite" nodes mounted simultaneously. This
+      // is the download-specific one (the first of the two after the
+      // tertiary row) -- kept separate from the share one below so the two
+      // independent confirmations can never suppress each other.
       const disclaimer = screen.getByText(/is an estimate/i);
       const announcement = disclaimer.nextElementSibling.nextElementSibling;
       expect(announcement).toHaveAttribute('role', 'status');
@@ -2159,6 +2162,11 @@ describe('RoomVisualizationFlow', () => {
       // itself (see tests/unit/data-url.test.js) -- not a hardcoded value,
       // so a mismatched declared/actual type would be caught here.
       expect(shareArg.files[0].type).toBe('image/jpeg');
+      // .jpg, not a hardcoded .png -- found in review: the filename's
+      // extension must match what's actually inside the file (see
+      // extensionForMimeType in src/lib/data-url.ts), since the backend
+      // can also return image/webp for a different generation.
+      expect(shareArg.files[0].name).toMatch(/\.jpg$/);
       expect(shareArg.title).toContain('Test Rug');
     });
 
@@ -2296,7 +2304,7 @@ describe('RoomVisualizationFlow', () => {
         clickSpy.mockRestore();
       });
 
-      test('announces the copy via the same hidden aria-live region the download button uses', async () => {
+      test('announces the copy via its own hidden aria-live region, independent of the download one', async () => {
         const user = userEvent.setup();
         Object.defineProperty(navigator, 'clipboard', {
           value: { write: jest.fn().mockResolvedValue(undefined) },
@@ -2307,12 +2315,61 @@ describe('RoomVisualizationFlow', () => {
         await renderAtResult({ imageUrl: RESULT_DATA_URL });
         const shareButton = screen.getByText('Share');
         const disclaimer = screen.getByText(/is an estimate/i);
-        const announcement = disclaimer.nextElementSibling.nextElementSibling;
-        expect(announcement).toHaveTextContent('');
+        // The download announcement is the first span after the tertiary
+        // row, the share announcement is the second -- two separate nodes
+        // (found in review: a single shared node with one state taking
+        // precedence could silently drop the other confirmation's
+        // announcement if both were active at once, e.g. downloading then
+        // sharing before the download's own 2400ms window expires).
+        const downloadAnnouncement = disclaimer.nextElementSibling.nextElementSibling;
+        const shareAnnouncement = downloadAnnouncement.nextElementSibling;
+        expect(shareAnnouncement).toHaveAttribute('role', 'status');
+        expect(shareAnnouncement).toHaveAttribute('aria-live', 'polite');
+        expect(shareAnnouncement).toHaveTextContent('');
 
         await user.click(shareButton);
 
-        expect(announcement).toHaveTextContent('The image has been copied to your clipboard.');
+        expect(shareAnnouncement).toHaveTextContent('The image has been copied to your clipboard.');
+        // The download announcement stays untouched by a share action.
+        expect(downloadAnnouncement).toHaveTextContent('');
+      });
+
+      test('a download confirmation does not suppress a share confirmation announced right after it', async () => {
+        jest.useFakeTimers();
+        const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+        jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        Object.defineProperty(navigator, 'clipboard', {
+          value: { write: jest.fn().mockResolvedValue(undefined) },
+          configurable: true,
+        });
+        global.ClipboardItem = class {};
+
+        try {
+          await renderAtResult({ imageUrl: RESULT_DATA_URL });
+          const disclaimer = screen.getByText(/is an estimate/i);
+          const downloadAnnouncement = disclaimer.nextElementSibling.nextElementSibling;
+          const shareAnnouncement = downloadAnnouncement.nextElementSibling;
+
+          // Download first -- its own 2400ms confirmation window is now
+          // active.
+          await user.click(screen.getByText('Download Image'));
+          await waitFor(() => expect(downloadAnnouncement).toHaveTextContent('downloaded'));
+
+          // Share, via the clipboard tier, while the download confirmation
+          // is still showing. With a single shared live region and
+          // downloadButtonConfirmed given precedence, this would have kept
+          // announcing the download text and silently dropped the copy
+          // announcement entirely.
+          await user.click(screen.getByText('Share'));
+          await waitFor(() =>
+            expect(shareAnnouncement).toHaveTextContent(
+              'The image has been copied to your clipboard.'
+            )
+          );
+          expect(downloadAnnouncement).toHaveTextContent('The image has been downloaded.');
+        } finally {
+          jest.useRealTimers();
+        }
       });
 
       test('the "Copied ✓" confirmation reverts to "Share" after 2400ms', async () => {
