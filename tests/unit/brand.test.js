@@ -133,4 +133,42 @@ describe('brandThemeCss', () => {
     expect(brandThemeCss('nordicnest')).toContain('--getroomly-progress-fill: #000000;');
     expect(brandThemeCss('svensson')).toContain('--getroomly-progress-fill: #000000;');
   });
+
+  it('flattens every rectangular/pill corner radius to 0 for both brands ("Radius: 0")', () => {
+    const radiusTokens = [
+      '--getroomly-radius-pill',
+      '--getroomly-radius-card',
+      '--getroomly-radius-image',
+      '--getroomly-radius-modal',
+      '--getroomly-radius-sm',
+      '--getroomly-radius-xs',
+    ];
+    for (const token of radiusTokens) {
+      expect(brandThemeCss('nordicnest')).toContain(`${token}: 0;`);
+      expect(brandThemeCss('svensson')).toContain(`${token}: 0;`);
+    }
+  });
+
+  it("inherits the host page's own font instead of hardcoding a specific typeface", () => {
+    // "Gärna våra native typsnitt om möjligt" -- no font name/URL was given,
+    // so this picks up whatever font is already active on the host page at
+    // the point <getroomly-plugin> sits, rather than guessing a name.
+    const css = brandThemeCss('nordicnest');
+    // Both the general :host rule (body text, buttons) and a matching
+    // `h1, h2` rule (index.css's own h1/h2 selector has higher specificity
+    // than :host alone and would otherwise keep winning) must be present.
+    expect(css).toMatch(/:host\s*\{[^}]*font-family:\s*inherit/);
+    expect(css).toMatch(/h1,\s*h2,\s*:host\s*\{\s*font-family:\s*inherit/);
+  });
+
+  it('also makes form controls (button, input, select, textarea) inherit the host font', () => {
+    // Found in review: browsers' UA stylesheets commonly give form controls
+    // their own font-family that doesn't reliably inherit from an ancestor
+    // by default (the classic "why does my button ignore my font-family"
+    // problem) -- without this, every button's label would stay in the
+    // browser's default UI font even though headings/plain text correctly
+    // picked up the host's.
+    const css = brandThemeCss('nordicnest');
+    expect(css).toMatch(/button,\s*input,\s*select,\s*textarea\s*\{\s*font-family:\s*inherit/);
+  });
 });

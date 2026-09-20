@@ -109,6 +109,18 @@ describe('RoomVisualizationFlow', () => {
     expect(screen.getByRole('button', { name: 'Upload Photo' })).toBeInTheDocument();
   });
 
+  test('the upload step root sets no inline fontFamily, so it can inherit a brand override', () => {
+    // Found in review: an inline fontFamily here always beat brand.ts's
+    // font-family:inherit override (inline styles win over any injected
+    // <style> rule regardless of selector specificity), so the whole
+    // upload step silently kept the system font stack on a branded page
+    // while every other step correctly inherited the host's own font.
+    const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+    const uploadStepRoot = container.querySelector('.getroomly-upload-step');
+    expect(uploadStepRoot).not.toBeNull();
+    expect(uploadStepRoot.style.fontFamily).toBe('');
+  });
+
   // ─── Upload → Processing (no mark step) ──────────────────────────────────
 
   test('goes directly to processing after file upload — no mark step', async () => {

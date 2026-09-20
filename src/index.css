@@ -63,6 +63,22 @@
    * black, not the spinner's interpolated grey mid-tone. */
   --getroomly-progress-fill: #00c9a7;
 
+  /* Corner radius tokens -- one per distinct value already hardcoded on a
+   * rectangular/pill element (see RoomVisualizationFlow.tsx), split out the
+   * same way the text-role colours above are, so a brand override can flatten
+   * them to square corners without touching every call site. Deliberately
+   * NOT applied to any circular element (favourite button, feedback thumbs,
+   * close buttons, tip/step number badges) -- those use border-radius:50%
+   * to be circles, a different shape language entirely, not "very rounded
+   * corners"; a brand wanting square corners on rectangles doesn't imply it
+   * also wants its icon buttons turned into squares. */
+  --getroomly-radius-pill: 999px;
+  --getroomly-radius-card: 8px;
+  --getroomly-radius-image: 18px;
+  --getroomly-radius-modal: 1rem;
+  --getroomly-radius-sm: 6px;
+  --getroomly-radius-xs: 4px;
+
   /* Spacing */
   --getroomly-space-xs: 8px;
   --getroomly-space-sm: 16px;

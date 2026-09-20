@@ -56,7 +56,7 @@ export function EmbedButton({ config, onClick }: EmbedButtonProps) {
         style={{
           background: 'rgba(255,255,255,0.2)',
           padding: '4px 8px',
-          borderRadius: '4px',
+          borderRadius: 'var(--getroomly-radius-xs)',
           fontSize: '10px',
           fontWeight: '900',
           border: '1px solid rgba(255,255,255,0.2)',
