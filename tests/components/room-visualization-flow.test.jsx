@@ -580,6 +580,30 @@ describe('RoomVisualizationFlow', () => {
     expect(input.value).toBe('');
   });
 
+  test('clears a stale hover colour on the upload button when generation fails and returns to upload', async () => {
+    // Found in review: hovering the dropzone right before clicking it (the
+    // normal click-to-upload flow) sets the hover colour, but nothing
+    // before this fix cleared it when generation failed and returned to
+    // the upload step -- the button would render its press colour with no
+    // mouse anywhere near it.
+    generateRoomVisualization.mockRejectedValueOnce(new Error('upstream busy'));
+    const bgSpy = captureStyleSetterCalls('backgroundColor');
+
+    const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+    const dropzone = container.querySelector('[style*="cursor: pointer"]');
+    fireEvent.mouseEnter(dropzone);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => screen.getByRole('heading', { name: 'Upload Photo' }));
+    bgSpy.restore();
+
+    const uploadButton = screen.getByRole('button', { name: 'Upload Photo' });
+    expect(bgSpy.valuesFor(uploadButton).at(-1)).toBe('var(--getroomly-primary-deep)');
+  });
+
   test('calls onError with the error message on failure', async () => {
     generateRoomVisualization.mockRejectedValueOnce(new Error('upstream busy'));
     const onError = jest.fn();
@@ -1155,6 +1179,31 @@ describe('RoomVisualizationFlow', () => {
 
     expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
     expect(input.value).toBe('');
+  });
+
+  test('New Photo also clears a stale hover colour left over from the previous upload', async () => {
+    // Same reasoning as the generation-failure case above -- the mouse that
+    // hovered the FIRST photo's dropzone is very likely nowhere near the
+    // second upload step this button returns to.
+    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+    const bgSpy = captureStyleSetterCalls('backgroundColor');
+
+    const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+    const dropzone = container.querySelector('[style*="cursor: pointer"]');
+    fireEvent.mouseEnter(dropzone);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+    await waitFor(() => screen.getByText('Review Your New Room'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('New Photo'));
+    });
+    bgSpy.restore();
+
+    const uploadButton = screen.getByRole('button', { name: 'Upload Photo' });
+    expect(bgSpy.valuesFor(uploadButton).at(-1)).toBe('var(--getroomly-primary-deep)');
   });
 
   // ─── Before/After toggle pill ───────────────────────────────────────────

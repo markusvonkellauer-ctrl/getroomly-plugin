@@ -475,6 +475,14 @@ export function RoomVisualizationFlow({
       setResultImage(null);
       setGenerationId(null);
       setStep('upload');
+      // Found in review: the dropzone's hover/dragover state is transient
+      // UI feedback tied to a mouse/drag interaction that's long over by
+      // the time an async generation fails -- without this, a hover right
+      // before upload (the normal click-to-upload flow) can leave the
+      // button rendering its press colour on the upload step this reset
+      // returns to, with no mouse anywhere near it.
+      setIsUploadButtonHovered(false);
+      setIsDraggingFileOver(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -513,6 +521,11 @@ export function RoomVisualizationFlow({
       uploadedImageRef.current = null;
       setUploadedImage(null);
       setStep('upload');
+      // See the same reset in the generation-error catch block above --
+      // stale hover/dragover feedback from the interaction that triggered
+      // this failed read shouldn't survive onto the upload step it returns to.
+      setIsUploadButtonHovered(false);
+      setIsDraggingFileOver(false);
       setIsGenerating(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -643,6 +656,13 @@ export function RoomVisualizationFlow({
     setResultImage(null);
     setGenerationId(null);
     setShowOriginalImage(false);
+    // Same reason as the other two resets to 'upload' -- the mouse that
+    // hovered the dropzone for the PREVIOUS photo is very likely nowhere
+    // near it now (this fires from a click on the result step's "New
+    // Photo" button), so the stale hover/dragover feedback shouldn't
+    // carry over.
+    setIsUploadButtonHovered(false);
+    setIsDraggingFileOver(false);
 
     // Reset every transient timer so a pending one from the previous
     // result can't fire after this reset and clear confirmation state
