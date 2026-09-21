@@ -478,6 +478,19 @@ describe('App — modal focus trap', () => {
     expect(document.activeElement).toBe(dialog);
   });
 
+  it('marks the dialog as modal and gives it an accessible name via the visible step heading', async () => {
+    // Found in review: role="dialog" alone doesn't tell assistive tech this
+    // is the only interactive surface (aria-modal) or give it a name
+    // (aria-labelledby) -- without these a screen reader announces an
+    // unnamed dialog and may still expose the covered page behind it.
+    const { dialog } = await openModal();
+
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const labelledBy = dialog.getAttribute('aria-labelledby');
+    expect(labelledBy).toBeTruthy();
+    expect(document.getElementById(labelledBy)).toHaveTextContent('Upload Photo');
+  });
+
   it('wraps Tab from the last focusable element back to the first, instead of escaping into the host page', async () => {
     const { dialog } = await openModal();
     const focusable = getFocusable(dialog);

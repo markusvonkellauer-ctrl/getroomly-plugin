@@ -22,11 +22,22 @@ function isTopmostTrap(container: HTMLElement | null): boolean {
 // though every test using plain document.activeElement passes (RTL renders
 // App directly, without the real shadow boundary). getRootNode() returns
 // the ShadowRoot the container actually lives in (or `document` itself,
-// outside a shadow tree), so reading .activeElement off THAT is correct in
-// both cases.
+// outside a shadow tree), so reading .activeElement off THAT is correct
+// for focus that's actually inside our own shadow tree.
+//
+// Falls back to document.activeElement when the root's own activeElement
+// is null: that happens legitimately when the dialog was opened
+// programmatically from the HOST page's own trigger (window.GetRoomly.open(),
+// not the plugin's default EmbedButton) -- that trigger lives in the host's
+// light DOM, outside our shadow root entirely, so shadowRoot.activeElement
+// correctly reports nothing focused *inside the shadow tree*, but
+// document.activeElement still correctly names it. Only matters for the
+// capture-on-open call site below; while the trap is actively engaged
+// (Tab-boundary checks), focus is always inside the shadow tree by
+// construction, so the fallback is a no-op there.
 function getActiveElement(container: HTMLElement): Element | null {
   const root = container.getRootNode() as Document | ShadowRoot;
-  return root.activeElement;
+  return root.activeElement ?? document.activeElement;
 }
 
 /**
@@ -71,8 +82,15 @@ export function useFocusTrap(
       return;
     }
 
+    // Same Shadow DOM problem as the Tab-boundary check below: plain
+    // document.activeElement is the <getroomly-plugin> shadow HOST while
+    // focus is actually on a descendant inside it (e.g. the trigger button
+    // that opened this dialog), not the trigger itself -- capturing THAT
+    // means the later restore calls .focus() on the non-useful host
+    // element instead of returning focus to the real trigger.
+    const activeBeforeOpen = getActiveElement(container);
     previouslyFocusedRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      activeBeforeOpen instanceof HTMLElement ? activeBeforeOpen : null;
     container.focus();
     activeTrapStack.push(container);
 

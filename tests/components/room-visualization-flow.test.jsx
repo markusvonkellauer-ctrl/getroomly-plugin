@@ -2897,6 +2897,19 @@ describe('RoomVisualizationFlow', () => {
       return screen.getByRole('dialog');
     };
 
+    test("marks itself modal and names itself via its own visible heading, not the covered upload step's", () => {
+      // Found in review: role="dialog" alone doesn't tell assistive tech
+      // this is the only interactive surface (aria-modal) or give it a name
+      // (aria-labelledby) -- without these a screen reader announces an
+      // unnamed overlay and may still expose the covered upload step behind it.
+      const termsDialog = openTermsDialog();
+
+      expect(termsDialog).toHaveAttribute('aria-modal', 'true');
+      const labelledBy = termsDialog.getAttribute('aria-labelledby');
+      expect(labelledBy).toBeTruthy();
+      expect(document.getElementById(labelledBy)).toHaveTextContent(translations.en.termsTitle);
+    });
+
     test('wraps Tab from its own last focusable element back to its own first, not into the covered upload step behind it', () => {
       const termsDialog = openTermsDialog();
       const focusable = getFocusable(termsDialog);

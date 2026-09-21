@@ -2717,6 +2717,13 @@ export function RoomVisualizationFlow({
         <div
           ref={termsDialogRef}
           role="dialog"
+          // Found in review: without these, a screen reader announces an
+          // unnamed overlay and may still expose the (covered) upload step
+          // behind it as browsable -- aria-modal marks this as the only
+          // interactive surface while open, aria-labelledby gives it the
+          // visible "Terms of Use & Privacy" heading as its accessible name.
+          aria-modal="true"
+          aria-labelledby="getroomly-terms-title"
           // -1, not absent -- a valid useFocusTrap focus() target without
           // joining the normal Tab order itself (matches the outer modal's
           // own container in App.tsx).
@@ -2746,6 +2753,7 @@ export function RoomVisualizationFlow({
             }}
           >
             <h2
+              id="getroomly-terms-title"
               style={{
                 margin: 0,
                 fontSize: '20px',
@@ -2905,6 +2913,7 @@ export function RoomVisualizationFlow({
         <div style={{ width: '28px', flexShrink: 0 }} />
 
         <h2
+          id="getroomly-modal-title"
           style={{
             flex: 1,
             textAlign: 'center',

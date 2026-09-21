@@ -307,6 +307,16 @@ function App() {
             <div
               ref={dialogRef}
               role="dialog"
+              // Found in review: role="dialog" alone doesn't tell assistive
+              // tech this is the ONLY interactive surface (aria-modal) or
+              // give it an accessible name (aria-labelledby) -- without
+              // these a screen reader announces an unnamed dialog and may
+              // still expose the (visually hidden) page behind it.
+              // getroomly-modal-title is RoomVisualizationFlow's own step
+              // heading (Upload Photo / Transforming.../Your New Room),
+              // always present whenever this dialog is open.
+              aria-modal="true"
+              aria-labelledby="getroomly-modal-title"
               // -1, not absent -- makes the container a valid programmatic
               // focus() target (useFocusTrap moves focus here when the
               // modal opens) without adding it to the normal Tab order

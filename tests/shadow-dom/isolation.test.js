@@ -267,4 +267,57 @@ describe('Shadow DOM focus trap (real ShadowRoot boundary)', () => {
     expect(result.dialogFound).toBe(true);
     expect(result.activeInsideDialog).toBe(true);
   });
+
+  // Regression coverage for a Copilot review finding on the same PR (#115),
+  // found on a LATER review round after the boundary-check fix above had
+  // already landed: the capture-on-open call site had the identical Shadow
+  // DOM problem, just not yet fixed there too -- document.activeElement at
+  // the moment the dialog opens is the <getroomly-plugin> host (not the
+  // real trigger button that was clicked), so the later restore-on-close
+  // called .focus() on that inert host element instead of the actual
+  // trigger, leaving focus stuck on <body>/page after Escape.
+  test('restores focus to the real trigger button inside the ShadowRoot on close, not the inert <getroomly-plugin> host', async () => {
+    // Starts from a clean (closed) state regardless of what the previous
+    // test left behind.
+    const openInitially = await page.evaluate(
+      () =>
+        !!document.querySelector('getroomly-plugin')?.shadowRoot?.querySelector('[role="dialog"]')
+    );
+    if (openInitially) {
+      await page.keyboard.press('Escape');
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    await page.evaluate(() => {
+      const el = document.querySelector('getroomly-plugin');
+      const button = el?.shadowRoot?.querySelector('button');
+      button?.focus();
+      button?.click();
+    });
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const dialogOpen = await page.evaluate(
+      () =>
+        !!document.querySelector('getroomly-plugin')?.shadowRoot?.querySelector('[role="dialog"]')
+    );
+    expect(dialogOpen).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    const result = await page.evaluate(() => {
+      const el = document.querySelector('getroomly-plugin');
+      const active = el?.shadowRoot?.activeElement;
+      return {
+        dialogClosed: !el?.shadowRoot?.querySelector('[role="dialog"]'),
+        activeIsRealButton: active?.tagName === 'BUTTON',
+      };
+    });
+
+    expect(result.dialogClosed).toBe(true);
+    // Not just "something got focus" -- specifically the real trigger
+    // button, not the shadow host itself (which has no meaningful
+    // .focus() target of its own).
+    expect(result.activeIsRealButton).toBe(true);
+  });
 });
