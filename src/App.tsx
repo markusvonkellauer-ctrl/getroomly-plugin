@@ -1,6 +1,7 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEmbedConfig } from '@/hooks/use-embed-config';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { EmbedButton } from '@/components/EmbedButton';
 import { RoomVisualizationFlow } from '@/components/RoomVisualizationFlow';
 import { trackInteraction } from '@/lib/analytics';
@@ -221,6 +222,28 @@ function App() {
     };
   }, []);
 
+  // Defined here (before the loading/error early returns below), as
+  // useCallback, and referenced by both useFocusTrap's Escape handling and
+  // the modal's own close affordances (X button, backdrop click) further
+  // down -- hooks must run unconditionally on every render (can't be
+  // declared after an early return), and useFocusTrap's Tab/Escape effect
+  // needs this reference to stay stable across renders so it doesn't tear
+  // down and reattach its keydown listener on every unrelated App
+  // re-render (e.g. the availability check resolving). config may still be
+  // null/undefined here (before the `!config` check below has run), unlike
+  // every other use of `config.x` further down in this component.
+  const handleModalClose = useCallback(() => {
+    setIsModalOpen(false);
+    config?.callbacks?.onModalClose?.();
+    // 'getroomly-modal-closed' is dispatched by the centralized isModalOpen
+    // effect above, not here — keeps it a single-writer event regardless of
+    // which close path (this one, or the 'getroomly-close-modal' listener)
+    // caused isModalOpen to become false.
+  }, [config]);
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, isModalOpen, handleModalClose);
+
   // Show loading state while config is being loaded
   if (!isReady) {
     return (
@@ -259,16 +282,6 @@ function App() {
     );
   }
 
-  const handleModalClose = () => {
-    setIsModalOpen(false);
-    // Call callback if provided
-    config.callbacks?.onModalClose?.();
-    // 'getroomly-modal-closed' is dispatched by the centralized isModalOpen
-    // effect above, not here — keeps it a single-writer event regardless of
-    // which close path (this one, or the 'getroomly-close-modal' listener)
-    // caused isModalOpen to become false.
-  };
-
   // Shadow DOM mode: shows button + modal (modal can also be opened externally via window.GetRoomly.open())
   const hideButton = config.hideButton === true;
   const showButton = !hideButton && partnerAvailable;
@@ -292,7 +305,13 @@ function App() {
               onClick={handleModalClose}
             />
             <div
+              ref={dialogRef}
               role="dialog"
+              // -1, not absent -- makes the container a valid programmatic
+              // focus() target (useFocusTrap moves focus here when the
+              // modal opens) without adding it to the normal Tab order
+              // itself.
+              tabIndex={-1}
               className="getroomly-modal-container rounded-2xl flex flex-col gap-0 transition-all duration-300 overflow-hidden bg-background border shadow-2xl"
               style={{
                 pointerEvents: 'auto',
