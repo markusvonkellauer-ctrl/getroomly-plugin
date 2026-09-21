@@ -925,7 +925,15 @@ export function RoomVisualizationFlow({
         }}
         onDragEnter={e => {
           e.preventDefault();
-          setIsDraggingFileOver(true);
+          // Found in review: without this check, dragging ANYTHING over the
+          // zone (selected text, a link, an image from another tab) showed
+          // the "drop here" dashed border, even though only an actual file
+          // drop does anything -- dataTransfer.types includes 'Files' only
+          // for a real file drag, so this keeps the affirmative feedback
+          // honest about what will actually work.
+          if (e.dataTransfer?.types?.includes('Files')) {
+            setIsDraggingFileOver(true);
+          }
         }}
         onDragOver={e => {
           e.preventDefault();

@@ -193,7 +193,7 @@ describe('RoomVisualizationFlow', () => {
       const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
       const dropzone = getDropzone(container);
 
-      fireEvent.dragEnter(dropzone);
+      fireEvent.dragEnter(dropzone, { dataTransfer: { types: ['Files'] } });
       borderSpy.restore();
 
       expect(borderSpy.valuesFor(dropzone)).toEqual([
@@ -202,12 +202,27 @@ describe('RoomVisualizationFlow', () => {
       ]);
     });
 
+    test('does NOT show the dashed dragover border for a non-file drag (e.g. dragging selected text or a link)', () => {
+      // Found in review: without checking dataTransfer.types, dragging
+      // ANYTHING over the zone showed the "drop here" feedback, even
+      // though only an actual file drop does anything -- misleading the
+      // user into thinking a text/link drag would work.
+      const borderSpy = captureStyleSetterCalls('border');
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+      const dropzone = getDropzone(container);
+
+      fireEvent.dragEnter(dropzone, { dataTransfer: { types: ['text/plain'] } });
+      borderSpy.restore();
+
+      expect(borderSpy.valuesFor(dropzone)).toEqual(['2px dashed transparent']);
+    });
+
     test('clears the dragover border when the file is actually dropped', () => {
       const borderSpy = captureStyleSetterCalls('border');
       const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
       const dropzone = getDropzone(container);
 
-      fireEvent.dragEnter(dropzone);
+      fireEvent.dragEnter(dropzone, { dataTransfer: { types: ['Files'] } });
       fireEvent.drop(dropzone, { dataTransfer: { files: [] } });
       borderSpy.restore();
 
@@ -223,7 +238,7 @@ describe('RoomVisualizationFlow', () => {
       const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
       const dropzone = getDropzone(container);
 
-      fireEvent.dragEnter(dropzone);
+      fireEvent.dragEnter(dropzone, { dataTransfer: { types: ['Files'] } });
       // relatedTarget outside the zone (document.body) -- a real "left the
       // zone" leave, not a dragleave fired while crossing between the
       // zone's own children (icon/button/text), which must NOT clear it.
@@ -248,7 +263,7 @@ describe('RoomVisualizationFlow', () => {
       const dropzone = getDropzone(container);
       const iconCircle = dropzone.firstElementChild;
 
-      fireEvent.dragEnter(dropzone);
+      fireEvent.dragEnter(dropzone, { dataTransfer: { types: ['Files'] } });
       fireDragLeave(dropzone, iconCircle);
       borderSpy.restore();
 
