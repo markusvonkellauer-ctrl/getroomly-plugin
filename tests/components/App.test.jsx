@@ -501,18 +501,39 @@ describe('App — modal focus trap', () => {
     expect(document.activeElement).toBe(last);
   });
 
-  it("does NOT move focus for a Tab press in the middle of the dialog's own focusable elements", async () => {
+  it('also wraps Shift+Tab pressed immediately on open, before any descendant has been individually focused', async () => {
+    // Found in review: activation focuses the dialog CONTAINER itself, not
+    // `first` -- a Shift+Tab pressed at that exact moment matched neither
+    // `first` nor `last` in the boundary check, so it fell through to the
+    // browser's native (trap-escaping) backward navigation instead of
+    // wrapping.
+    const { dialog } = await openModal();
+    expect(document.activeElement).toBe(dialog);
+    const last = getFocusable(dialog).at(-1);
+
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+
+    expect(document.activeElement).toBe(last);
+  });
+
+  it("does NOT intervene on a Tab press from the middle of the dialog's own focusable elements", async () => {
     // The trap should only intervene at the boundaries -- everywhere else,
     // the browser's own native Tab order (correct here, since it's all one
-    // self-contained subtree) must be left alone.
+    // self-contained subtree) must be left alone. Asserts on the event's
+    // own defaultPrevented state, not on document.activeElement staying put
+    // -- jsdom's fireEvent never performs real Tab navigation regardless of
+    // whether anything handles the event, so an activeElement assertion
+    // alone would pass even if this were testing the (already-a-boundary)
+    // first element instead of a genuine middle one.
     const { dialog } = await openModal();
     const focusable = getFocusable(dialog);
     expect(focusable.length).toBeGreaterThan(2);
+    const middle = focusable[1];
 
-    focusable[0].focus();
-    fireEvent.keyDown(focusable[0], { key: 'Tab' });
+    middle.focus();
+    const notPrevented = fireEvent.keyDown(middle, { key: 'Tab' });
 
-    expect(document.activeElement).toBe(focusable[0]);
+    expect(notPrevented).toBe(true);
   });
 
   it('closes the modal on Escape', async () => {
@@ -549,5 +570,36 @@ describe('App — modal focus trap', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('while the Terms dialog opens on top of the main modal, Tab stays inside the Terms dialog only -- the outer modal trap defers to it', async () => {
+    // Unlike room-visualization-flow.test.jsx's own nested-trap coverage
+    // (which only proves the Terms dialog's own trap works in isolation,
+    // since that file never renders App's outer trap at all), THIS is the
+    // one place both traps are genuinely stacked at once -- the real
+    // scenario the module-level activeTrapStack in use-focus-trap.ts exists
+    // to handle.
+    const { dialog } = await openModal();
+
+    act(() => {
+      screen.getByText('Terms of Use & Privacy').click();
+    });
+
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs).toHaveLength(2);
+    const termsDialog = dialogs.find(d => d !== dialog);
+
+    const focusable = getFocusable(termsDialog);
+    expect(focusable.length).toBeGreaterThan(1);
+    const last = focusable[focusable.length - 1];
+
+    last.focus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+
+    // If the outer trap had also acted (no stack check), it would have
+    // wrapped to ITS OWN first focusable element (the outer close button,
+    // still present underneath, uncovered content), not stayed inside the
+    // topmost Terms dialog.
+    expect(termsDialog.contains(document.activeElement)).toBe(true);
   });
 });

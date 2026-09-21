@@ -8,6 +8,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlow';
 import { translations } from '../../src/lib/i18n';
+import { FOCUSABLE_SELECTOR } from '../../src/hooks/use-focus-trap';
 
 jest.mock('../../src/services/ai-generation', () => ({
   // AIGenerationError is the real class, not mocked — the component checks
@@ -2876,6 +2877,50 @@ describe('RoomVisualizationFlow', () => {
 
         clickSpy.mockRestore();
       });
+    });
+  });
+
+  describe('Terms of Use dialog — nested focus trap', () => {
+    // Renders ON TOP of the main modal (z-index 10000) -- found in review
+    // (PR #115): without its own trap, Tab could move from this overlay's
+    // own controls into the underlying, now-covered upload step's controls
+    // still present (not unmounted) behind it, and Escape would close the
+    // wrong thing (the whole flow) instead of just this overlay.
+    const getFocusable = container =>
+      Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
+        el => getComputedStyle(el).display !== 'none'
+      );
+
+    const openTermsDialog = () => {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      fireEvent.click(screen.getByText(translations.en.termsLink));
+      return screen.getByRole('dialog');
+    };
+
+    test('wraps Tab from its own last focusable element back to its own first, not into the covered upload step behind it', () => {
+      const termsDialog = openTermsDialog();
+      const focusable = getFocusable(termsDialog);
+      expect(focusable.length).toBeGreaterThan(1);
+      const [first, last] = [focusable[0], focusable[focusable.length - 1]];
+
+      last.focus();
+      fireEvent.keyDown(last, { key: 'Tab' });
+
+      expect(document.activeElement).toBe(first);
+      // Also confirms the covered upload step's own controls (e.g. its
+      // Upload Photo button) never entered the wrap -- they're still in
+      // the DOM (not unmounted), so a non-nesting-aware trap could have
+      // wrapped into them instead of staying within the overlay.
+      expect(termsDialog.contains(document.activeElement)).toBe(true);
+    });
+
+    test('closes only the terms overlay on Escape, leaving the upload step underneath open', () => {
+      openTermsDialog();
+
+      fireEvent.keyDown(document.activeElement, { key: 'Escape' });
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
     });
   });
 });

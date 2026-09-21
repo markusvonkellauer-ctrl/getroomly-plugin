@@ -185,3 +185,86 @@ describe('Shadow DOM CSS Isolation', () => {
     expect(clickHandled).toBe(true);
   });
 });
+
+// Separate describe/browser session, not reusing the suite above's page --
+// that one is built via page.setContent() with a script tag pointing at
+// localhost:5173, which Chrome treats as loaded from a null/opaque origin
+// and CORS-blocks the cross-origin module fetch entirely (pre-existing
+// breakage in the suite above, unrelated to this file's own changes --
+// confirmed by the very first test above, "Plugin container creates shadow
+// root", already failing the same way against `development`). Real
+// navigation via page.goto() to a fixture Vite serves keeps everything on
+// the same origin, avoiding that problem outright.
+describe('Shadow DOM focus trap (real ShadowRoot boundary)', () => {
+  let browser;
+  let page;
+
+  beforeAll(async () => {
+    browser = await puppeteer.launch({
+      headless: process.env.CI !== 'false',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    page = await browser.newPage();
+    await page.goto('http://localhost:5173/tests/shadow-dom/fixtures/embed.html', {
+      waitUntil: 'networkidle0',
+    });
+  });
+
+  afterAll(async () => {
+    if (browser) await browser.close();
+  });
+
+  // Regression coverage for a Copilot review finding on PR #115: the focus
+  // trap's boundary check originally compared against document.activeElement,
+  // which stops at the shadow HOST element (<getroomly-plugin>) when focus
+  // is actually on a descendant inside a real ShadowRoot -- meaning the
+  // trap silently never engaged in production. jsdom-based unit tests
+  // (tests/components/App.test.jsx) can't catch this at all: RTL renders
+  // directly into document.body, with no real shadow boundary to trip over
+  // -- this is the one place that boundary actually exists. Verified this
+  // reproduces: reverting the getRootNode()-based fix back to plain
+  // document.activeElement here made this test fail with the active
+  // element landing on <body>, confirming Tab genuinely escaped the shadow
+  // tree entirely, not just failing to wrap within it.
+  test("Tab wraps within the shadow root's own dialog and never escapes to the host page (real Shadow DOM boundary)", async () => {
+    await page.evaluate(() => {
+      const el = document.querySelector('getroomly-plugin');
+      const button = el?.shadowRoot?.querySelector('button');
+      if (button) button.click();
+    });
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const focusedLast = await page.evaluate(() => {
+      const el = document.querySelector('getroomly-plugin');
+      const dialog = el?.shadowRoot?.querySelector('[role="dialog"]');
+      if (!dialog) return false;
+      const focusable = Array.from(
+        dialog.querySelectorAll(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter(node => getComputedStyle(node).display !== 'none');
+      if (focusable.length === 0) return false;
+      focusable[focusable.length - 1].focus();
+      return true;
+    });
+    expect(focusedLast).toBe(true);
+
+    // A real Tab keypress -- Puppeteer drives actual browser tab-order
+    // navigation here, unlike jsdom's fireEvent (which never performs real
+    // focus movement on its own).
+    await page.keyboard.press('Tab');
+
+    const result = await page.evaluate(() => {
+      const el = document.querySelector('getroomly-plugin');
+      const dialog = el?.shadowRoot?.querySelector('[role="dialog"]');
+      const active = el?.shadowRoot?.activeElement;
+      return {
+        dialogFound: !!dialog,
+        activeInsideDialog: !!dialog && !!active && dialog.contains(active),
+      };
+    });
+
+    expect(result.dialogFound).toBe(true);
+    expect(result.activeInsideDialog).toBe(true);
+  });
+});
