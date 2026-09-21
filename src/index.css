@@ -302,14 +302,19 @@ code {
   max-height: 80vh;
   max-height: 80dvh;
 }
-/* Upload step — on wider/desktop viewports the square container is much taller
-   than on mobile, so space-between pushes the icon to the very top. Switch to
-   center so the icon+button and guidance box are grouped in the middle instead.
-   Mobile (≤480px) keeps the original space-between layout which looks fine. */
+/* Upload step — on wider/desktop viewports the square container is much
+   taller than on mobile; centering the (flex:1) dropzone + tips card as a
+   group here keeps them visually grouped in the middle instead of flush to
+   the top, which is how they'd otherwise render at the default
+   justify-content. Narrow viewports (≤480px) are already tight/square
+   enough that the default looks fine without this override.
+   Note: no `gap` override here (checked in review of PR #114's Copilot
+   comment) -- the component's own inline `gap` (RoomVisualizationFlow.tsx)
+   has no `!important`, so it already wins over any gap this rule could set;
+   adding one back would be dead code. */
 @media (min-width: 481px) {
   .getroomly-upload-step {
     justify-content: center !important;
-    gap: var(--getroomly-space-lg);
   }
 }
 

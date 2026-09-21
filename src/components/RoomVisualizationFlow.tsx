@@ -868,7 +868,18 @@ export function RoomVisualizationFlow({
         backgroundColor: 'rgba(0, 0, 0, 0.02)',
         borderRadius: 'var(--getroomly-radius-card)',
         position: 'relative',
-        overflow: 'hidden',
+        // Not 'hidden' -- found in review: at narrow widths (320-375px,
+        // e.g. iPhone SE/mini) the strict aspectRatio:5/5 square plus the
+        // dropzone's own minHeight floor leaves too little room for the
+        // tips card's real content, which needs ~200px. With
+        // overflow:'hidden' that excess was silently clipped off the
+        // bottom of the box instead of visible; 'visible' lets the box
+        // grow taller than a perfect square on narrow screens so nothing
+        // is cut off (verified via real-browser screenshots at 320/375px
+        // -- no visual regression at any width, since flex:1 already caps
+        // the box back to its intended square height wherever there's
+        // enough room).
+        overflow: 'visible',
         // No explicit fontFamily here -- found in review: it redundantly
         // repeated the exact same stack index.css's own :root, :host rule
         // already sets by default, but being an inline style, it also

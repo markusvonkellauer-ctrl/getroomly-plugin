@@ -169,6 +169,22 @@ describe('RoomVisualizationFlow', () => {
     expect(uploadStepRoot.style.fontFamily).toBe('');
   });
 
+  test('the upload step root does not clip its own content (overflow must stay visible, not hidden)', () => {
+    // Found in review (Copilot, PR #114): at narrow widths (320-375px) the
+    // strict aspectRatio:5/5 square plus the dropzone's minHeight floor
+    // leaves too little room for the tips card's real content -- with
+    // overflow:'hidden' that excess was silently clipped off the bottom of
+    // the box instead of just letting it grow taller than a perfect
+    // square. Verified via real-browser screenshots at 320/375/480/600px:
+    // 'visible' fixes the narrow-width clipping with no regression at any
+    // other width (flex:1 already caps the box back to its square height
+    // wherever there's enough room).
+    const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+    const uploadStepRoot = container.querySelector('.getroomly-upload-step');
+    expect(uploadStepRoot).not.toBeNull();
+    expect(uploadStepRoot.style.overflow).toBe('visible');
+  });
+
   describe('upload dropzone polish (design change)', () => {
     const getDropzone = container => container.querySelector('[style*="cursor: pointer"]');
 
