@@ -1052,6 +1052,7 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
                   <button style="${tertiaryButtonStyle}">${escapeHtml(t.shareWithFriends)}</button>
                   <button style="${tertiaryButtonStyle}">${escapeHtml(t.newPhoto)}</button>
                 </div>
+                <p style="margin:0; text-align:center; font-size:11px; color:#6b7280; font-family:${FONT_STACK};">Powered by GetRoomly</p>
               </div>
             </div>
           `;
