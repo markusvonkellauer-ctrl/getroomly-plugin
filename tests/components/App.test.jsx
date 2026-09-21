@@ -585,6 +585,29 @@ describe('App — modal focus trap', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('re-enters the trap at the first focusable element when the currently-focused control is unmounted out from under it', async () => {
+    // Found in review: e.g. selecting a file swaps the upload step's own
+    // controls for the processing step's -- if the focused control was one
+    // of them, the browser moves focus to <body> (neither `first`, `last`,
+    // nor the container itself), and the boundary check originally only
+    // recognized those three exact matches, letting the next Tab escape
+    // into the host page instead of re-entering the dialog.
+    const { dialog } = await openModal();
+    const focusable = getFocusable(dialog);
+    const middle = focusable[1] ?? focusable[0];
+    middle.focus();
+    expect(document.activeElement).toBe(middle);
+
+    act(() => {
+      middle.remove();
+    });
+    expect(dialog.contains(document.activeElement)).toBe(false);
+
+    fireEvent.keyDown(document.activeElement, { key: 'Tab' });
+
+    expect(document.activeElement).toBe(getFocusable(dialog)[0]);
+  });
+
   it('while the Terms dialog opens on top of the main modal, Tab stays inside the Terms dialog only -- the outer modal trap defers to it', async () => {
     // Unlike room-visualization-flow.test.jsx's own nested-trap coverage
     // (which only proves the Terms dialog's own trap works in isolation,

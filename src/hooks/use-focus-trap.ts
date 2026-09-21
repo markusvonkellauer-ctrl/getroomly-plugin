@@ -156,16 +156,22 @@ export function useFocusTrap(
       const last = focusable[focusable.length - 1];
       const active = getActiveElement(container);
 
-      // `active === container` covers the moment right after opening,
-      // before any descendant has been individually focused -- activation
-      // above focuses the container itself (not `first`), so a Shift+Tab
-      // pressed immediately would otherwise match neither `first` nor
-      // `last` and fall through to the browser's native (trap-escaping)
-      // backward navigation.
-      if (event.shiftKey && (active === first || active === container)) {
+      // Found in review: when the currently-focused control is unmounted
+      // out from under the trap (e.g. selecting a file swaps the upload
+      // step's controls for the processing step's), the browser moves
+      // focus to the shadow host/body -- neither `first`, `last`, nor
+      // `container`. Treating "active element isn't even inside container
+      // anymore" as its own out-of-bounds case (re-entering at `first` on
+      // Tab, `last` on Shift+Tab) covers that alongside the two named
+      // boundaries, instead of only the moment right after opening (the
+      // `active === container` case, still needed on its own: activation
+      // focuses the container itself, not `first`, so a Shift+Tab pressed
+      // immediately would otherwise match neither and escape).
+      const outsideContainer = !(active instanceof Node) || !container.contains(active);
+      if (event.shiftKey && (active === first || active === container || outsideContainer)) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && active === last) {
+      } else if (!event.shiftKey && (active === last || outsideContainer)) {
         event.preventDefault();
         first.focus();
       }
