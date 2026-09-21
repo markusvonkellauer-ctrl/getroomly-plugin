@@ -107,6 +107,20 @@ export function RoomVisualizationFlow({
   // read/written synchronously inside the handler.
   const isSharingRef = useRef(false);
 
+  // Upload-step dropzone polish: hover state for the (pointer-events:none)
+  // upload button's own background colour -- see renderUploadStep's
+  // onMouseEnter/onMouseLeave, which already exist for the scale transform
+  // and now also drive this. State, not a CSS :hover rule, because the
+  // button itself never receives pointer events (the wrapping div does,
+  // see its own onClick) -- CSS :hover requires the pointer to actually be
+  // over the element being styled, which pointer-events:none prevents.
+  const [isUploadButtonHovered, setIsUploadButtonHovered] = useState(false);
+  // Drives the dropzone's dragover-only border -- found in review of a
+  // design change request: dropping a file onto the zone already worked,
+  // but gave zero visual feedback while the file was being dragged over
+  // it, so the (real, working) drop support was effectively undiscoverable.
+  const [isDraggingFileOver, setIsDraggingFileOver] = useState(false);
+
   // The result image's own maxHeight can't be a plain CSS percentage: its
   // flex ancestor (resultContentRef below) has overflow:hidden + minHeight:0,
   // so flexbox is free to shrink it below the image's natural size whenever
@@ -461,6 +475,14 @@ export function RoomVisualizationFlow({
       setResultImage(null);
       setGenerationId(null);
       setStep('upload');
+      // Found in review: the dropzone's hover/dragover state is transient
+      // UI feedback tied to a mouse/drag interaction that's long over by
+      // the time an async generation fails -- without this, a hover right
+      // before upload (the normal click-to-upload flow) can leave the
+      // button rendering its press colour on the upload step this reset
+      // returns to, with no mouse anywhere near it.
+      setIsUploadButtonHovered(false);
+      setIsDraggingFileOver(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -499,6 +521,11 @@ export function RoomVisualizationFlow({
       uploadedImageRef.current = null;
       setUploadedImage(null);
       setStep('upload');
+      // See the same reset in the generation-error catch block above --
+      // stale hover/dragover feedback from the interaction that triggered
+      // this failed read shouldn't survive onto the upload step it returns to.
+      setIsUploadButtonHovered(false);
+      setIsDraggingFileOver(false);
       setIsGenerating(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -629,6 +656,13 @@ export function RoomVisualizationFlow({
     setResultImage(null);
     setGenerationId(null);
     setShowOriginalImage(false);
+    // Same reason as the other two resets to 'upload' -- the mouse that
+    // hovered the dropzone for the PREVIOUS photo is very likely nowhere
+    // near it now (this fires from a click on the result step's "New
+    // Photo" button), so the stale hover/dragover feedback shouldn't
+    // carry over.
+    setIsUploadButtonHovered(false);
+    setIsDraggingFileOver(false);
 
     // Reset every transient timer so a pending one from the previous
     // result can't fire after this reset and clear confirmation state
@@ -843,12 +877,29 @@ export function RoomVisualizationFlow({
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        // gap, not justifyContent:'space-between' -- found in review of a
+        // design change request: space-between let the gap between the
+        // dropzone and the tips card grow unpredictably with container
+        // height instead of staying a fixed, intentional distance. The
+        // dropzone itself now grows via flex:1 (below) to fill the
+        // remaining space, so there's still no dead gap either.
+        gap: '14px',
         padding: '24px',
         backgroundColor: 'rgba(0, 0, 0, 0.02)',
         borderRadius: 'var(--getroomly-radius-card)',
         position: 'relative',
-        overflow: 'hidden',
+        // Not 'hidden' -- found in review: at narrow widths (320-375px,
+        // e.g. iPhone SE/mini) the strict aspectRatio:5/5 square plus the
+        // dropzone's own minHeight floor leaves too little room for the
+        // tips card's real content, which needs ~200px. With
+        // overflow:'hidden' that excess was silently clipped off the
+        // bottom of the box instead of visible; 'visible' lets the box
+        // grow taller than a perfect square on narrow screens so nothing
+        // is cut off (verified via real-browser screenshots at 320/375px
+        // -- no visual regression at any width, since flex:1 already caps
+        // the box back to its intended square height wherever there's
+        // enough room).
+        overflow: 'visible',
         // No explicit fontFamily here -- found in review: it redundantly
         // repeated the exact same stack index.css's own :root, :host rule
         // already sets by default, but being an inline style, it also
@@ -864,26 +915,61 @@ export function RoomVisualizationFlow({
 
       <div
         style={{
+          flex: '1',
+          minHeight: '150px',
+          width: '100%',
+          boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          justifyContent: 'center',
           textAlign: 'center',
-          marginTop: '8px',
           cursor: 'pointer',
-          transition: 'transform 0.2s ease',
+          borderRadius: 'var(--getroomly-radius-card)',
+          // Transparent, not 'none' -- keeps the box the same size whether
+          // the border is showing or not, so it appearing on dragover
+          // doesn't shift the icon/button/hint by the border's own width.
+          border: isDraggingFileOver
+            ? '2px dashed var(--getroomly-primary)'
+            : '2px dashed transparent',
+          transition: 'transform 0.2s ease, border-color 0.15s ease',
         }}
         onClick={() => fileInputRef.current?.click()}
         onMouseEnter={e => {
           e.currentTarget.style.transform = 'scale(1.05)';
+          setIsUploadButtonHovered(true);
         }}
         onMouseLeave={e => {
           e.currentTarget.style.transform = 'scale(1)';
+          setIsUploadButtonHovered(false);
+        }}
+        onDragEnter={e => {
+          e.preventDefault();
+          // Found in review: without this check, dragging ANYTHING over the
+          // zone (selected text, a link, an image from another tab) showed
+          // the "drop here" dashed border, even though only an actual file
+          // drop does anything -- dataTransfer.types includes 'Files' only
+          // for a real file drag, so this keeps the affirmative feedback
+          // honest about what will actually work.
+          if (e.dataTransfer?.types?.includes('Files')) {
+            setIsDraggingFileOver(true);
+          }
         }}
         onDragOver={e => {
           e.preventDefault();
         }}
+        onDragLeave={e => {
+          e.preventDefault();
+          // Only clear when actually leaving the zone, not when crossing
+          // from one of its own children to another -- relatedTarget is
+          // the element the pointer is moving into.
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            setIsDraggingFileOver(false);
+          }
+        }}
         onDrop={e => {
           e.preventDefault();
+          setIsDraggingFileOver(false);
           const file = e.dataTransfer.files[0];
           if (file) {
             const event = { target: { files: [file] } } as any;
@@ -928,17 +1014,19 @@ export function RoomVisualizationFlow({
             justifyContent: 'center',
             gap: '8px',
             whiteSpace: 'nowrap',
-            fontSize: '14px',
-            backgroundColor: 'var(--getroomly-primary-deep)', // bg-primary, white text needs the AA-safe deep tone
+            fontSize: '13px',
+            backgroundColor: isUploadButtonHovered
+              ? 'var(--getroomly-primary-press)'
+              : 'var(--getroomly-primary-deep)', // bg-primary, white text needs the AA-safe deep tone
             color: '#ffffff', // text-primary-foreground
             border: 'none',
-            borderRadius: 'var(--getroomly-radius-sm)',
-            padding: '8px 12px',
-            fontWeight: 'bold',
+            borderRadius: 'var(--getroomly-radius-pill)',
+            padding: '13px 26px',
+            fontWeight: 600,
             letterSpacing: '0.025em',
             width: '100%',
-            maxWidth: '170px',
-            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+            maxWidth: '200px',
+            boxShadow: 'var(--getroomly-upload-button-shadow)',
             pointerEvents: 'none',
             transition: 'all 0.2s ease',
             cursor: 'pointer',
@@ -949,11 +1037,9 @@ export function RoomVisualizationFlow({
         <p
           style={{
             marginTop: '8px',
-            fontSize: '9px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
+            fontSize: '11px',
+            fontWeight: '400',
             color: 'var(--getroomly-upload-hint)', // text-muted-foreground/50
-            fontWeight: '500',
           }}
         >
           {t.uploadHint}

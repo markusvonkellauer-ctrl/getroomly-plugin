@@ -124,6 +124,18 @@ describe('brandThemeCss', () => {
     expect(svensson).toContain('--getroomly-spinner-end: #000000;');
   });
 
+  it('swaps the upload button drop shadow to a black glow, keeping the alpha/blur/spread', () => {
+    // Same rule as the other colour tokens: only the hue changes to black,
+    // the blur/spread/alpha stay exactly as the default theme's -- a black
+    // glow under a black button, not the default teal one left over.
+    expect(brandThemeCss('nordicnest')).toContain(
+      '--getroomly-upload-button-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.6);'
+    );
+    expect(brandThemeCss('svensson')).toContain(
+      '--getroomly-upload-button-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.6);'
+    );
+  });
+
   it('overrides the 0-100% processing progress bar fill to the primary black, not left teal', () => {
     // Found in review: this is a separate variable from the spinner's own
     // gradient stops, since it's a brand accent element (like a button),
