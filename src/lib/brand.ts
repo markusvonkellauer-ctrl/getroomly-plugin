@@ -84,6 +84,10 @@ const NORDIC_NEST_THEME: Readonly<Record<string, string>> = {
   // mid-tone, so it doesn't stay teal while the rest of the processing UI
   // has already switched to black/tint.
   '--getroomly-progress-fill': '#000000',
+  // Same rule as every other colour token above: swap the hue to black,
+  // keep the alpha/blur/spread exactly as-is -- a black glow under a
+  // black button, not a green one left over from the default theme.
+  '--getroomly-upload-button-shadow': '0 10px 24px -10px rgba(0, 0, 0, 0.6)',
   // Square corners on every rectangular/pill element -- NOT applied to any
   // circular element (favourite button, feedback thumbs, close buttons, tip/
   // step number badges), which stay literal border-radius:50%/999px-on-a-

@@ -63,6 +63,13 @@
    * black, not the spinner's interpolated grey mid-tone. */
   --getroomly-progress-fill: #00c9a7;
 
+  /* Upload button's own drop shadow -- a brand-tinted glow (matches
+   * --getroomly-primary), so it needs to be a token too rather than a
+   * hardcoded rgba(): baking the green in literally would leave a green
+   * glow under an otherwise fully black button on a branded page, exactly
+   * the "leftover brand colour" bug already fixed elsewhere in this file. */
+  --getroomly-upload-button-shadow: 0 10px 24px -10px rgba(58, 140, 125, 0.6);
+
   /* Corner radius tokens -- one per distinct value already hardcoded on a
    * rectangular/pill element (see RoomVisualizationFlow.tsx), split out the
    * same way the text-role colours above are, so a brand override can flatten

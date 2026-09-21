@@ -89,6 +89,54 @@ const findOverlayAncestor = el => {
   return null;
 };
 
+// jsdom's bundled cssstyle@2.3.0 has no var() support in its typed property
+// setters (background-color, border, color, ...): each one parses the
+// assigned value with a strict CSS grammar (e.g. parseColor) and silently
+// no-ops when that parse fails, so `element.style.backgroundColor` can never
+// read back a value like 'var(--getroomly-primary-deep)' in this test
+// environment -- not a getter quirk, the value is never stored at all
+// (confirmed by reading cssstyle's source: properties with no dedicated
+// typed setter, like border-radius/box-shadow, DO store var() correctly,
+// since they fall through to a generic unconditional-store path instead).
+// This spies on the prototype setter itself to capture the literal value
+// React actually assigns, independent of whether jsdom's storage accepts
+// it -- real production correctness for these specific properties is
+// already confirmed via real-browser Puppeteer screenshots.
+// jsdom has no DragEvent constructor at all (a long-standing jsdom gap --
+// https://github.com/jsdom/jsdom/issues/2913), so @testing-library/dom's
+// fireEvent.dragLeave falls back to a plain `Event`, whose constructor
+// silently drops `relatedTarget` (it's part of MouseEventInit, not the
+// generic EventInit RTL's fallback uses) -- unlike `dataTransfer`, RTL has
+// no special-case patch for `relatedTarget`, so it never reaches the fired
+// event at all. Verified directly: `fireEvent.dragLeave(el, {relatedTarget})`
+// produces an event whose `e.relatedTarget` reads back `undefined` in this
+// environment. This builds the event by hand and defines the property
+// directly on it (the same technique RTL itself uses internally for
+// dataTransfer), so the component's real `e.relatedTarget` check gets a
+// real value to test against.
+const fireDragLeave = (element, relatedTarget) => {
+  const event = new Event('dragleave', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'relatedTarget', { value: relatedTarget });
+  fireEvent(element, event);
+};
+
+const captureStyleSetterCalls = propertyName => {
+  const descriptor = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, propertyName);
+  const calls = [];
+  Object.defineProperty(CSSStyleDeclaration.prototype, propertyName, {
+    configurable: true,
+    get: descriptor.get,
+    set(value) {
+      calls.push({ style: this, value });
+      descriptor.set.call(this, value);
+    },
+  });
+  return {
+    valuesFor: element => calls.filter(c => c.style === element.style).map(c => c.value),
+    restore: () => Object.defineProperty(CSSStyleDeclaration.prototype, propertyName, descriptor),
+  };
+};
+
 describe('RoomVisualizationFlow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -119,6 +167,141 @@ describe('RoomVisualizationFlow', () => {
     const uploadStepRoot = container.querySelector('.getroomly-upload-step');
     expect(uploadStepRoot).not.toBeNull();
     expect(uploadStepRoot.style.fontFamily).toBe('');
+  });
+
+  describe('upload dropzone polish (design change)', () => {
+    const getDropzone = container => container.querySelector('[style*="cursor: pointer"]');
+
+    test('shows a transparent (invisible) border by default, and a visible dashed one only while a file is being dragged over', () => {
+      const borderSpy = captureStyleSetterCalls('border');
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+      const dropzone = getDropzone(container);
+
+      fireEvent.dragEnter(dropzone);
+      borderSpy.restore();
+
+      expect(borderSpy.valuesFor(dropzone)).toEqual([
+        '2px dashed transparent',
+        '2px dashed var(--getroomly-primary)',
+      ]);
+    });
+
+    test('clears the dragover border when the file is actually dropped', () => {
+      const borderSpy = captureStyleSetterCalls('border');
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+      const dropzone = getDropzone(container);
+
+      fireEvent.dragEnter(dropzone);
+      fireEvent.drop(dropzone, { dataTransfer: { files: [] } });
+      borderSpy.restore();
+
+      expect(borderSpy.valuesFor(dropzone)).toEqual([
+        '2px dashed transparent',
+        '2px dashed var(--getroomly-primary)',
+        '2px dashed transparent',
+      ]);
+    });
+
+    test('clears the dragover border when the drag leaves the zone entirely', () => {
+      const borderSpy = captureStyleSetterCalls('border');
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+      const dropzone = getDropzone(container);
+
+      fireEvent.dragEnter(dropzone);
+      // relatedTarget outside the zone (document.body) -- a real "left the
+      // zone" leave, not a dragleave fired while crossing between the
+      // zone's own children (icon/button/text), which must NOT clear it.
+      fireDragLeave(dropzone, document.body);
+      borderSpy.restore();
+
+      expect(borderSpy.valuesFor(dropzone)).toEqual([
+        '2px dashed transparent',
+        '2px dashed var(--getroomly-primary)',
+        '2px dashed transparent',
+      ]);
+    });
+
+    test("does NOT clear the dragover border when dragleave fires for a move between the zone's own children", () => {
+      // Found in review of the design change itself: a naive dragenter/
+      // dragleave pair flickers on/off as the pointer crosses internal
+      // element boundaries (icon -> button -> text) while still over the
+      // zone -- relatedTarget still being a descendant of the zone is what
+      // distinguishes that from actually leaving.
+      const borderSpy = captureStyleSetterCalls('border');
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+      const dropzone = getDropzone(container);
+      const iconCircle = dropzone.firstElementChild;
+
+      fireEvent.dragEnter(dropzone);
+      fireDragLeave(dropzone, iconCircle);
+      borderSpy.restore();
+
+      // No 3rd, "cleared" call -- the child-to-child leave must not touch
+      // the border at all, so it stays on the one dragEnter set.
+      expect(borderSpy.valuesFor(dropzone)).toEqual([
+        '2px dashed transparent',
+        '2px dashed var(--getroomly-primary)',
+      ]);
+    });
+
+    test('still uploads the dropped file (existing drop-to-upload behaviour is unchanged)', async () => {
+      generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+      const dropzone = getDropzone(container);
+      const file = makeFile();
+
+      fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
+
+      await waitFor(() => {
+        expect(screen.getByText('Transforming your space...')).toBeInTheDocument();
+      });
+    });
+
+    test('the upload button swaps to the hover/press colour token while the zone is hovered, and back on mouse-leave', () => {
+      const bgSpy = captureStyleSetterCalls('backgroundColor');
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+      const dropzone = getDropzone(container);
+      const uploadButton = screen.getByRole('button', { name: 'Upload Photo' });
+
+      fireEvent.mouseEnter(dropzone);
+      fireEvent.mouseLeave(dropzone);
+      bgSpy.restore();
+
+      expect(bgSpy.valuesFor(uploadButton)).toEqual([
+        'var(--getroomly-primary-deep)',
+        'var(--getroomly-primary-press)',
+        'var(--getroomly-primary-deep)',
+      ]);
+    });
+
+    test('the existing scale(1.05) hover effect on the whole cluster is unchanged', () => {
+      // Confirms the design change only ADDED the hover colour/dragover
+      // behaviour above, without touching this pre-existing effect.
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+      const dropzone = getDropzone(container);
+
+      fireEvent.mouseEnter(dropzone);
+      expect(dropzone.style.transform).toBe('scale(1.05)');
+
+      fireEvent.mouseLeave(dropzone);
+      expect(dropzone.style.transform).toBe('scale(1)');
+    });
+
+    test('the upload button is a pill (radius token) and uses the brand-tokenised shadow, not a hardcoded green one', () => {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const button = screen.getByRole('button', { name: 'Upload Photo' });
+
+      expect(button.style.borderRadius).toBe('var(--getroomly-radius-pill)');
+      expect(button.style.boxShadow).toBe('var(--getroomly-upload-button-shadow)');
+    });
+
+    test('the file info hint text has no uppercase/letter-spacing styling', () => {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const hint = screen.getByText(translations.en.uploadHint);
+
+      expect(hint.style.textTransform).toBe('');
+      expect(hint.style.letterSpacing).toBe('');
+    });
   });
 
   // ─── Upload → Processing (no mark step) ──────────────────────────────────
