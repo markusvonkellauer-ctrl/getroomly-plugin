@@ -10,6 +10,7 @@ import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
 import { dataUrlToBlob, extensionForMimeType, mimeTypeFromDataUrl } from '@/lib/data-url';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 
 interface RoomVisualizationFlowProps {
   productImages: string[];
@@ -341,6 +342,14 @@ export function RoomVisualizationFlow({
 
   // Terms dialog state
   const [showTermsDialog, setShowTermsDialog] = useState(false);
+  const termsDialogRef = useRef<HTMLDivElement>(null);
+  // Own focus trap, separate from App.tsx's outer modal trap -- this
+  // overlay renders ON TOP of the main modal (z-index 10000), so it needs
+  // to be the surface Tab/Escape act on while it's open; useFocusTrap's
+  // internal stack (see use-focus-trap.ts) makes the outer trap defer to
+  // this one automatically while both are registered.
+  const closeTermsDialog = useCallback(() => setShowTermsDialog(false), []);
+  useFocusTrap(termsDialogRef, showTermsDialog, closeTermsDialog);
 
   const uploadedImageRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2706,6 +2715,19 @@ export function RoomVisualizationFlow({
             shadow). The CSS class adds dvh max-height + mobile margin/radius
             overrides that require two-value fallbacks or media queries. */}
         <div
+          ref={termsDialogRef}
+          role="dialog"
+          // Found in review: without these, a screen reader announces an
+          // unnamed overlay and may still expose the (covered) upload step
+          // behind it as browsable -- aria-modal marks this as the only
+          // interactive surface while open, aria-labelledby gives it the
+          // visible "Terms of Use & Privacy" heading as its accessible name.
+          aria-modal="true"
+          aria-labelledby="getroomly-terms-title"
+          // -1, not absent -- a valid useFocusTrap focus() target without
+          // joining the normal Tab order itself (matches the outer modal's
+          // own container in App.tsx).
+          tabIndex={-1}
           className="getroomly-terms-content"
           style={{
             backgroundColor: '#ffffff',
@@ -2731,6 +2753,7 @@ export function RoomVisualizationFlow({
             }}
           >
             <h2
+              id="getroomly-terms-title"
               style={{
                 margin: 0,
                 fontSize: '20px',
@@ -2890,6 +2913,7 @@ export function RoomVisualizationFlow({
         <div style={{ width: '28px', flexShrink: 0 }} />
 
         <h2
+          id="getroomly-modal-title"
           style={{
             flex: 1,
             textAlign: 'center',

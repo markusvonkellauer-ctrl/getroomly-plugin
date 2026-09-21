@@ -2,7 +2,7 @@
  * App Component Tests — partner-availability-gated trigger button
  */
 
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import App from '../../src/App';
 
 jest.mock('../../src/services/partner-status', () => ({
@@ -11,6 +11,7 @@ jest.mock('../../src/services/partner-status', () => ({
 
 import { checkPartnerAvailability } from '../../src/services/partner-status';
 import { __resetAvailabilityStateForTests } from '../../src/lib/availability-state';
+import { FOCUSABLE_SELECTOR } from '../../src/hooks/use-focus-trap';
 
 const baseEmbedConfig = {
   apiKey: 'grm_pub_test',
@@ -425,5 +426,263 @@ describe('App — getroomly-open-modal safety net', () => {
     } finally {
       window.removeEventListener('getroomly-modal-closed', closedHandler);
     }
+  });
+});
+
+describe('App — modal focus trap', () => {
+  // The modal claims role="dialog", which per WAI-ARIA implies Tab/Shift+Tab
+  // stay inside it, Escape closes it, and focus both enters it on open and
+  // returns to whatever opened it on close -- found in review that none of
+  // that was actually implemented, so a keyboard/screen-reader user tabbing
+  // through the modal fell straight through into the host page behind it.
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    __resetAvailabilityStateForTests();
+    window.GetRoomlyEmbedConfig = { ...baseEmbedConfig };
+  });
+
+  afterEach(() => {
+    delete window.GetRoomlyEmbedConfig;
+  });
+
+  // Queries generically (not hardcoding "the close button is first, the
+  // terms link is last") so this doesn't silently stop testing anything
+  // real if the upload step's own content changes later.
+  const getFocusable = dialog =>
+    Array.from(dialog.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
+      el => getComputedStyle(el).display !== 'none'
+    );
+
+  const openModal = async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(true);
+    render(<App />);
+    await waitForAvailability();
+
+    const trigger = screen.getByRole('button', { name: /visualize in your room/i });
+    // Simulates a keyboard user having reached the trigger button before
+    // activating it -- real browsers vary on whether a mouse click alone
+    // also moves focus, so this makes "focus returns to the trigger on
+    // close" a deterministic thing to assert rather than an accident of
+    // jsdom's click() behaviour.
+    trigger.focus();
+    act(() => {
+      trigger.click();
+    });
+
+    return { trigger, dialog: screen.getByRole('dialog') };
+  };
+
+  it('moves focus into the dialog when it opens', async () => {
+    const { dialog } = await openModal();
+    expect(document.activeElement).toBe(dialog);
+  });
+
+  it('marks the dialog as modal and gives it an accessible name via the visible step heading', async () => {
+    // Found in review: role="dialog" alone doesn't tell assistive tech this
+    // is the only interactive surface (aria-modal) or give it a name
+    // (aria-labelledby) -- without these a screen reader announces an
+    // unnamed dialog and may still expose the covered page behind it.
+    const { dialog } = await openModal();
+
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const labelledBy = dialog.getAttribute('aria-labelledby');
+    expect(labelledBy).toBeTruthy();
+    expect(document.getElementById(labelledBy)).toHaveTextContent('Upload Photo');
+  });
+
+  it('wraps Tab from the last focusable element back to the first, instead of escaping into the host page', async () => {
+    const { dialog } = await openModal();
+    const focusable = getFocusable(dialog);
+    expect(focusable.length).toBeGreaterThan(1);
+    const [first, last] = [focusable[0], focusable[focusable.length - 1]];
+
+    last.focus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+
+    expect(document.activeElement).toBe(first);
+  });
+
+  it('wraps Shift+Tab from the first focusable element back to the last', async () => {
+    const { dialog } = await openModal();
+    const focusable = getFocusable(dialog);
+    const [first, last] = [focusable[0], focusable[focusable.length - 1]];
+
+    first.focus();
+    fireEvent.keyDown(first, { key: 'Tab', shiftKey: true });
+
+    expect(document.activeElement).toBe(last);
+  });
+
+  it('also wraps Shift+Tab pressed immediately on open, before any descendant has been individually focused', async () => {
+    // Found in review: activation focuses the dialog CONTAINER itself, not
+    // `first` -- a Shift+Tab pressed at that exact moment matched neither
+    // `first` nor `last` in the boundary check, so it fell through to the
+    // browser's native (trap-escaping) backward navigation instead of
+    // wrapping.
+    const { dialog } = await openModal();
+    expect(document.activeElement).toBe(dialog);
+    const last = getFocusable(dialog).at(-1);
+
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+
+    expect(document.activeElement).toBe(last);
+  });
+
+  it("does NOT intervene on a Tab press from the middle of the dialog's own focusable elements", async () => {
+    // The trap should only intervene at the boundaries -- everywhere else,
+    // the browser's own native Tab order (correct here, since it's all one
+    // self-contained subtree) must be left alone. Asserts on the event's
+    // own defaultPrevented state, not on document.activeElement staying put
+    // -- jsdom's fireEvent never performs real Tab navigation regardless of
+    // whether anything handles the event, so an activeElement assertion
+    // alone would pass even if this were testing the (already-a-boundary)
+    // first element instead of a genuine middle one.
+    const { dialog } = await openModal();
+    const focusable = getFocusable(dialog);
+    expect(focusable.length).toBeGreaterThan(2);
+    const middle = focusable[1];
+
+    middle.focus();
+    const notPrevented = fireEvent.keyDown(middle, { key: 'Tab' });
+
+    expect(notPrevented).toBe(true);
+  });
+
+  it('closes the modal on Escape', async () => {
+    const { dialog } = await openModal();
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('restores focus to the trigger button after closing via Escape', async () => {
+    const { dialog, trigger } = await openModal();
+    // Moves focus away from trigger FIRST -- otherwise this couldn't tell
+    // "focus was correctly restored" apart from "focus never left trigger
+    // in the first place" (e.g. if the initial move-into-dialog behaviour
+    // were broken), since both look identical at the assertion below.
+    getFocusable(dialog)[0].focus();
+    expect(document.activeElement).not.toBe(trigger);
+
+    fireEvent.keyDown(document.activeElement, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('restores focus to the trigger button after closing via the backdrop click', async () => {
+    const { dialog, trigger } = await openModal();
+    getFocusable(dialog)[0].focus();
+    expect(document.activeElement).not.toBe(trigger);
+
+    act(() => {
+      document.querySelector('.fixed.inset-0.z-50').click();
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('re-enters the trap at the first focusable element when the currently-focused control is unmounted out from under it', async () => {
+    // Found in review: e.g. selecting a file swaps the upload step's own
+    // controls for the processing step's -- if the focused control was one
+    // of them, the browser moves focus to <body> (neither `first`, `last`,
+    // nor the container itself), and the boundary check originally only
+    // recognized those three exact matches, letting the next Tab escape
+    // into the host page instead of re-entering the dialog.
+    const { dialog } = await openModal();
+    const focusable = getFocusable(dialog);
+    const middle = focusable[1] ?? focusable[0];
+    middle.focus();
+    expect(document.activeElement).toBe(middle);
+
+    act(() => {
+      middle.remove();
+    });
+    expect(dialog.contains(document.activeElement)).toBe(false);
+
+    fireEvent.keyDown(document.activeElement, { key: 'Tab' });
+
+    expect(document.activeElement).toBe(getFocusable(dialog)[0]);
+  });
+
+  it('while the Terms dialog opens on top of the main modal, Tab stays inside the Terms dialog only -- the outer modal trap defers to it', async () => {
+    // Unlike room-visualization-flow.test.jsx's own nested-trap coverage
+    // (which only proves the Terms dialog's own trap works in isolation,
+    // since that file never renders App's outer trap at all), THIS is the
+    // one place both traps are genuinely stacked at once -- the real
+    // scenario the module-level activeTrapStack in use-focus-trap.ts exists
+    // to handle.
+    const { dialog } = await openModal();
+
+    act(() => {
+      screen.getByText('Terms of Use & Privacy').click();
+    });
+
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs).toHaveLength(2);
+    const termsDialog = dialogs.find(d => d !== dialog);
+
+    const focusable = getFocusable(termsDialog);
+    expect(focusable.length).toBeGreaterThan(1);
+    const last = focusable[focusable.length - 1];
+
+    last.focus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+
+    // If the outer trap had also acted (no stack check), it would have
+    // wrapped to ITS OWN first focusable element (the outer close button,
+    // still present underneath, uncovered content), not stayed inside the
+    // topmost Terms dialog.
+    expect(termsDialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it('re-activates the trap on a fresh dialog after isReady/error changed while isModalOpen stayed true throughout', async () => {
+    // Found in review: isModalOpen alone isn't the same thing as "the
+    // dialog is actually rendered" -- useEmbedConfig re-validates
+    // window.GetRoomlyEmbedConfig on every 'getroomly-open-modal' event
+    // (see use-embed-config.ts), and a failed re-check sets `error` without
+    // ever resetting `isReady`/`config` back. App's own early-return above
+    // the dialog JSX unmounts it whenever `error` is truthy -- all while
+    // isModalOpen (this component's own state) never toggles at all. Since
+    // useFocusTrap's activation effect was originally keyed on isModalOpen
+    // alone, it would never re-fire when the dialog later re-mounts (a
+    // fresh dialogRef.current) once a valid config restores it, leaving
+    // that new dialog instance's Tab/Escape permanently untrapped.
+    const { dialog: firstDialog } = await openModal();
+    expect(document.activeElement).toBe(firstDialog);
+
+    // A re-check that fails validation (missing productImage) -- isReady
+    // and config stay whatever they already were; only `error` flips true,
+    // which alone is enough to swap App to its error branch below.
+    window.GetRoomlyEmbedConfig = { ...baseEmbedConfig, productImage: undefined };
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText(/GetRoomly Configuration Error/i)).toBeInTheDocument();
+
+    // A later re-check with a valid config again -- the dialog re-mounts
+    // (a NEW DOM node), with isModalOpen never having changed underneath
+    // any of this.
+    window.GetRoomlyEmbedConfig = { ...baseEmbedConfig };
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+
+    const secondDialog = screen.getByRole('dialog');
+    expect(secondDialog).not.toBe(firstDialog);
+    // The trap re-activated on this fresh instance: focus moved into it
+    // (not left stranded on the old, now-detached trigger reference), and
+    // Tab from its own last element wraps back to its own first instead of
+    // escaping.
+    expect(document.activeElement).toBe(secondDialog);
+    const focusable = getFocusable(secondDialog);
+    const [first, last] = [focusable[0], focusable[focusable.length - 1]];
+    last.focus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
   });
 });
