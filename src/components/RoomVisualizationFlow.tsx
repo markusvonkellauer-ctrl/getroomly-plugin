@@ -2618,6 +2618,23 @@ export function RoomVisualizationFlow({
           </span>
         </>
       )}
+
+      {/* Literal, not t.xyz -- explicitly NOT translated per the user's
+          instruction: the brand name stays "Powered by GetRoomly" in every
+          language. --getroomly-tertiary-text (same token as the
+          Ladda ner/Dela/Nytt foto row above) keeps this the same muted tone
+          in the default widget and on both Nordic Nest/Svensson, which flatten
+          it to black in brand.ts -- no separate per-brand value needed. */}
+      <p
+        style={{
+          margin: 0,
+          textAlign: 'center',
+          fontSize: '11px',
+          color: 'var(--getroomly-tertiary-text)',
+        }}
+      >
+        Powered by GetRoomly
+      </p>
     </div>
   );
 

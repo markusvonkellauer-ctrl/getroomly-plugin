@@ -2936,4 +2936,48 @@ describe('RoomVisualizationFlow', () => {
       expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
     });
   });
+
+  describe('"Powered by GetRoomly" footer credit (result step)', () => {
+    const renderAtResult = async (props = {}) => {
+      generateRoomVisualization.mockResolvedValueOnce({
+        imageUrl: 'data:image/jpeg;base64,result',
+      });
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      // The step-1 heading's own text is localized (e.g. Swedish reads
+      // "Granska ditt nya rum", not this literal English string) -- waiting
+      // for the always-English "Powered by GetRoomly" credit itself is a
+      // reliable, language-agnostic way to know the result step finished
+      // rendering regardless of which config.language a given test passes.
+      await waitFor(() => screen.getByText('Powered by GetRoomly'));
+    };
+
+    test('shows the literal, untranslated "Powered by GetRoomly" text even when the rest of the UI is localized', async () => {
+      // Explicit instruction: this string is NOT part of the t.xyz
+      // translation dictionary and must read identically in every
+      // language -- config.language: 'sv' proves both halves at once, since
+      // Swedish strings (like newPhoto below) ARE genuinely localized
+      // elsewhere on the very same screen.
+      await renderAtResult({ config: { language: 'sv' } });
+
+      expect(screen.getByText('Powered by GetRoomly')).toBeInTheDocument();
+      expect(screen.getByText('Nytt foto')).toBeInTheDocument();
+    });
+
+    test('uses the same muted colour token as the tertiary row above it, so it stays consistent across brand themes without its own override', async () => {
+      // --getroomly-tertiary-text is already what Share/New Photo (rendered
+      // right above this) use, and is already flattened to black in
+      // brand.ts for Nordic Nest/Svensson -- reusing it here means this
+      // credit line automatically matches whatever theme is active, with
+      // no new per-brand colour needed.
+      const colorSpy = captureStyleSetterCalls('color');
+      await renderAtResult();
+      colorSpy.restore();
+
+      const credit = screen.getByText('Powered by GetRoomly');
+      expect(colorSpy.valuesFor(credit)).toEqual(['var(--getroomly-tertiary-text)']);
+    });
+  });
 });
