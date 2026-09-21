@@ -242,7 +242,18 @@ function App() {
   }, [config]);
 
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, isModalOpen, handleModalClose);
+  // isModalOpen alone isn't the same thing as "the dialog is actually
+  // rendered" -- found in review: isReady/error/config can change while
+  // isModalOpen stays true (e.g. useEmbedConfig revalidates a changed host
+  // config and briefly rejects it), swapping this component to the
+  // loading/error branch below and unmounting the dialog div without
+  // isModalOpen ever toggling. Since useFocusTrap's activation effect is
+  // keyed on this value, isModalOpen alone would never re-fire it when the
+  // dialog later re-mounts (a fresh dialogRef.current) once config becomes
+  // valid again, leaving Tab/Escape untrapped indefinitely. Matching the
+  // exact condition that gates the dialog JSX below keeps the two in sync.
+  const dialogActuallyRendered = isModalOpen && isReady && !error && !!config;
+  useFocusTrap(dialogRef, dialogActuallyRendered, handleModalClose);
 
   // Show loading state while config is being loaded
   if (!isReady) {

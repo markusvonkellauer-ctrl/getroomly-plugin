@@ -638,4 +638,51 @@ describe('App — modal focus trap', () => {
     // topmost Terms dialog.
     expect(termsDialog.contains(document.activeElement)).toBe(true);
   });
+
+  it('re-activates the trap on a fresh dialog after isReady/error changed while isModalOpen stayed true throughout', async () => {
+    // Found in review: isModalOpen alone isn't the same thing as "the
+    // dialog is actually rendered" -- useEmbedConfig re-validates
+    // window.GetRoomlyEmbedConfig on every 'getroomly-open-modal' event
+    // (see use-embed-config.ts), and a failed re-check sets `error` without
+    // ever resetting `isReady`/`config` back. App's own early-return above
+    // the dialog JSX unmounts it whenever `error` is truthy -- all while
+    // isModalOpen (this component's own state) never toggles at all. Since
+    // useFocusTrap's activation effect was originally keyed on isModalOpen
+    // alone, it would never re-fire when the dialog later re-mounts (a
+    // fresh dialogRef.current) once a valid config restores it, leaving
+    // that new dialog instance's Tab/Escape permanently untrapped.
+    const { dialog: firstDialog } = await openModal();
+    expect(document.activeElement).toBe(firstDialog);
+
+    // A re-check that fails validation (missing productImage) -- isReady
+    // and config stay whatever they already were; only `error` flips true,
+    // which alone is enough to swap App to its error branch below.
+    window.GetRoomlyEmbedConfig = { ...baseEmbedConfig, productImage: undefined };
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText(/GetRoomly Configuration Error/i)).toBeInTheDocument();
+
+    // A later re-check with a valid config again -- the dialog re-mounts
+    // (a NEW DOM node), with isModalOpen never having changed underneath
+    // any of this.
+    window.GetRoomlyEmbedConfig = { ...baseEmbedConfig };
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+
+    const secondDialog = screen.getByRole('dialog');
+    expect(secondDialog).not.toBe(firstDialog);
+    // The trap re-activated on this fresh instance: focus moved into it
+    // (not left stranded on the old, now-detached trigger reference), and
+    // Tab from its own last element wraps back to its own first instead of
+    // escaping.
+    expect(document.activeElement).toBe(secondDialog);
+    const focusable = getFocusable(secondDialog);
+    const [first, last] = [focusable[0], focusable[focusable.length - 1]];
+    last.focus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+  });
 });
