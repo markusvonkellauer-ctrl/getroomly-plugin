@@ -2935,6 +2935,36 @@ describe('RoomVisualizationFlow', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
     });
+
+    test('shows the generic (no-partner-name) intro paragraph immediately above section 1, before any section heading', () => {
+      const termsDialog = openTermsDialog();
+
+      expect(screen.getByText(translations.en.termsIntro)).toBeInTheDocument();
+
+      const paragraphs = Array.from(termsDialog.querySelectorAll('p, h3'));
+      const introIndex = paragraphs.findIndex(el => el.textContent === translations.en.termsIntro);
+      const section1Index = paragraphs.findIndex(
+        el => el.textContent === translations.en.termsSection1Title
+      );
+      expect(introIndex).toBeGreaterThanOrEqual(0);
+      expect(section1Index).toBeGreaterThan(introIndex);
+    });
+
+    test('shows the GDPR/international-standards lead paragraph in section 3, before the cloud-platform body paragraph', () => {
+      const termsDialog = openTermsDialog();
+
+      expect(screen.getByText(translations.en.termsSection3Intro)).toBeInTheDocument();
+
+      const paragraphs = Array.from(termsDialog.querySelectorAll('p'));
+      const introIndex = paragraphs.findIndex(
+        el => el.textContent === translations.en.termsSection3Intro
+      );
+      const bodyIndex = paragraphs.findIndex(
+        el => el.textContent === translations.en.termsSection3Body
+      );
+      expect(introIndex).toBeGreaterThanOrEqual(0);
+      expect(bodyIndex).toBeGreaterThan(introIndex);
+    });
   });
 
   describe('"Powered by GetRoomly" footer credit (result step)', () => {

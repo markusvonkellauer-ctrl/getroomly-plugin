@@ -48,6 +48,8 @@ export const nl: TranslationStrings = {
   copiedAnnouncement: 'De afbeelding is gekopieerd naar het klembord.',
   newPhoto: 'Nieuwe foto',
   termsTitle: 'Gebruiksvoorwaarden & Privacy',
+  termsIntro:
+    'Deze functie wordt aangeboden door GetRoomly, een aanbieder van AI-visualisatie die je helpt producten in jouw omgeving te visualiseren. Je foto wordt verwerkt volgens de volgende voorwaarden:',
   termsSection1Title: '1. Doel van beeldverwerking',
   termsSection1Body:
     'Door een afbeelding te uploaden, verleent u GetRoomly een tijdelijke licentie om de foto te verwerken om meubelproducten in uw omgeving te visualiseren. De AI analyseert kamergeometrie en verlichting om een realistische voorvertoning te bieden.',
@@ -59,6 +61,8 @@ export const nl: TranslationStrings = {
   termsQualityRetentionBody:
     'Uw foto en de gegenereerde visualisatie worden maximaal 14 dagen opgeslagen op beveiligde servers binnen de EU/EER voor interne kwaliteitscontrole, en daarna automatisch verwijderd. Ze worden nooit gebruikt om AI-modellen te trainen of gedeeld met derden, en zijn alleen gekoppeld aan een tijdelijke sessiereferentie — nooit aan uw naam, e-mail of IP-adres. Als een generatiepoging wordt geweigerd, worden dezelfde foto en de technische details van die poging onder dezelfde voorwaarden bewaard, zodat we de betrouwbaarheid kunnen onderzoeken en verbeteren.',
   termsSection3Title: '3. Gegevensbeveiliging',
+  termsSection3Intro:
+    'Uw gegevens worden beschermd conform de AVG en vergelijkbare internationale gegevensbeschermingsnormen. We werken voortdurend aan het waarborgen dat onze verwerking van persoonsgegevens voldoet aan de toepasselijke gegevensbeschermingswetgeving in elke regio waarin we actief zijn.',
   termsSection3Body:
     "Uw foto wordt verwerkt via een toonaangevend wereldwijd cloudtechnologieplatform dat vertrouwd wordt door grote internationale bedrijven, onder contractuele gegevensbeschermingswaarborgen die gelijkwaardig zijn aan de AVG-vereisten (zoals modelcontractbepalingen), ongeacht waar de verwerking plaatsvindt. Uw gegevens worden nooit gebruikt om AI-modellen van derden te trainen. Foto's die worden bewaard voor kwaliteitsevaluatie, worden opgeslagen zoals beschreven in Sectie 2, met toegang beperkt tot geautoriseerd GetRoomly-personeel.",
   termsSection4Title: '4. Eigendom',

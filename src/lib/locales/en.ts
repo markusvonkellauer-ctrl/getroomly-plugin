@@ -48,6 +48,8 @@ export const en: TranslationStrings = {
   copiedAnnouncement: 'The image has been copied to your clipboard.',
   newPhoto: 'New Photo',
   termsTitle: 'Terms of Use & Privacy',
+  termsIntro:
+    'This feature is powered by GetRoomly, an AI visualisation provider that helps you visualise products in your environment. Your photo is processed under the following terms:',
   termsSection1Title: '1. Purpose of Image Processing',
   termsSection1Body:
     'By uploading an image, you grant GetRoomly a temporary licence to process the photo to visualise furniture products in your environment. The AI analyses room geometry and lighting to provide a realistic preview.',
@@ -59,6 +61,8 @@ export const en: TranslationStrings = {
   termsQualityRetentionBody:
     'Your photo and the generated visualisation are stored on secure servers within the EU/EEA for up to 14 days for internal quality review, then automatically deleted. They are never used to train AI models or shared with third parties, and are linked only to a temporary session reference — never to your name, email, or IP address. If a generation attempt is refused, the same photo and the technical details of that attempt are stored under these same terms, so we can investigate and improve reliability.',
   termsSection3Title: '3. Data Security',
+  termsSection3Intro:
+    'Your data is protected under GDPR and equivalent international data protection standards. We work continuously to ensure our handling of personal data meets applicable data protection law in every region we operate in.',
   termsSection3Body:
     'Your photo is processed using a leading global cloud technology platform trusted by major international businesses, under contractual data protection safeguards equivalent to GDPR requirements (such as Standard Contractual Clauses) wherever processing occurs. Your data is never used to train third-party AI models. Photos retained for quality evaluation are stored as described in Section 2, with access restricted to authorised GetRoomly personnel only.',
   termsSection4Title: '4. Ownership',

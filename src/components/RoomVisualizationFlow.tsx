@@ -2835,6 +2835,8 @@ export function RoomVisualizationFlow({
               color: 'var(--getroomly-dialog-body)',
             }}
           >
+            <p style={{ margin: '0 0 16px 0' }}>{t.termsIntro}</p>
+
             <div style={{ marginBottom: '16px' }}>
               <h3
                 style={{
@@ -2880,6 +2882,7 @@ export function RoomVisualizationFlow({
               >
                 {t.termsSection3Title}
               </h3>
+              <p style={{ margin: '0 0 8px 0' }}>{t.termsSection3Intro}</p>
               <p style={{ margin: 0 }}>{t.termsSection3Body}</p>
             </div>
 

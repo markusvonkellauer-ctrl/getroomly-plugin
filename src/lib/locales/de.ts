@@ -49,6 +49,8 @@ export const de: TranslationStrings = {
   copiedAnnouncement: 'Das Bild wurde in die Zwischenablage kopiert.',
   newPhoto: 'Neues Foto',
   termsTitle: 'Nutzungsbedingungen & Datenschutz',
+  termsIntro:
+    'Diese Funktion wird von GetRoomly bereitgestellt, einem Anbieter für KI-Visualisierung, der Ihnen hilft, Produkte in Ihrer Umgebung zu visualisieren. Ihr Foto wird gemäß den folgenden Bedingungen verarbeitet:',
   termsSection1Title: '1. Zweck der Bildverarbeitung',
   termsSection1Body:
     'Durch das Hochladen eines Bildes gewähren Sie GetRoomly eine vorübergehende Lizenz zur Verarbeitung des Fotos, um Möbelprodukte in Ihrer Umgebung zu visualisieren. Die KI analysiert Raumgeometrie und Beleuchtung, um eine realistische Vorschau zu erstellen.',
@@ -60,6 +62,8 @@ export const de: TranslationStrings = {
   termsQualityRetentionBody:
     'Ihr Foto und die generierte Visualisierung werden auf sicheren Servern innerhalb der EU/des EWR bis zu 14 Tage lang zur internen Qualitätsprüfung gespeichert und anschließend automatisch gelöscht. Sie werden niemals zum Training von KI-Modellen verwendet oder an Dritte weitergegeben und sind nur mit einer temporären Sitzungsreferenz verknüpft — niemals mit Ihrem Namen, Ihrer E-Mail-Adresse oder IP-Adresse. Wird ein Generierungsversuch abgelehnt, werden dasselbe Foto und die technischen Details dieses Versuchs unter denselben Bedingungen gespeichert, damit wir die Zuverlässigkeit untersuchen und verbessern können.',
   termsSection3Title: '3. Datensicherheit',
+  termsSection3Intro:
+    'Ihre Daten werden gemäß der DSGVO und vergleichbaren internationalen Datenschutzstandards geschützt. Wir arbeiten kontinuierlich daran, sicherzustellen, dass unsere Verarbeitung personenbezogener Daten den geltenden Datenschutzgesetzen in jeder Region, in der wir tätig sind, entspricht.',
   termsSection3Body:
     'Ihr Foto wird über eine führende globale Cloud-Technologieplattform verarbeitet, der große internationale Unternehmen vertrauen, unter vertraglichen Datenschutzgarantien, die den DSGVO-Anforderungen entsprechen (z. B. Standardvertragsklauseln), unabhängig davon, wo die Verarbeitung erfolgt. Ihre Daten werden niemals zum Training von KI-Modellen Dritter verwendet. Zur Qualitätsbewertung aufbewahrte Fotos werden wie in Abschnitt 2 beschrieben gespeichert, mit Zugriff, der auf autorisiertes GetRoomly-Personal beschränkt ist.',
   termsSection4Title: '4. Eigentum',

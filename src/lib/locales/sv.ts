@@ -48,6 +48,8 @@ export const sv: TranslationStrings = {
   copiedAnnouncement: 'Bilden har kopierats till urklipp.',
   newPhoto: 'Nytt foto',
   termsTitle: 'Användarvillkor & Integritet',
+  termsIntro:
+    'Denna funktion drivs av GetRoomly, en AI-visualiseringsleverantör som hjälper dig visualisera produkter i din miljö. Din foto behandlas enligt följande villkor:',
   termsSection1Title: '1. Syfte med bildbehandling',
   termsSection1Body:
     'Genom att ladda upp en bild ger du GetRoomly en tillfällig licens att behandla fotot för att visualisera möbelprodukter i din miljö. AI:n analyserar rumsgeometri och ljussättning för att ge en realistisk förhandsgranskning.',
@@ -59,6 +61,8 @@ export const sv: TranslationStrings = {
   termsQualityRetentionBody:
     'Ditt foto och den genererade visualiseringen lagras på säkra servrar inom EU/EES i upp till 14 dagar för intern kvalitetsgranskning och raderas därefter automatiskt. De används aldrig för att träna AI-modeller eller delas med tredje part, och kopplas endast till en tillfällig sessionsreferens — aldrig till ditt namn, e-post eller IP-adress. Om ett genereringsförsök avvisas lagras samma foto och de tekniska detaljerna för det försöket enligt samma villkor, så att vi kan utreda och förbättra tillförlitligheten.',
   termsSection3Title: '3. Datasäkerhet',
+  termsSection3Intro:
+    'Din data skyddas enligt GDPR och motsvarande internationella dataskyddsstandarder. Vi arbetar kontinuerligt för att säkerställa att vår hantering av persondata uppfyller tillämplig dataskyddslag i varje region vi är aktiva i.',
   termsSection3Body:
     'Ditt foto behandlas via en ledande global molnplattform som används av stora internationella företag, med avtalsmässiga dataskyddsgarantier som motsvarar GDPR-kraven (exempelvis Standardavtalsklausuler) oavsett var behandlingen sker. Din data används aldrig för att träna tredjeparts-AI-modeller. Bilder som sparas för kvalitetsutvärdering lagras enligt beskrivningen i avsnitt 2, med åtkomst begränsad till behöriga GetRoomly-medarbetare.',
   termsSection4Title: '4. Äganderätt',
