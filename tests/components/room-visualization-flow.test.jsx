@@ -3002,5 +3002,34 @@ describe('RoomVisualizationFlow', () => {
       expect(credit.parentElement).not.toBe(buttonRowColumn);
       expect(credit.parentElement).toBe(buttonRowColumn.parentElement);
     });
+
+    test('sits 4px from the widget edge -- the same gap already used between the disclaimer and the button row above it', async () => {
+      // Found in review (Markus): measured (not guessed) the real gap
+      // between the disclaimer and the button row above it -- 8px column
+      // gap minus the disclaimer's own -4px margin = 4px net -- then
+      // applied that SAME value symmetrically around this line's own
+      // 11px height, both above (from the button row) and below (to the
+      // widget's own edge), instead of the arbitrary leftover space the
+      // previous version left.
+      await renderAtResult();
+      const credit = screen.getByText('Powered by GetRoomly');
+      expect(credit.style.bottom).toBe('4px');
+    });
+
+    test("widens the footer's bottom padding only on the result step -- upload and processing never show this credit line, so their padding is untouched", () => {
+      // The credit line and the upload/processing footers all share ONE
+      // wrapper div (see the main return) -- without scoping the padding
+      // change to step==='result', it would have silently grown those two
+      // unrelated footers' bottom padding too.
+      const paddingSpy = captureStyleSetterCalls('padding');
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      paddingSpy.restore();
+
+      const termsLinkButton = screen.getByText(translations.en.termsLink);
+      const uploadFooter = termsLinkButton.closest('div[style*="flex-shrink: 0"]');
+      expect(uploadFooter).not.toBeNull();
+      const values = paddingSpy.valuesFor(uploadFooter);
+      expect(values.at(-1)).toBe('8px var(--getroomly-space-sm) var(--getroomly-space-sm)');
+    });
   });
 });

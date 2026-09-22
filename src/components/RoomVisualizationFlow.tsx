@@ -2621,18 +2621,20 @@ export function RoomVisualizationFlow({
     </div>
   );
 
-  // Absolutely positioned against the footer wrapper's own existing bottom
-  // padding (see the padding:'8px var(--getroomly-space-sm) var(--getroomly-
-  // space-sm)' div this renders inside, in the main return below) -- NOT a
-  // flex child of the column above. Found in review: an earlier version
-  // added this as a normal flex child, which added its own gap + line
-  // height on TOP of that existing padding, growing the footer's total
-  // height and, since the room photo's own maxHeight is measured live
-  // against whatever height the footer actually leaves it (see
-  // resultContentRef's effect), shrinking the photo to make room. This
-  // version spends the SAME padding band that was already there instead of
-  // adding to it, so the button row's own spacing and the photo's size are
-  // both completely unaffected by this credit line's presence.
+  // Absolutely positioned against the footer wrapper's own bottom padding
+  // (see the result-step-only 19px bottom padding on the div this renders
+  // inside, in the main return below) -- NOT a flex child of the column
+  // above, so it can never add to that column's own height or the button
+  // row's spacing.
+  //
+  // bottom:4px -- found in review (Markus): matches the SAME 4px gap
+  // already used between the disclaimer and the button row above it
+  // (measured: 8px column gap - the disclaimer's own -4px margin = 4px
+  // net), applied symmetrically on both sides of this 11px-tall line --
+  // 4px above (from the button row) + 11px (this text) + 4px below (to
+  // the widget's own edge) = the 19px bottom padding on the wrapper,
+  // deliberately sized for exactly this rhythm rather than an arbitrary
+  // leftover value.
   //
   // Literal, not t.xyz -- explicitly NOT translated per the user's
   // instruction: the brand name stays "Powered by GetRoomly" in every
@@ -2644,7 +2646,7 @@ export function RoomVisualizationFlow({
     <p
       style={{
         position: 'absolute',
-        bottom: '2px',
+        bottom: '4px',
         left: 0,
         right: 0,
         margin: 0,
@@ -3042,7 +3044,16 @@ export function RoomVisualizationFlow({
       {/* Footer - Dynamic based on step */}
       <div
         style={{
-          padding: '8px var(--getroomly-space-sm) var(--getroomly-space-sm)',
+          // Bottom padding only, only on the result step -- found in
+          // review (Markus): 19px = the SAME 4px gap already used between
+          // the disclaimer and the button row above (measured, not
+          // guessed: 8px column gap - the disclaimer's own -4px margin =
+          // 4px net), applied symmetrically around the credit line's own
+          // 11px height (4px + 11px + 4px = 19px), replacing the arbitrary
+          // var(--getroomly-space-sm) bottom padding that existed before
+          // any credit line did. Upload/processing keep the original
+          // token value -- they never render the credit line at all.
+          padding: `8px var(--getroomly-space-sm) ${step === 'result' ? '19px' : 'var(--getroomly-space-sm)'}`,
           backgroundColor: '#ffffff',
           flexShrink: 0,
           // position:relative only so renderResultFooterCredit's absolute
