@@ -48,6 +48,8 @@ export const no: TranslationStrings = {
   copiedAnnouncement: 'Bildet er kopiert til utklippstavlen.',
   newPhoto: 'Nytt bilde',
   termsTitle: 'Bruksvilkår & personvern',
+  termsIntro:
+    'Denne funksjonen tilbys av GetRoomly, en leverandør av AI-visualisering som hjelper deg med å visualisere produkter i dine omgivelser. Bildet ditt behandles i henhold til følgende vilkår:',
   termsSection1Title: '1. Formål med bildebehandling',
   termsSection1Body:
     'Ved å laste opp et bilde gir du GetRoomly en midlertidig lisens til å behandle fotoet for å visualisere møbelprodukter i dine omgivelser. AI-modellen analyserer romgeometri og belysning for å gi en realistisk forhåndsvisning.',
@@ -59,6 +61,8 @@ export const no: TranslationStrings = {
   termsQualityRetentionBody:
     'Bildet ditt og den genererte visualiseringen lagres på sikre servere innenfor EU/EØS i inntil 14 dager for intern kvalitetsgjennomgang, og slettes deretter automatisk. De brukes aldri til å trene AI-modeller eller deles med tredjeparter, og knyttes kun til en midlertidig øktreferanse — aldri til navnet, e-posten eller IP-adressen din. Hvis et genereringsforsøk avvises, lagres det samme bildet og de tekniske detaljene om forsøket på samme vilkår, slik at vi kan undersøke og forbedre påliteligheten.',
   termsSection3Title: '3. Datasikkerhet',
+  termsSection3Intro:
+    'Dataene dine beskyttes i samsvar med GDPR og tilsvarende internasjonale databeskyttelsesstandarder. Vi arbeider kontinuerlig for å sikre at vår behandling av personopplysninger overholder gjeldende personvernlovgivning i hver region vi opererer i.',
   termsSection3Body:
     'Bildet ditt behandles ved hjelp av en ledende global skyteknologiplattform som store internasjonale virksomheter har tillit til, under kontraktsmessige databeskyttelsesgarantier tilsvarende GDPR-kravene (som standard personvernbestemmelser), uansett hvor behandlingen finner sted. Dataene dine brukes aldri til å trene tredjeparts-AI-modeller. Bilder som lagres for kvalitetsevaluering, oppbevares som beskrevet i avsnitt 2, med tilgang begrenset til autorisert GetRoomly-personell.',
   termsSection4Title: '4. Eierskap',

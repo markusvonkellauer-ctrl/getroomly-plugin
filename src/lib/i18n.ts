@@ -85,6 +85,10 @@ export interface TranslationStrings {
   copiedAnnouncement: string;
   newPhoto: string;
   termsTitle: string;
+  /** Intro paragraph shown once, above section 1 -- deliberately generic
+   * (no partner name) since this same string renders on every partner's
+   * site, not just one. */
+  termsIntro: string;
   termsSection1Title: string;
   termsSection1Body: string;
   termsSection2Title: string;
@@ -93,6 +97,10 @@ export interface TranslationStrings {
   termsQualityRetentionTitle: string;
   termsQualityRetentionBody: string;
   termsSection3Title: string;
+  /** New lead paragraph, rendered before termsSection3Body -- the general
+   * GDPR/international-standards commitment, distinct from the specific
+   * cloud-platform paragraph that follows it. */
+  termsSection3Intro: string;
   termsSection3Body: string;
   termsSection4Title: string;
   termsSection4Body: string;

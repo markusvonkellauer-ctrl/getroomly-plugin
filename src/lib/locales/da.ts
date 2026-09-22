@@ -48,6 +48,8 @@ export const da: TranslationStrings = {
   copiedAnnouncement: 'Billedet er kopieret til udklipsholderen.',
   newPhoto: 'Nyt foto',
   termsTitle: 'Vilkår for brug & privatliv',
+  termsIntro:
+    'Denne funktion drives af GetRoomly, en AI-visualiseringsudbyder, der hjælper dig med at visualisere produkter i dine omgivelser. Dit foto behandles i henhold til følgende vilkår:',
   termsSection1Title: '1. Formål med billedbehandling',
   termsSection1Body:
     'Ved at uploade et billede giver du GetRoomly en midlertidig licens til at behandle fotoet for at visualisere møbelprodukter i dine omgivelser. AI-modellen analyserer rummets geometri og belysning for at give en realistisk forhåndsvisning.',
@@ -59,6 +61,8 @@ export const da: TranslationStrings = {
   termsQualityRetentionBody:
     'Dit foto og den genererede visualisering opbevares på sikre servere inden for EU/EØS i op til 14 dage til intern kvalitetsgennemgang og slettes derefter automatisk. De bruges aldrig til at træne AI-modeller eller deles med tredjeparter, og de knyttes kun til en midlertidig sessionsreference — aldrig til dit navn, din e-mail eller IP-adresse. Hvis et genereringsforsøg afvises, opbevares det samme foto og de tekniske detaljer om forsøget på samme vilkår, så vi kan undersøge og forbedre pålideligheden.',
   termsSection3Title: '3. Datasikkerhed',
+  termsSection3Intro:
+    'Dine data er beskyttet i henhold til GDPR og tilsvarende internationale databeskyttelsesstandarder. Vi arbejder løbende på at sikre, at vores behandling af persondata overholder gældende databeskyttelseslovgivning i hver region, hvor vi er aktive.',
   termsSection3Body:
     'Dit foto behandles ved hjælp af en førende global cloud-teknologiplatform, som store internationale virksomheder har tillid til, under kontraktlige databeskyttelsesgarantier svarende til GDPR-kravene (såsom standardkontraktbestemmelser), uanset hvor behandlingen finder sted. Dine data bruges aldrig til at træne tredjeparts-AI-modeller. Fotos, der opbevares til kvalitetsevaluering, gemmes som beskrevet i afsnit 2, med adgang begrænset til autoriseret GetRoomly-personale.',
   termsSection4Title: '4. Ejerskab',

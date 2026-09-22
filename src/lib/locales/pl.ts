@@ -49,6 +49,8 @@ export const pl: TranslationStrings = {
   copiedAnnouncement: 'Obraz został skopiowany do schowka.',
   newPhoto: 'Nowe zdjęcie',
   termsTitle: 'Warunki korzystania i prywatność',
+  termsIntro:
+    'Ta funkcja jest oferowana przez GetRoomly, dostawcę wizualizacji opartej na sztucznej inteligencji, który pomaga wizualizować produkty w Twoim otoczeniu. Twoje zdjęcie jest przetwarzane zgodnie z poniższymi warunkami:',
   termsSection1Title: '1. Cel przetwarzania obrazu',
   termsSection1Body:
     'Przesyłając zdjęcie, udzielasz GetRoomly tymczasowej licencji na przetworzenie fotografii w celu zwizualizowania produktów meblowych w Twoim otoczeniu. Sztuczna inteligencja analizuje geometrię pomieszczenia i oświetlenie, aby zapewnić realistyczny podgląd.',
@@ -60,6 +62,8 @@ export const pl: TranslationStrings = {
   termsQualityRetentionBody:
     'Twoje zdjęcie oraz wygenerowana wizualizacja są przechowywane na bezpiecznych serwerach na terenie UE/EOG przez maksymalnie 14 dni w celu wewnętrznej kontroli jakości, a następnie automatycznie usuwane. Nigdy nie są wykorzystywane do trenowania modeli AI ani udostępniane osobom trzecim, i są powiązane wyłącznie z tymczasowym identyfikatorem sesji — nigdy z Twoim imieniem, e-mailem ani adresem IP. Jeśli próba generowania zostanie odrzucona, to samo zdjęcie oraz szczegóły techniczne tej próby są przechowywane na tych samych zasadach, abyśmy mogli badać i poprawiać niezawodność.',
   termsSection3Title: '3. Bezpieczeństwo danych',
+  termsSection3Intro:
+    'Twoje dane są chronione zgodnie z RODO i równoważnymi międzynarodowymi standardami ochrony danych. Nieustannie dążymy do zapewnienia, że nasze przetwarzanie danych osobowych jest zgodne z obowiązującym prawem ochrony danych w każdym regionie, w którym działamy.',
   termsSection3Body:
     'Twoje zdjęcie jest przetwarzane za pomocą wiodącej globalnej platformy technologii chmurowej, której zaufały duże międzynarodowe firmy, na podstawie umownych gwarancji ochrony danych równoważnych wymogom RODO (takich jak standardowe klauzule umowne), niezależnie od miejsca przetwarzania. Twoje dane nigdy nie są wykorzystywane do trenowania modeli AI podmiotów trzecich. Zdjęcia przechowywane w celu oceny jakości są przechowywane zgodnie z opisem w sekcji 2, z dostępem ograniczonym do upoważnionego personelu GetRoomly.',
   termsSection4Title: '4. Własność',

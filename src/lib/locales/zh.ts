@@ -49,6 +49,8 @@ export const zh: TranslationStrings = {
   copiedAnnouncement: '图片已复制到剪贴板。',
   newPhoto: '新照片',
   termsTitle: '使用条款与隐私政策',
+  termsIntro:
+    '此功能由GetRoomly提供，这是一家人工智能可视化服务商，帮助您在自己的环境中查看产品效果。您的照片将根据以下条款进行处理：',
   termsSection1Title: '1. 图像处理目的',
   termsSection1Body:
     '上传图像即表示您授予GetRoomly临时许可，以处理该照片，从而在您的环境中可视化家具产品。人工智能会分析房间的几何结构和光照，以提供逼真的预览效果。',
@@ -59,6 +61,8 @@ export const zh: TranslationStrings = {
   termsQualityRetentionBody:
     '您的照片和生成的可视化效果图将存储在欧盟/欧洲经济区境内的安全服务器上，最长保留14天用于内部质量审核，之后将自动删除。这些数据绝不会用于训练人工智能模型，也不会与第三方共享，且仅与临时会话标识关联——绝不与您的姓名、电子邮件或IP地址关联。如果生成请求被拒绝，同一照片及该次尝试的技术细节将按相同条款予以保留，以便我们调查并改进可靠性。',
   termsSection3Title: '3. 数据安全',
+  termsSection3Intro:
+    '您的数据受GDPR及同等国际数据保护标准的保护。我们持续努力确保我们对个人数据的处理符合我们运营所在每个地区适用的数据保护法律。',
   termsSection3Body:
     '您的照片将通过受众多国际大型企业信赖的领先全球云技术平台进行处理，无论处理发生在何地，均遵循与GDPR要求（例如标准合同条款）相当的合同数据保护保障措施。您的数据绝不会用于训练第三方人工智能模型。为质量评估而保留的照片将按第2节所述方式存储，仅限GetRoomly授权人员访问。',
   termsSection4Title: '4. 所有权',

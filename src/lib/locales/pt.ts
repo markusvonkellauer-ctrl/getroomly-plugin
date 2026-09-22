@@ -50,6 +50,8 @@ export const pt: TranslationStrings = {
   copiedAnnouncement: 'A imagem foi copiada para a área de transferência.',
   newPhoto: 'Nova fotografia',
   termsTitle: 'Termos de utilização e privacidade',
+  termsIntro:
+    'Esta funcionalidade é oferecida pela GetRoomly, um fornecedor de visualização por IA que o ajuda a visualizar produtos no seu ambiente. A sua fotografia é processada de acordo com os seguintes termos:',
   termsSection1Title: '1. Finalidade do processamento de imagem',
   termsSection1Body:
     'Ao carregar uma imagem, concede à GetRoomly uma licença temporária para processar a fotografia com o objetivo de visualizar produtos de mobiliário no seu ambiente. A IA analisa a geometria da divisão e a iluminação para fornecer uma pré-visualização realista.',
@@ -61,6 +63,8 @@ export const pt: TranslationStrings = {
   termsQualityRetentionBody:
     'A sua fotografia e a visualização gerada são armazenadas em servidores seguros dentro do EEE durante um máximo de 14 dias para revisão interna de qualidade, sendo depois eliminadas automaticamente. Nunca são utilizadas para treinar modelos de IA nem partilhadas com terceiros, e estão associadas apenas a uma referência de sessão temporária — nunca ao seu nome, e-mail ou endereço IP. Se uma tentativa de geração for recusada, a mesma fotografia e os detalhes técnicos dessa tentativa são conservados nos mesmos termos, para que possamos investigar e melhorar a fiabilidade.',
   termsSection3Title: '3. Segurança de dados',
+  termsSection3Intro:
+    'Os seus dados são protegidos em conformidade com o RGPD e normas internacionais de proteção de dados equivalentes. Trabalhamos continuamente para garantir que o nosso tratamento de dados pessoais cumpre a legislação de proteção de dados aplicável em cada região onde operamos.',
   termsSection3Body:
     'A sua fotografia é processada através de uma plataforma tecnológica de nuvem líder mundial, em que confiam grandes empresas internacionais, sob garantias contratuais de proteção de dados equivalentes aos requisitos do RGPD (como as Cláusulas Contratuais-Tipo), independentemente do local onde o processamento ocorre. Os seus dados nunca são utilizados para treinar modelos de IA de terceiros. As fotografias conservadas para avaliação de qualidade são armazenadas conforme descrito na Secção 2, com acesso restrito a pessoal autorizado da GetRoomly.',
   termsSection4Title: '4. Propriedade',

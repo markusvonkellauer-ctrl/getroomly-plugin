@@ -48,6 +48,8 @@ export const fi: TranslationStrings = {
   copiedAnnouncement: 'Kuva on kopioitu leikepöydälle.',
   newPhoto: 'Uusi kuva',
   termsTitle: 'Käyttöehdot & tietosuoja',
+  termsIntro:
+    'Tämän ominaisuuden tarjoaa GetRoomly, tekoälypohjainen visualisointipalveluntarjoaja, joka auttaa sinua visualisoimaan tuotteita omassa ympäristössäsi. Valokuvaasi käsitellään seuraavien ehtojen mukaisesti:',
   termsSection1Title: '1. Kuvankäsittelyn tarkoitus',
   termsSection1Body:
     'Lataamalla kuvan myönnät GetRoomlylle väliaikaisen luvan käsitellä valokuvaa visualisoidaksesi huonekaluja ympäristössäsi. Tekoäly analysoi huoneen geometrian ja valaistuksen tuottaakseen realistisen esikatselun.',
@@ -59,6 +61,8 @@ export const fi: TranslationStrings = {
   termsQualityRetentionBody:
     'Kuvasi ja luotu visualisointi tallennetaan tietoturvallisille palvelimille EU:n/ETA:n alueella enintään 14 päiväksi sisäistä laaduntarkastusta varten, minkä jälkeen ne poistetaan automaattisesti. Niitä ei koskaan käytetä tekoälymallien kouluttamiseen tai jaeta kolmansille osapuolille, ja ne yhdistetään ainoastaan väliaikaiseen istuntoviitteeseen — ei koskaan nimeesi, sähköpostiisi tai IP-osoitteeseesi. Jos luontiyritys hylätään, sama kuva ja yrityksen tekniset tiedot säilytetään samoin ehdoin, jotta voimme tutkia ja parantaa luotettavuutta.',
   termsSection3Title: '3. Tietoturva',
+  termsSection3Intro:
+    'Tietosi on suojattu GDPR:n ja vastaavien kansainvälisten tietosuojastandardien mukaisesti. Työskentelemme jatkuvasti varmistaaksemme, että henkilötietojen käsittelymme täyttää sovellettavan tietosuojalainsäädännön kaikilla toiminta-alueillamme.',
   termsSection3Body:
     'Kuvasi käsitellään käyttäen johtavaa globaalia pilviteknologia-alustaa, johon suuret kansainväliset yritykset luottavat, sopimusperusteisten tietosuojatakeiden alaisena, jotka vastaavat GDPR-vaatimuksia (kuten vakiosopimuslausekkeita) riippumatta siitä, missä käsittely tapahtuu. Tietojasi ei koskaan käytetä kolmannen osapuolen tekoälymallien kouluttamiseen. Laadunarviointia varten säilytetyt kuvat tallennetaan kohdassa 2 kuvatulla tavalla, ja pääsy niihin on rajattu valtuutetulle GetRoomly-henkilöstölle.',
   termsSection4Title: '4. Omistusoikeus',
