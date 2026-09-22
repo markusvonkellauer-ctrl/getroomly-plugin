@@ -2979,5 +2979,28 @@ describe('RoomVisualizationFlow', () => {
       const credit = screen.getByText('Powered by GetRoomly');
       expect(colorSpy.valuesFor(credit)).toEqual(['var(--getroomly-tertiary-text)']);
     });
+
+    test("is absolutely positioned against the footer's own existing bottom padding, not a new flex row that would grow the footer", async () => {
+      // Found in review (Markus): an earlier version added this as a normal
+      // flex child of the button row's column, which grew the footer's
+      // total height beyond what existed before it -- since the room
+      // photo's own size is measured live against whatever height the
+      // footer leaves it (see resultContentRef's effect), that shrank the
+      // photo. Absolute positioning spends the SAME padding band that was
+      // already there below the buttons instead of adding to it, so the
+      // button row's own spacing and the photo's size are both unaffected.
+      await renderAtResult();
+      const credit = screen.getByText('Powered by GetRoomly');
+      const newPhotoButton = screen.getByText('New Photo');
+
+      expect(credit.style.position).toBe('absolute');
+      // A sibling of the button row's own flex column, not nested inside
+      // it -- so it never participates in that column's own `gap` and
+      // can't add to its height.
+      const buttonRowColumn = newPhotoButton.closest('div[style*="flex-direction: column"]');
+      expect(buttonRowColumn).not.toBeNull();
+      expect(credit.parentElement).not.toBe(buttonRowColumn);
+      expect(credit.parentElement).toBe(buttonRowColumn.parentElement);
+    });
   });
 });

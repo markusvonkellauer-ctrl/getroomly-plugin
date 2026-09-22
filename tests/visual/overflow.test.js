@@ -1040,7 +1040,7 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
           `;
 
           const footerHtml = `
-            <div style="padding:8px 16px 16px; background-color:#ffffff; flex-shrink:0;">
+            <div style="padding:8px 16px 16px; background-color:#ffffff; flex-shrink:0; position:relative;">
               <div style="display:flex; flex-direction:column; gap:8px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
                 <div style="display:flex; gap:10px;">
                   <button style="flex-shrink:0; width:54px; height:54px; border-radius:999px; border:1.5px solid #7d7979;"></button>
@@ -1052,8 +1052,13 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
                   <button style="${tertiaryButtonStyle}">${escapeHtml(t.shareWithFriends)}</button>
                   <button style="${tertiaryButtonStyle}">${escapeHtml(t.newPhoto)}</button>
                 </div>
-                <p style="margin:0; text-align:center; font-size:11px; color:#6b7280; font-family:${FONT_STACK};">Powered by GetRoomly</p>
               </div>
+              <!-- Absolutely positioned against this wrapper's own existing
+                   bottom padding (not a flex child of the column above) --
+                   spends the SAME padding band that was already there
+                   instead of adding a new row on top of it. See
+                   RoomVisualizationFlow.tsx's renderResultFooterCredit. -->
+              <p style="position:absolute; bottom:2px; left:0; right:0; margin:0; text-align:center; font-size:11px; line-height:1; color:#6b7280; font-family:${FONT_STACK};">Powered by GetRoomly</p>
             </div>
           `;
 
