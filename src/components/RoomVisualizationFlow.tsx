@@ -2618,24 +2618,44 @@ export function RoomVisualizationFlow({
           </span>
         </>
       )}
-
-      {/* Literal, not t.xyz -- explicitly NOT translated per the user's
-          instruction: the brand name stays "Powered by GetRoomly" in every
-          language. --getroomly-tertiary-text (same token as the
-          Ladda ner/Dela/Nytt foto row above) keeps this the same muted tone
-          in the default widget and on both Nordic Nest/Svensson, which flatten
-          it to black in brand.ts -- no separate per-brand value needed. */}
-      <p
-        style={{
-          margin: 0,
-          textAlign: 'center',
-          fontSize: '11px',
-          color: 'var(--getroomly-tertiary-text)',
-        }}
-      >
-        Powered by GetRoomly
-      </p>
     </div>
+  );
+
+  // Absolutely positioned against the footer wrapper's own existing bottom
+  // padding (see the padding:'8px var(--getroomly-space-sm) var(--getroomly-
+  // space-sm)' div this renders inside, in the main return below) -- NOT a
+  // flex child of the column above. Found in review: an earlier version
+  // added this as a normal flex child, which added its own gap + line
+  // height on TOP of that existing padding, growing the footer's total
+  // height and, since the room photo's own maxHeight is measured live
+  // against whatever height the footer actually leaves it (see
+  // resultContentRef's effect), shrinking the photo to make room. This
+  // version spends the SAME padding band that was already there instead of
+  // adding to it, so the button row's own spacing and the photo's size are
+  // both completely unaffected by this credit line's presence.
+  //
+  // Literal, not t.xyz -- explicitly NOT translated per the user's
+  // instruction: the brand name stays "Powered by GetRoomly" in every
+  // language. --getroomly-tertiary-text (same token as the Ladda ner/Dela/
+  // Nytt foto row above) keeps this the same muted tone in the default
+  // widget and on both Nordic Nest/Svensson, which flatten it to black in
+  // brand.ts -- no separate per-brand value needed.
+  const renderResultFooterCredit = () => (
+    <p
+      style={{
+        position: 'absolute',
+        bottom: '2px',
+        left: 0,
+        right: 0,
+        margin: 0,
+        textAlign: 'center',
+        fontSize: '11px',
+        lineHeight: '1',
+        color: 'var(--getroomly-tertiary-text)',
+      }}
+    >
+      Powered by GetRoomly
+    </p>
   );
 
   // Processing Footer Component (Step 2)
@@ -3025,11 +3045,16 @@ export function RoomVisualizationFlow({
           padding: '8px var(--getroomly-space-sm) var(--getroomly-space-sm)',
           backgroundColor: '#ffffff',
           flexShrink: 0,
+          // position:relative only so renderResultFooterCredit's absolute
+          // positioning anchors against THIS div's own bottom padding
+          // (harmless on the upload/processing steps, which never render it).
+          position: 'relative',
         }}
       >
         {step === 'upload' && renderTermsFooter()}
         {step === 'processing' && renderProcessingFooter()}
         {step === 'result' && renderResultFooter()}
+        {step === 'result' && renderResultFooterCredit()}
       </div>
 
       {/* Terms Dialog */}
