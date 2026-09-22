@@ -1133,6 +1133,90 @@ describe('Result-step modal height: image is never clipped by the footer', () =>
 });
 
 /**
+ * Copilot review on PR #118: the component/unit tests for the "Powered by
+ * GetRoomly" credit line's spacing only assert CSS string values
+ * (bottom:'4px', padding ending in '19px') via jsdom -- which has no real
+ * layout engine, so they can prove the VALUES are what's intended without
+ * proving those values actually PRODUCE a 4px visual gap once real CSS
+ * cascade/box-model rules apply. This renders the real footer markup (the
+ * same fixture as "Result-step modal height" above) in a real browser and
+ * measures the three gaps directly, the same way the earlier manual
+ * Puppeteer verification did (disclaimer-to-buttons, buttons-to-credit,
+ * credit-to-widget-edge) -- confirming all three are genuinely equal, not
+ * just that each CSS declaration looks correct in isolation.
+ */
+describe('Result footer "Powered by GetRoomly" credit: real gaps match the disclaimer-to-button-row gap', () => {
+  let browser;
+
+  beforeAll(async () => {
+    browser = await puppeteer.launch({
+      headless: process.env.CI !== 'false',
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    if (browser) await browser.close();
+  });
+
+  it('measures a 4px gap disclaimer-to-buttons, buttons-to-credit, and credit-to-widget-edge -- all three equal', async () => {
+    const t = translations.en;
+    const tertiaryButtonStyle = `
+      box-sizing:border-box; gap:8px; justify-content:center; align-items:center;
+      text-align:center; min-height:44px; border-radius:999px; display:flex;
+      font-size:14px; padding:10px 16px; background:none; color:#6b7280;
+      font-weight:500; border:none; flex:1 1 0; min-width:0; font-family:${FONT_STACK};
+    `;
+
+    const page = await browser.newPage();
+    try {
+      await page.setViewport({ width: 375, height: 300 });
+      await page.setContent(
+        `<!DOCTYPE html><html><body style="margin:0;">
+          <div id="footer" style="padding:8px 16px 19px; background-color:#ffffff; position:relative; width:375px; box-sizing:border-box;">
+            <div style="display:flex; flex-direction:column; gap:8px; width:100%; margin:0 auto; font-family:${FONT_STACK};">
+              <div style="display:flex; gap:10px;">
+                <button style="flex-shrink:0; width:54px; height:54px; border-radius:999px; border:1.5px solid #7d7979;"></button>
+                <button style="flex:1; gap:8px; justify-content:center; text-align:center; font-weight:700; height:54px; border-radius:999px; display:flex; align-items:center; border:none; font-size:14px; padding:10px 16px; background:${PRIMARY}; color:white;">${escapeHtml(t.addToBasket)}</button>
+              </div>
+              <p id="disclaimer" style="margin:0 0 -4px; text-align:center; font-size:12px; line-height:1.45; color:#444141;">${escapeHtml(t.disclaimer)}</p>
+              <div id="button-row" style="display:flex; justify-content:center; gap:4px;">
+                <button style="${tertiaryButtonStyle}">${escapeHtml(t.downloadToDevice)}</button>
+                <button style="${tertiaryButtonStyle}">${escapeHtml(t.shareWithFriends)}</button>
+                <button style="${tertiaryButtonStyle}">${escapeHtml(t.newPhoto)}</button>
+              </div>
+            </div>
+            <p id="credit" style="position:absolute; bottom:4px; left:0; right:0; margin:0; text-align:center; font-size:11px; line-height:1; color:#6b7280; font-family:${FONT_STACK};">Powered by GetRoomly</p>
+          </div>
+        </body></html>`
+      );
+
+      const gaps = await page.evaluate(() => {
+        const footer = document.getElementById('footer');
+        const disclaimer = document.getElementById('disclaimer');
+        const buttonRow = document.getElementById('button-row');
+        const credit = document.getElementById('credit');
+        const dRect = disclaimer.getBoundingClientRect();
+        const bRect = buttonRow.getBoundingClientRect();
+        const cRect = credit.getBoundingClientRect();
+        const fRect = footer.getBoundingClientRect();
+        return {
+          disclaimerToButtons: bRect.top - dRect.bottom,
+          buttonsToCredit: cRect.top - bRect.bottom,
+          creditToEdge: fRect.bottom - cRect.bottom,
+        };
+      });
+
+      expect(gaps.disclaimerToButtons).toBe(4);
+      expect(gaps.buttonsToCredit).toBe(4);
+      expect(gaps.creditToEdge).toBe(4);
+    } finally {
+      await page.close();
+    }
+  }, 15000);
+});
+
+/**
  * Point 3 of the 2026-09 footer redesign replaced the tertiary row's
  * per-button `min-width` (a floor, not a ceiling -- a longer confirmation
  * label like "Downloaded ✓" still grew that one button's own natural width
