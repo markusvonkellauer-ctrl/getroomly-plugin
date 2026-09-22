@@ -49,7 +49,7 @@ export const sv: TranslationStrings = {
   newPhoto: 'Nytt foto',
   termsTitle: 'Användarvillkor & Integritet',
   termsIntro:
-    'Denna funktion drivs av GetRoomly, en AI-visualiseringsleverantör som hjälper dig visualisera produkter i din miljö. Din foto behandlas enligt följande villkor:',
+    'Denna funktion drivs av GetRoomly, en AI-visualiseringsleverantör som hjälper dig visualisera produkter i din miljö. Ditt foto behandlas enligt följande villkor:',
   termsSection1Title: '1. Syfte med bildbehandling',
   termsSection1Body:
     'Genom att ladda upp en bild ger du GetRoomly en tillfällig licens att behandla fotot för att visualisera möbelprodukter i din miljö. AI:n analyserar rumsgeometri och ljussättning för att ge en realistisk förhandsgranskning.',

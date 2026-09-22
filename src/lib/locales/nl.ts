@@ -49,7 +49,7 @@ export const nl: TranslationStrings = {
   newPhoto: 'Nieuwe foto',
   termsTitle: 'Gebruiksvoorwaarden & Privacy',
   termsIntro:
-    'Deze functie wordt aangeboden door GetRoomly, een aanbieder van AI-visualisatie die je helpt producten in jouw omgeving te visualiseren. Je foto wordt verwerkt volgens de volgende voorwaarden:',
+    'Deze functie wordt aangeboden door GetRoomly, een aanbieder van AI-visualisatie die u helpt producten in uw omgeving te visualiseren. Uw foto wordt verwerkt volgens de volgende voorwaarden:',
   termsSection1Title: '1. Doel van beeldverwerking',
   termsSection1Body:
     'Door een afbeelding te uploaden, verleent u GetRoomly een tijdelijke licentie om de foto te verwerken om meubelproducten in uw omgeving te visualiseren. De AI analyseert kamergeometrie en verlichting om een realistische voorvertoning te bieden.',
