@@ -3031,5 +3031,22 @@ describe('RoomVisualizationFlow', () => {
       const values = paddingSpy.valuesFor(uploadFooter);
       expect(values.at(-1)).toBe('8px var(--getroomly-space-sm) var(--getroomly-space-sm)');
     });
+
+    test("widens the result step's own footer padding to exactly 19px on the bottom", async () => {
+      // Found in review: the previous test only proved the OTHER steps'
+      // padding is untouched -- this directly asserts the result step's
+      // own footer actually got the new, deliberately-sized value (4px
+      // gap + 11px credit line + 4px gap = 19px), not just "not the old
+      // one".
+      const paddingSpy = captureStyleSetterCalls('padding');
+      await renderAtResult();
+      paddingSpy.restore();
+
+      const newPhotoButton = screen.getByText('New Photo');
+      const resultFooter = newPhotoButton.closest('div[style*="flex-shrink: 0"]');
+      expect(resultFooter).not.toBeNull();
+      const values = paddingSpy.valuesFor(resultFooter);
+      expect(values.at(-1)).toBe('8px var(--getroomly-space-sm) 19px');
+    });
   });
 });
