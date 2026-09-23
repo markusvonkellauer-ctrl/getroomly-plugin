@@ -2485,6 +2485,43 @@ describe('RoomVisualizationFlow', () => {
       clickSpy.mockRestore();
     });
 
+    test("names the downloaded file with the extension matching the image's own MIME type, not a hardcoded .jpg", async () => {
+      // Found in review: triggerDownload used to hardcode '.jpg' regardless
+      // of what the data: URI actually contained -- a WebP or PNG result
+      // would be saved with a JPEG extension even though the bytes inside
+      // were never JPEG. The share path (handleShareWithFriends) already
+      // derives its extension from the Blob's own .type; download must too.
+      const user = userEvent.setup();
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({
+        imageUrl: 'data:image/webp;base64,ZmFrZS13ZWJwLWltYWdl',
+      });
+      await user.click(screen.getByText('Download Image'));
+
+      expect(clickSpy.mock.instances[0].download).toBe('Test Rug-visualization.webp');
+
+      clickSpy.mockRestore();
+    });
+
+    test('names the downloaded file .png for a PNG result', async () => {
+      const user = userEvent.setup();
+      const clickSpy = jest
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+
+      await renderAtResult({
+        imageUrl: 'data:image/png;base64,ZmFrZS1wbmctaW1hZ2U=',
+      });
+      await user.click(screen.getByText('Download Image'));
+
+      expect(clickSpy.mock.instances[0].download).toBe('Test Rug-visualization.png');
+
+      clickSpy.mockRestore();
+    });
+
     test('downloads directly (no blob conversion) for a non-data: URL, so no await ever comes between the click and link.click()', async () => {
       const user = userEvent.setup();
       const nonDataUrl = 'https://cdn.example.com/result.jpg';

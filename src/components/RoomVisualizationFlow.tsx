@@ -1679,7 +1679,8 @@ export function RoomVisualizationFlow({
       return;
     }
 
-    const filename = `${productName}-${showOriginalImage ? 'original' : 'visualization'}.jpg`;
+    const extension = extensionForMimeType(mimeTypeFromDataUrl(imageToDownload) ?? '');
+    const filename = `${productName}-${showOriginalImage ? 'original' : 'visualization'}.${extension}`;
     const link = document.createElement('a');
     link.download = filename;
 
