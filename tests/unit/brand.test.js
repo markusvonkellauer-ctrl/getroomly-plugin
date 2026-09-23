@@ -136,6 +136,20 @@ describe('brandThemeCss', () => {
     );
   });
 
+  it('swaps the upload guidance card border to black, keeping the default 0.05 alpha', () => {
+    // Found in review: the upload guidance card's border was still a
+    // literal teal hsla(176, 51%, 36%, 0.05) in RoomVisualizationFlow.tsx,
+    // not a themed token -- so both brands kept a teal-tinted border after
+    // the rest of the UI switched to black/tint. Same rule as the other
+    // colour tokens: only the hue changes, the alpha stays 0.05.
+    expect(brandThemeCss('nordicnest')).toContain(
+      '--getroomly-guidance-border: rgba(0, 0, 0, 0.05);'
+    );
+    expect(brandThemeCss('svensson')).toContain(
+      '--getroomly-guidance-border: rgba(0, 0, 0, 0.05);'
+    );
+  });
+
   it('overrides the 0-100% processing progress bar fill to the primary black, not left teal', () => {
     // Found in review: this is a separate variable from the spinner's own
     // gradient stops, since it's a brand accent element (like a button),

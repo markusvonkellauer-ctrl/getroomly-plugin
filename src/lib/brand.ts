@@ -69,6 +69,7 @@ const NORDIC_NEST_THEME: Readonly<Record<string, string>> = {
   '--getroomly-dialog-body': '#000000',
   '--getroomly-header-title': 'rgba(0, 0, 0, 0.8)',
   '--getroomly-upload-hint': 'rgba(0, 0, 0, 0.5)',
+  '--getroomly-guidance-border': 'rgba(0, 0, 0, 0.05)',
   // Processing-step spinner gradient (loading-spinner.css): light (tint)
   // to dark (primary), same 3-stop structure as the default teal gradient.
   // --getroomly-spinner-mid has no client-given value -- linearly

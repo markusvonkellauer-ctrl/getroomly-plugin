@@ -264,9 +264,10 @@ export function detectLanguageFromTLD(): SupportedLanguage {
 }
 
 /**
- * Full priority chain: explicit host-page override, then TLD, then English.
- * Use this when there's no already-resolved `config.language` to read from
- * (e.g. inside use-embed-config.ts, before defaults are applied).
+ * Full priority chain: explicit host-page override, then TLD, then the
+ * staging-label fallback (see detectLanguageFromStagingLabel above), then
+ * English. Use this when there's no already-resolved `config.language` to
+ * read from (e.g. inside use-embed-config.ts, before defaults are applied).
  */
 export function detectLanguage(): SupportedLanguage {
   const configLang = window.GetRoomlyEmbedConfig?.language;

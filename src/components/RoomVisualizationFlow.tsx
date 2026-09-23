@@ -1067,7 +1067,7 @@ export function RoomVisualizationFlow({
           backgroundColor: 'hsla(30, 20%, 98%, 0.4)', // bg-background/40
           backdropFilter: 'blur(2px)', // backdrop-blur-[2px]
           borderRadius: 'var(--getroomly-radius-card)', // rounded-lg
-          border: '1px solid hsla(176, 51%, 36%, 0.05)', // border border-primary/5
+          border: '1px solid var(--getroomly-guidance-border)', // border border-primary/5
           boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)', // shadow-sm
         }}
       >
