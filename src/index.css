@@ -50,6 +50,7 @@
   --getroomly-dialog-body: #4b5563;
   --getroomly-header-title: rgba(0, 0, 0, 0.8);
   --getroomly-upload-hint: rgba(107, 114, 126, 0.5);
+  --getroomly-guidance-border: hsla(176, 51%, 36%, 0.05);
   /* Processing-step spinner gradient (see loading-spinner.css) -- 3 stops,
    * light to dark, same as the default teal so a brand override only needs
    * to redefine these three, not touch the animation/shape rules. */
