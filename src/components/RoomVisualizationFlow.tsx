@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import {
   AIGenerationError,
   generateRoomVisualization,
@@ -9,7 +9,8 @@ import {
 import type { EmbedConfig } from '@/types/embed-config';
 import { getTranslations } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { dataUrlToBlob, extensionForMimeType, mimeTypeFromDataUrl } from '@/lib/data-url';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 
 interface RoomVisualizationFlowProps {
   productImages: string[];
@@ -65,9 +66,94 @@ export function RoomVisualizationFlow({
 
   // Result step state
   const [showOriginalImage, setShowOriginalImage] = useState(false);
-  const [saveShareDropdownOpen, setSaveShareDropdownOpen] = useState(false);
   const [isFavorited, setIsFavorited] = useState(config?.isFavorite ?? false);
-  const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState(false);
+  // 'open' = the two thumb circles are visible on the image, 'thanks' =
+  // replaced in place by a confirmation pill for 2200ms, 'gone' = cleared,
+  // nothing shown at that position (there's no footer row left to
+  // preserve height for -- see renderResultStep's top band). Each timer is
+  // keyed to its own ref (feedback vs. download status below) -- a shared
+  // setTimeout handle would let one reset cancel/overwrite the other's
+  // pending clear.
+  const [feedbackState, setFeedbackState] = useState<'open' | 'thanks' | 'gone'>('open');
+  const feedbackTimerRef = useRef<number | null>(null);
+  // Transient confirmations shown ON the button that triggered them, for
+  // 2400ms, then reverted -- replaces an earlier design where a separate
+  // status line under the disclaimer carried this instead (empty almost
+  // all the time, permanently reserving space for that). Three
+  // independent buttons, three independent pieces of state: each can be
+  // triggered without affecting the others.
+  const [downloadButtonConfirmed, setDownloadButtonConfirmed] = useState(false);
+  const downloadButtonTimerRef = useRef<number | null>(null);
+  const [addedToBasketVisible, setAddedToBasketVisible] = useState(false);
+  const addedToBasketTimerRef = useRef<number | null>(null);
+  // 'copied' when handleShareWithFriends's clipboard fallback succeeds,
+  // 'downloaded' when even that fails and it falls through to a plain
+  // download -- two different confirmations on the SAME button, since
+  // "Kopierad" would be a lie if what actually happened was a download.
+  const [shareButtonStatus, setShareButtonStatus] = useState<'idle' | 'copied' | 'downloaded'>(
+    'idle'
+  );
+  const shareButtonTimerRef = useRef<number | null>(null);
+  // Guards against a second Share click while the first is still in
+  // flight -- found in review: the native share sheet (tier 1) stays open
+  // for as long as the user takes to choose, during which
+  // navigator.share()'s own promise is still pending. A second click
+  // during that window starts a SECOND, independent call; the Web Share
+  // API only allows one share at a time, so that second call's own
+  // navigator.share() rejects with InvalidStateError -- a different error
+  // name than AbortError, so it wasn't caught by the "user cancelled"
+  // check and fell through to the clipboard/download tiers, silently
+  // downloading the image on what the user experienced as a double-tap. A
+  // ref, not state -- this never needs to trigger a re-render, only to be
+  // read/written synchronously inside the handler.
+  const isSharingRef = useRef(false);
+
+  // Upload-step dropzone polish: hover state for the (pointer-events:none)
+  // upload button's own background colour -- see renderUploadStep's
+  // onMouseEnter/onMouseLeave, which already exist for the scale transform
+  // and now also drive this. State, not a CSS :hover rule, because the
+  // button itself never receives pointer events (the wrapping div does,
+  // see its own onClick) -- CSS :hover requires the pointer to actually be
+  // over the element being styled, which pointer-events:none prevents.
+  const [isUploadButtonHovered, setIsUploadButtonHovered] = useState(false);
+  // Drives the dropzone's dragover-only border -- found in review of a
+  // design change request: dropping a file onto the zone already worked,
+  // but gave zero visual feedback while the file was being dragged over
+  // it, so the (real, working) drop support was effectively undiscoverable.
+  const [isDraggingFileOver, setIsDraggingFileOver] = useState(false);
+
+  // The result image's own maxHeight can't be a plain CSS percentage: its
+  // flex ancestor (resultContentRef below) has overflow:hidden + minHeight:0,
+  // so flexbox is free to shrink it below the image's natural size whenever
+  // the header+footer (whose height varies with language/translated string
+  // length and with which optional footer rows are currently showing) leave
+  // less than a fixed CSS guess assumes -- verified with Puppeteer: a static
+  // `max(calc(55dvh - 200px), 150px)` guess left the image up to ~39px taller
+  // than the wrapper's real shrunk box at a 375x568 viewport, and the
+  // wrapper's own overflow:hidden silently clipped the excess. Since
+  // flex:1 1 auto + minHeight:0 makes resultContentRef's resolved height
+  // always converge to the true leftover space (flex-grow fills slack,
+  // flex-shrink absorbs a deficit, all the way to 0) regardless of the
+  // image's own size, ResizeObserver-measuring that element directly is
+  // exact where a CSS formula could only ever approximate. Null until the
+  // first observation fires (one frame, typically before first paint) --
+  // the CSS formula below is used as the fallback for that instant only.
+  const [availableImageHeightPx, setAvailableImageHeightPx] = useState<number | null>(null);
+  const resultContentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = resultContentRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (entry) {
+        setAvailableImageHeightPx(entry.contentRect.height);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
   // resets automatically whenever resultImage changes — no effect needed.
@@ -80,6 +166,144 @@ export function RoomVisualizationFlow({
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null);
   const lastTapRef = useRef(0);
+
+  // The photo overlay (Before/After toggle, top-left corner; feedback
+  // thumbs, bottom-right corner) used to be a child of imageContainerRef,
+  // clipped by its overflow:hidden -- but at short viewports
+  // resultContentRef (a SEPARATE overflow:hidden ancestor, with its own
+  // independently flex-resolved height) could clip it first, regardless
+  // of the image's own size, making the only feedback/Before-After
+  // controls genuinely inaccessible. Fixed by rendering the overlay as a
+  // sibling of the header/content/footer stack instead (see the JSX
+  // below, outside imageContainerRef entirely).
+  //
+  // overlayAnchor is imageContainerRef's on-screen box, in the SAME
+  // coordinate system the overlay's own position:absolute resolves
+  // against -- found in review that resultContentRef is itself
+  // position:relative (its own div, further down), so it's
+  // imageContainerRef's real offsetParent; reading offsetTop/Left
+  // directly (an earlier version of this did) silently returns
+  // coordinates relative to resultContentRef, not the overlay's own
+  // containing block, landing it near the header instead of over the
+  // image. getBoundingClientRect gives both elements' positions in the
+  // same (viewport) coordinate system regardless of how many positioned
+  // ancestors sit in between either of them, so subtracting is correct
+  // no matter what resultContentRef (or anything else) does with its own
+  // `position`.
+  //
+  // overlayRef is the chicken-and-egg piece: the overlay's own containing
+  // block is only knowable once it has actually mounted (via its own
+  // offsetParent), but it only needs to mount at all once a real anchor
+  // exists. renderPhotoOverlay mounts it regardless, visually hidden
+  // until the first real measurement lands, specifically so this has
+  // something to read.
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const [overlayAnchor, setOverlayAnchor] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const measureOverlayAnchor = useCallback(() => {
+    const imageEl = imageContainerRef.current;
+    const overlayEl = overlayRef.current;
+    // overlayEl can still be null the very first time this runs:
+    // attachImageContainerRef's callback ref fires mid-commit, and can
+    // race ahead of the overlay's own (later, plain) ref being assigned
+    // -- found in review. Bailing out here (rather than falling back to
+    // document.body) leaves overlayAnchor -- and therefore
+    // visibility:hidden -- untouched for that one moment; the
+    // useLayoutEffect below guarantees a real measurement runs after
+    // every commit where the overlay could exist, by which point
+    // overlayEl is always populated (React attaches every ref in a
+    // commit before running that commit's layout effects). Once
+    // overlayEl itself exists, though, a still-missing offsetParent does
+    // NOT mean "not really mounted" -- jsdom (unit tests, no real layout
+    // engine) never resolves offsetParent correctly even for a
+    // genuinely-mounted, correctly-styled element; bailing out on that
+    // too made every overlay-related unit test fail (the overlay stayed
+    // permanently visibility:hidden, invisible to testing-library's
+    // accessible-role queries). document.body there is a harmless
+    // fallback either way: in jsdom nothing checks the resulting pixel
+    // values, and in a real browser this genuinely shouldn't happen once
+    // overlayEl is mounted under the (position:fixed) modal.
+    if (!imageEl || !overlayEl) {
+      return;
+    }
+    const containingEl = overlayEl.offsetParent ?? document.body;
+    const imageRect = imageEl.getBoundingClientRect();
+    const containingRect = containingEl.getBoundingClientRect();
+    // getBoundingClientRect() is measured from the containing element's
+    // BORDER box, but a position:absolute child's top/left resolve
+    // against its PADDING box -- found in review: .getroomly-modal-
+    // container (the real containingEl in production) has a 1px border
+    // (index.css's .border class), so subtracting containingRect.top/left
+    // alone landed the overlay 1px down and right of the image. clientTop/
+    // clientLeft give exactly the border width (0 for the document.body
+    // fallback, which has none), correcting for it regardless of what
+    // border containingEl does or doesn't have.
+    const top = imageRect.top - containingRect.top - containingEl.clientTop;
+    const left = imageRect.left - containingRect.left - containingEl.clientLeft;
+    // The overlay's own box is set to EXACTLY the image's box (top/left/
+    // width/height, no insets baked in here -- each control applies its
+    // own 14px inset from whichever corner it's anchored to instead, see
+    // renderPhotoOverlay). That makes the footer irrelevant to this
+    // calculation entirely: since the overlay can never be taller than
+    // the image itself, and the image (normal document flow) never
+    // overlaps the footer to begin with, the overlay structurally can't
+    // either -- no separate footer-distance tracking needed. An earlier
+    // version of this DID track footer distance (maxHeightBeforeFooter /
+    // maxHeightWithinBounds, plus a dedicated footerRef ResizeObserver
+    // and language/button-visibility dependencies to keep it fresh) --
+    // removed once the single shared band (both controls sharing one
+    // row) was replaced with two independently corner-anchored controls,
+    // which made that whole tracking mechanism dead weight.
+    setOverlayAnchor({
+      top,
+      left,
+      width: imageRect.width,
+      height: imageRect.height,
+    });
+  }, []);
+
+  // The ResizeObserver on imageContainerRef (attachImageContainerRef)
+  // only fires when that element's own SIZE changes -- it wouldn't catch
+  // imageContainerRef staying the same size but shifting horizontally
+  // (its own centering position depends on the available width of its
+  // flex row, not its own size), e.g. an actual window/orientation
+  // resize. Cheap enough to just always listen.
+  useEffect(() => {
+    window.addEventListener('resize', measureOverlayAnchor);
+    return () => window.removeEventListener('resize', measureOverlayAnchor);
+  }, [measureOverlayAnchor]);
+
+  // Measures the bottom-right corner's real rendered height (whichever of
+  // the thumb group / confirmation pill currently occupies it -- see
+  // renderPhotoOverlay, they share one stable wrapper specifically so this
+  // ref doesn't have to track two different, conditionally-mounted
+  // elements). Read by the toggle group (top-left) to cap its own
+  // maxHeight so its wrapped text can never grow down far enough to
+  // visually overlap the bottom-right corner -- found in review (caught by
+  // actually screenshotting the narrowest case, not by the numeric-only
+  // checks that missed it): at extreme widths (~84px) the toggle's own
+  // wrapped text can reach ~146px tall, comfortably overlapping the thumb
+  // group beneath it despite each being individually positioned within its
+  // own corner correctly.
+  //
+  // A STATIC height reservation (e.g. always reserving the thumb group's
+  // worst-case 96px) was tried first and rejected: measured directly, the
+  // thumb group only needs that much when it's ALSO forced to wrap (narrow
+  // widths) -- at normal/wide widths it renders as a single 44px-tall row,
+  // and a static 96px+ reservation would clip the toggle's own ordinary
+  // single-line case for no reason, on any image that happens to be ~150px
+  // tall (the common case, not a rare one). Only a real measurement avoids
+  // that: it costs the toggle nothing when the bottom corner is small, and
+  // caps it correctly when the bottom corner is large.
+  const bottomControlRef = useRef<HTMLDivElement | null>(null);
+  const [bottomControlHeight, setBottomControlHeight] = useState<number | null>(null);
+  // The effect observing bottomControlRef lives further down, alongside
+  // showFeedback's own declaration (it depends on showFeedback -- see
+  // that effect's comment for why).
 
   // Mutable refs so touch handlers can read latest values without being in the
   // effect dep array (avoids re-registering listeners on every scale update).
@@ -118,6 +342,14 @@ export function RoomVisualizationFlow({
 
   // Terms dialog state
   const [showTermsDialog, setShowTermsDialog] = useState(false);
+  const termsDialogRef = useRef<HTMLDivElement>(null);
+  // Own focus trap, separate from App.tsx's outer modal trap -- this
+  // overlay renders ON TOP of the main modal (z-index 10000), so it needs
+  // to be the surface Tab/Escape act on while it's open; useFocusTrap's
+  // internal stack (see use-focus-trap.ts) makes the outer trap defer to
+  // this one automatically while both are registered.
+  const closeTermsDialog = useCallback(() => setShowTermsDialog(false), []);
+  useFocusTrap(termsDialogRef, showTermsDialog, closeTermsDialog);
 
   const uploadedImageRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -136,8 +368,27 @@ export function RoomVisualizationFlow({
   // of calling setState after unmount.
   const isMountedRef = useRef(true);
   useEffect(() => {
+    // Both entrypoints (main.tsx, shadow-entry.tsx) mount under
+    // React.StrictMode, which in dev replays this effect as
+    // setup -> cleanup -> setup to surface missing cleanup bugs. Without
+    // this assignment, the first (simulated) cleanup would leave the ref
+    // false forever, permanently no-oping every isMountedRef.current-gated
+    // setState -- including the feedback/download timers below -- in dev.
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+      }
+      if (downloadButtonTimerRef.current) {
+        clearTimeout(downloadButtonTimerRef.current);
+      }
+      if (addedToBasketTimerRef.current) {
+        clearTimeout(addedToBasketTimerRef.current);
+      }
+      if (shareButtonTimerRef.current) {
+        clearTimeout(shareButtonTimerRef.current);
+      }
     };
   }, []);
 
@@ -233,6 +484,14 @@ export function RoomVisualizationFlow({
       setResultImage(null);
       setGenerationId(null);
       setStep('upload');
+      // Found in review: the dropzone's hover/dragover state is transient
+      // UI feedback tied to a mouse/drag interaction that's long over by
+      // the time an async generation fails -- without this, a hover right
+      // before upload (the normal click-to-upload flow) can leave the
+      // button rendering its press colour on the upload step this reset
+      // returns to, with no mouse anywhere near it.
+      setIsUploadButtonHovered(false);
+      setIsDraggingFileOver(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -271,6 +530,11 @@ export function RoomVisualizationFlow({
       uploadedImageRef.current = null;
       setUploadedImage(null);
       setStep('upload');
+      // See the same reset in the generation-error catch block above --
+      // stale hover/dragover feedback from the interaction that triggered
+      // this failed read shouldn't survive onto the upload step it returns to.
+      setIsUploadButtonHovered(false);
+      setIsDraggingFileOver(false);
       setIsGenerating(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -400,8 +664,38 @@ export function RoomVisualizationFlow({
     setUploadedImage(null);
     setResultImage(null);
     setGenerationId(null);
-    setHasSubmittedFeedback(false);
     setShowOriginalImage(false);
+    // Same reason as the other two resets to 'upload' -- the mouse that
+    // hovered the dropzone for the PREVIOUS photo is very likely nowhere
+    // near it now (this fires from a click on the result step's "New
+    // Photo" button), so the stale hover/dragover feedback shouldn't
+    // carry over.
+    setIsUploadButtonHovered(false);
+    setIsDraggingFileOver(false);
+
+    // Reset every transient timer so a pending one from the previous
+    // result can't fire after this reset and clear confirmation state
+    // that belongs to the next photo's own buttons.
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current);
+      feedbackTimerRef.current = null;
+    }
+    setFeedbackState('open');
+    if (downloadButtonTimerRef.current) {
+      clearTimeout(downloadButtonTimerRef.current);
+      downloadButtonTimerRef.current = null;
+    }
+    setDownloadButtonConfirmed(false);
+    if (addedToBasketTimerRef.current) {
+      clearTimeout(addedToBasketTimerRef.current);
+      addedToBasketTimerRef.current = null;
+    }
+    setAddedToBasketVisible(false);
+    if (shareButtonTimerRef.current) {
+      clearTimeout(shareButtonTimerRef.current);
+      shareButtonTimerRef.current = null;
+    }
+    setShareButtonStatus('idle');
   };
 
   const handleOpenTerms = () => {
@@ -415,50 +709,95 @@ export function RoomVisualizationFlow({
     []
   );
 
-  useEffect(() => {
-    const el = imageContainerRef.current;
-    if (!el) {
-      return;
-    }
+  // Callback ref, not useEffect + a plain useRef: the image well
+  // (imageContainerRef's element) only exists in the DOM during the
+  // 'result' step, but a useEffect with a fixed dependency array only
+  // runs once, on the component's first mount -- while still in the
+  // 'upload' step, before this div exists at all. That meant these
+  // listeners were being attached to `null` and never re-attached once
+  // the real element mounted: pinch-zoom and double-tap-to-reset-zoom
+  // never actually worked. A callback ref runs every time the DOM node
+  // itself mounts/unmounts, which is what this needs -- confirmed via
+  // debug logging that a plain useRef effect here only ever saw `el` as
+  // null. React 19 supports returning a cleanup function directly from a
+  // ref callback, mirroring a useEffect's own attach/cleanup shape.
+  const attachImageContainerRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      imageContainerRef.current = el;
+      measureOverlayAnchor();
+      if (!el) {
+        return;
+      }
 
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        pinchRef.current = {
-          startDist: getDistance(e.touches[0], e.touches[1]),
-          startScale: imageScaleRef.current,
-        };
-      } else if (e.touches.length === 1) {
-        const now = Date.now();
-        if (now - lastTapRef.current < 300) {
-          setImageScale(1);
+      const onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length === 2) {
+          pinchRef.current = {
+            startDist: getDistance(e.touches[0], e.touches[1]),
+            startScale: imageScaleRef.current,
+          };
+        } else if (e.touches.length === 1) {
+          // Belt-and-suspenders guard against any button inside this
+          // container registering as a double-tap-to-reset-zoom gesture.
+          // The photo overlay (Before/After toggle, feedback thumbs) and
+          // the favorite/action-row buttons all live outside
+          // imageContainerRef now (see renderPhotoOverlay and the
+          // footer), so touches on them never reach this handler via
+          // bubbling in the first place -- this only matters for
+          // whatever real descendants this container still has.
+          const target = e.touches[0].target;
+          if (target instanceof Element && target.closest('button')) {
+            return;
+          }
+          const now = Date.now();
+          if (now - lastTapRef.current < 300) {
+            setImageScale(1);
+          }
+          lastTapRef.current = now;
         }
-        lastTapRef.current = now;
+      };
+
+      const onTouchMove = (e: TouchEvent) => {
+        if (e.touches.length === 2 && pinchRef.current) {
+          e.preventDefault();
+          const newDist = getDistance(e.touches[0], e.touches[1]);
+          const ratio = newDist / pinchRef.current.startDist;
+          const next = Math.min(Math.max(pinchRef.current.startScale * ratio, 1), 4);
+          setImageScale(next);
+        }
+      };
+
+      const onTouchEnd = () => {
+        pinchRef.current = null;
+      };
+
+      el.addEventListener('touchstart', onTouchStart, { passive: true });
+      el.addEventListener('touchmove', onTouchMove, { passive: false });
+      el.addEventListener('touchend', onTouchEnd, { passive: true });
+
+      // Re-measures the overlay's anchor whenever imageContainerRef's own
+      // rendered size changes (image maxHeight resolving, aspect ratio,
+      // etc.) -- deliberately its own observer rather than piggy-backing
+      // on resultContentRef's (above): that one fires in the same tick as
+      // the state update that CAUSES this element to resize, before the
+      // resulting re-render has actually happened, so reading
+      // offsetWidth/Height there would return the stale, pre-resize box.
+      let resizeObserver: ResizeObserver | undefined;
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          measureOverlayAnchor();
+        });
+        resizeObserver.observe(el);
       }
-    };
 
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 2 && pinchRef.current) {
-        e.preventDefault();
-        const newDist = getDistance(e.touches[0], e.touches[1]);
-        const ratio = newDist / pinchRef.current.startDist;
-        const next = Math.min(Math.max(pinchRef.current.startScale * ratio, 1), 4);
-        setImageScale(next);
-      }
-    };
-
-    const onTouchEnd = () => {
-      pinchRef.current = null;
-    };
-
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
-    return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
-    };
-  }, [getDistance, setImageScale]);
+      return () => {
+        el.removeEventListener('touchstart', onTouchStart);
+        el.removeEventListener('touchmove', onTouchMove);
+        el.removeEventListener('touchend', onTouchEnd);
+        resizeObserver?.disconnect();
+      };
+    },
+    [getDistance, setImageScale, measureOverlayAnchor]
+  );
 
   const renderStepIndicator = (currentStep: 'upload' | 'processing' | 'result') => {
     const steps = [
@@ -489,9 +828,9 @@ export function RoomVisualizationFlow({
                   height: '32px',
                   borderRadius: '50%',
                   backgroundColor: isActive
-                    ? 'var(--getroomly-primary)'
+                    ? 'var(--getroomly-primary-deep)'
                     : isCompleted
-                      ? 'var(--getroomly-primary)'
+                      ? 'var(--getroomly-primary-deep)'
                       : 'var(--getroomly-border-light)',
                   color: isActive || isCompleted ? '#ffffff' : 'var(--getroomly-muted)',
                   display: 'flex',
@@ -508,9 +847,9 @@ export function RoomVisualizationFlow({
                 style={{
                   fontSize: '12px',
                   color: isActive
-                    ? 'var(--getroomly-primary)'
+                    ? 'var(--getroomly-primary-deep)'
                     : isCompleted
-                      ? 'var(--getroomly-primary)'
+                      ? 'var(--getroomly-primary-deep)'
                       : 'var(--getroomly-muted)',
                   fontWeight: isActive ? '600' : '500',
                   transition: 'all 0.3s ease',
@@ -547,13 +886,37 @@ export function RoomVisualizationFlow({
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        // gap, not justifyContent:'space-between' -- found in review of a
+        // design change request: space-between let the gap between the
+        // dropzone and the tips card grow unpredictably with container
+        // height instead of staying a fixed, intentional distance. The
+        // dropzone itself now grows via flex:1 (below) to fill the
+        // remaining space, so there's still no dead gap either.
+        gap: '14px',
         padding: '24px',
         backgroundColor: 'rgba(0, 0, 0, 0.02)',
-        borderRadius: '8px',
+        borderRadius: 'var(--getroomly-radius-card)',
         position: 'relative',
-        overflow: 'hidden',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        // Not 'hidden' -- found in review: at narrow widths (320-375px,
+        // e.g. iPhone SE/mini) the strict aspectRatio:5/5 square plus the
+        // dropzone's own minHeight floor leaves too little room for the
+        // tips card's real content, which needs ~200px. With
+        // overflow:'hidden' that excess was silently clipped off the
+        // bottom of the box instead of visible; 'visible' lets the box
+        // grow taller than a perfect square on narrow screens so nothing
+        // is cut off (verified via real-browser screenshots at 320/375px
+        // -- no visual regression at any width, since flex:1 already caps
+        // the box back to its intended square height wherever there's
+        // enough room).
+        overflow: 'visible',
+        // No explicit fontFamily here -- found in review: it redundantly
+        // repeated the exact same stack index.css's own :root, :host rule
+        // already sets by default, but being an inline style, it also
+        // unconditionally beat brand.ts's font-family:inherit override
+        // (inline styles always win over injected <style> rules), so the
+        // entire upload step silently kept the system font stack on a
+        // branded page while every other step correctly inherited the
+        // host's own font.
         textAlign: 'center',
       }}
     >
@@ -561,26 +924,61 @@ export function RoomVisualizationFlow({
 
       <div
         style={{
+          flex: '1',
+          minHeight: '150px',
+          width: '100%',
+          boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          justifyContent: 'center',
           textAlign: 'center',
-          marginTop: '8px',
           cursor: 'pointer',
-          transition: 'transform 0.2s ease',
+          borderRadius: 'var(--getroomly-radius-card)',
+          // Transparent, not 'none' -- keeps the box the same size whether
+          // the border is showing or not, so it appearing on dragover
+          // doesn't shift the icon/button/hint by the border's own width.
+          border: isDraggingFileOver
+            ? '2px dashed var(--getroomly-primary)'
+            : '2px dashed transparent',
+          transition: 'transform 0.2s ease, border-color 0.15s ease',
         }}
         onClick={() => fileInputRef.current?.click()}
         onMouseEnter={e => {
           e.currentTarget.style.transform = 'scale(1.05)';
+          setIsUploadButtonHovered(true);
         }}
         onMouseLeave={e => {
           e.currentTarget.style.transform = 'scale(1)';
+          setIsUploadButtonHovered(false);
+        }}
+        onDragEnter={e => {
+          e.preventDefault();
+          // Found in review: without this check, dragging ANYTHING over the
+          // zone (selected text, a link, an image from another tab) showed
+          // the "drop here" dashed border, even though only an actual file
+          // drop does anything -- dataTransfer.types includes 'Files' only
+          // for a real file drag, so this keeps the affirmative feedback
+          // honest about what will actually work.
+          if (e.dataTransfer?.types?.includes('Files')) {
+            setIsDraggingFileOver(true);
+          }
         }}
         onDragOver={e => {
           e.preventDefault();
         }}
+        onDragLeave={e => {
+          e.preventDefault();
+          // Only clear when actually leaving the zone, not when crossing
+          // from one of its own children to another -- relatedTarget is
+          // the element the pointer is moving into.
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            setIsDraggingFileOver(false);
+          }
+        }}
         onDrop={e => {
           e.preventDefault();
+          setIsDraggingFileOver(false);
           const file = e.dataTransfer.files[0];
           if (file) {
             const event = { target: { files: [file] } } as any;
@@ -590,7 +988,7 @@ export function RoomVisualizationFlow({
       >
         <div
           style={{
-            backgroundColor: 'hsla(176, 51%, 36%, 0.1)', // bg-primary/10 equivalent
+            backgroundColor: 'var(--getroomly-primary-tint)', // bg-primary/10 equivalent
             padding: '16px',
             borderRadius: '50%',
             marginBottom: '12px',
@@ -625,17 +1023,19 @@ export function RoomVisualizationFlow({
             justifyContent: 'center',
             gap: '8px',
             whiteSpace: 'nowrap',
-            fontSize: '14px',
-            backgroundColor: 'var(--getroomly-primary)', // bg-primary
+            fontSize: '13px',
+            backgroundColor: isUploadButtonHovered
+              ? 'var(--getroomly-primary-press)'
+              : 'var(--getroomly-primary-deep)', // bg-primary, white text needs the AA-safe deep tone
             color: '#ffffff', // text-primary-foreground
             border: 'none',
-            borderRadius: '6px',
-            padding: '8px 12px',
-            fontWeight: 'bold',
+            borderRadius: 'var(--getroomly-radius-pill)',
+            padding: '13px 26px',
+            fontWeight: 600,
             letterSpacing: '0.025em',
             width: '100%',
-            maxWidth: '170px',
-            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+            maxWidth: '200px',
+            boxShadow: 'var(--getroomly-upload-button-shadow)',
             pointerEvents: 'none',
             transition: 'all 0.2s ease',
             cursor: 'pointer',
@@ -646,11 +1046,9 @@ export function RoomVisualizationFlow({
         <p
           style={{
             marginTop: '8px',
-            fontSize: '9px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            color: 'rgba(107, 114, 126, 0.5)', // text-muted-foreground/50
-            fontWeight: '500',
+            fontSize: '11px',
+            fontWeight: '400',
+            color: 'var(--getroomly-upload-hint)', // text-muted-foreground/50
           }}
         >
           {t.uploadHint}
@@ -668,8 +1066,8 @@ export function RoomVisualizationFlow({
           padding: '16px', // p-4
           backgroundColor: 'hsla(30, 20%, 98%, 0.4)', // bg-background/40
           backdropFilter: 'blur(2px)', // backdrop-blur-[2px]
-          borderRadius: '8px', // rounded-lg
-          border: '1px solid hsla(176, 51%, 36%, 0.05)', // border border-primary/5
+          borderRadius: 'var(--getroomly-radius-card)', // rounded-lg
+          border: '1px solid var(--getroomly-guidance-border)', // border border-primary/5
           boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)', // shadow-sm
         }}
       >
@@ -677,12 +1075,12 @@ export function RoomVisualizationFlow({
           style={{
             fontSize: '10px', // text-[10px]
             fontWeight: 'bold', // font-bold
-            color: 'hsla(176, 51%, 36%, 0.8)', // text-primary/80
+            color: 'var(--getroomly-tips-heading)', // text-primary/80
             marginBottom: '12px', // mb-3
             textTransform: 'uppercase', // uppercase
             letterSpacing: '0.15em', // tracking-[0.15em]
             textAlign: 'center', // text-center
-            borderBottom: '1px solid hsla(176, 51%, 36%, 0.1)', // border-b border-primary/10
+            borderBottom: '1px solid var(--getroomly-primary-tint)', // border-b border-primary/10
             paddingBottom: '8px', // pb-2
           }}
         >
@@ -705,8 +1103,8 @@ export function RoomVisualizationFlow({
                 width: '16px', // w-4
                 height: '16px', // h-4
                 borderRadius: '50%', // rounded-full
-                backgroundColor: 'hsla(176, 51%, 36%, 0.1)', // bg-primary/10
-                color: 'var(--getroomly-primary)', // text-primary
+                backgroundColor: 'var(--getroomly-primary-tint)', // bg-primary/10
+                color: 'var(--getroomly-primary-deep)', // text-primary, small bold text needs the AA-safe deep tone
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -718,7 +1116,7 @@ export function RoomVisualizationFlow({
               1
             </span>
             <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
-              <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
+              <span style={{ fontWeight: '600', color: 'var(--getroomly-tip-label)' }}>
                 {t.tip1Label}
               </span>
               <span> {t.tip1Body}</span>
@@ -731,8 +1129,8 @@ export function RoomVisualizationFlow({
                 width: '16px',
                 height: '16px',
                 borderRadius: '50%',
-                backgroundColor: 'hsla(176, 51%, 36%, 0.1)',
-                color: 'var(--getroomly-primary)',
+                backgroundColor: 'var(--getroomly-primary-tint)',
+                color: 'var(--getroomly-primary-deep)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -744,7 +1142,7 @@ export function RoomVisualizationFlow({
               2
             </span>
             <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
-              <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
+              <span style={{ fontWeight: '600', color: 'var(--getroomly-tip-label)' }}>
                 {t.tip2Label}
               </span>
               <span> {t.tip2Body}</span>
@@ -757,8 +1155,8 @@ export function RoomVisualizationFlow({
                 width: '16px',
                 height: '16px',
                 borderRadius: '50%',
-                backgroundColor: 'hsla(176, 51%, 36%, 0.1)',
-                color: 'var(--getroomly-primary)',
+                backgroundColor: 'var(--getroomly-primary-tint)',
+                color: 'var(--getroomly-primary-deep)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -770,7 +1168,7 @@ export function RoomVisualizationFlow({
               3
             </span>
             <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
-              <span style={{ fontWeight: '600', color: 'hsla(20, 10%, 15%, 0.8)' }}>
+              <span style={{ fontWeight: '600', color: 'var(--getroomly-tip-label)' }}>
                 {t.tip3Label}
               </span>
               <span> {t.tip3Body}</span>
@@ -834,7 +1232,7 @@ export function RoomVisualizationFlow({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: '8px',
+        borderRadius: 'var(--getroomly-radius-card)',
         overflow: 'hidden',
       }}
     >
@@ -928,7 +1326,7 @@ export function RoomVisualizationFlow({
               top: 0,
               left: 0,
               height: '100%',
-              background: '#00c9a7',
+              background: 'var(--getroomly-progress-fill)',
               // Raw (fractional) progress, not Math.floor — progress advances
               // ~0.64 points per 100ms tick, so flooring only changes the
               // rendered width every 1-2 ticks (100-200ms, unevenly), which
@@ -956,6 +1354,202 @@ export function RoomVisualizationFlow({
   const showFeedback = resultButtons.feedback !== false;
   const showOriginal = resultButtons.showOriginal !== false;
   const showSaveShare = resultButtons.saveShare !== false;
+  // The image Download/Share act on right now -- respects the Before/After
+  // toggle, matching triggerDownload's own selection (see
+  // handleDownloadToDevice below) so Share and Download never disagree
+  // about which image is "the current one" (found in review: Share used
+  // to always send resultImage regardless of the toggle).
+  const currentResultImage = showOriginalImage ? uploadedImage : resultImage;
+  // Only the declared MIME type, not the full decoded Blob -- found in
+  // review: dataUrlToBlob's atob() + per-byte Uint8Array copy running on
+  // every render (whenever the result image or Before/After selection
+  // changes) just to read a type was real, avoidable work for the
+  // multi-megabyte images this app accepts. mimeTypeFromDataUrl never
+  // touches the payload, so this stays cheap regardless of image size --
+  // the real decode stays lazy, inside handleShareWithFriends, only run
+  // when the user actually clicks Share.
+  const currentResultMimeType = currentResultImage ? mimeTypeFromDataUrl(currentResultImage) : null;
+  // On a browser with the Web Share API, "Download Image" saves into the
+  // Files app, not the Photos library -- Dela already covers everything
+  // Download does (its own tier-3 fallback IS a plain download) plus a
+  // native share sheet where "Save Image" saves into Photos directly. So
+  // where the share sheet is available, showing a redundant Download
+  // button that produces a worse-for-the-user result buys nothing.
+  // Capability-checked, not device/viewport-checked -- this doesn't rely
+  // on guessing "mobile" from a breakpoint or user-agent string, which
+  // the codebase avoids elsewhere.
+  //
+  // navigator.share alone isn't enough -- found in review: some browsers
+  // expose it for URL/text sharing only, with no file-sharing support at
+  // all. navigator.canShare({files}) (the Level 2 addition) is what
+  // actually gates whether a File can be shared, so this probes it with
+  // an EMPTY File of the SAME type as the real image -- canShare only
+  // inspects the File's own `type`, not its content, so no decode is
+  // needed for the probe either (see currentResultMimeType above).
+  // typeof navigator.share === 'function' and typeof File === 'undefined'
+  // are also required explicitly -- found in review: canShare present
+  // without a callable share() is a real (if unusual) partial-API case,
+  // and without either check Download could be hidden for a Share button
+  // that could never actually open the native sheet. Computed in useMemo
+  // (synchronously, during render), not useEffect+useState -- canShare()
+  // is a pure, side-effect-free capability read (same class of operation
+  // as reading window.innerWidth), so deferring it into an effect would
+  // only introduce an extra render where Download briefly shows before
+  // disappearing on mount, with no actual correctness benefit. Wrapped in
+  // try/catch and memoized on currentResultMimeType -- found in review:
+  // canShare isn't guaranteed not to throw on every implementation, and
+  // re-running it on every render (not just when the image's type
+  // actually changes) is unnecessary work.
+  const supportsNativeShare = useMemo(() => {
+    if (
+      typeof navigator === 'undefined' ||
+      typeof navigator.share !== 'function' ||
+      typeof navigator.canShare !== 'function' ||
+      typeof File === 'undefined' ||
+      !currentResultMimeType
+    ) {
+      return false;
+    }
+
+    try {
+      return navigator.canShare({
+        files: [
+          new File([], `probe.${extensionForMimeType(currentResultMimeType)}`, {
+            type: currentResultMimeType,
+          }),
+        ],
+      });
+    } catch {
+      return false;
+    }
+  }, [currentResultMimeType]);
+
+  // Depends on `step`, `showFeedback`, AND `feedbackState`: bottomControlRef's
+  // wrapper only renders when both `step === 'result'` and `showFeedback`
+  // are true (see renderPhotoOverlay's call site), but WHAT'S inside it
+  // (thumb group / confirmation pill / nothing, once feedbackState reaches
+  // 'gone') changes independently of either. `step`/`showFeedback` alone
+  // isn't enough -- found in review: useEmbedConfig re-reads
+  // config.buttons on every 'getroomly-open-modal' event without
+  // remounting (same mechanism as the config.language case below), so a
+  // host toggling feedback on/off while the SAME result stays mounted
+  // changes showFeedback without changing step at all. Without
+  // showFeedback here too: turning feedback ON would mount an unobserved
+  // wrapper (the toggle's collision cap never applies to it); turning it
+  // OFF leaves the last-measured height stale in state, potentially
+  // clipping the toggle unnecessarily on a later remount. The `!el`
+  // branch explicitly clears that stale value instead of just leaving it,
+  // so it can't linger past the wrapper's own lifetime.
+  //
+  // Always takes an immediate real measurement via getBoundingClientRect
+  // -- unlike ResizeObserver, this needs no special browser support at
+  // all, so it's used as the baseline in EVERY browser, not just a
+  // fallback for the ones lacking ResizeObserver. An earlier version used
+  // a static 96px guess as that fallback instead (the thumb group's own
+  // worst-case wrapped height) -- found in review to be wrong in
+  // practice: reserving the WORST case unconditionally clips the toggle's
+  // ordinary single-line case on any normal wide image (which only needs
+  // 44px, not 96), and never releases the reservation at all once
+  // feedbackState reaches 'gone' and the wrapper renders empty (needing
+  // 0px, not 96). A real measurement costs nothing extra to get right in
+  // either case, so there's no reason to guess. Also closes a smaller
+  // pre-existing gap: in browsers WITH ResizeObserver, this used to stay
+  // null (no cap at all) for one frame until the observer's first
+  // callback -- now correct from the very first synchronous measurement.
+  useEffect(() => {
+    const el = bottomControlRef.current;
+    if (!el) {
+      setBottomControlHeight(null);
+      return;
+    }
+    setBottomControlHeight(el.getBoundingClientRect().height);
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (entry) {
+        setBottomControlHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [step, showFeedback, feedbackState]);
+
+  // Guaranteed post-commit measurement for the overlay's anchor -- the
+  // other triggers (attachImageContainerRef's inline call, the
+  // ResizeObserver on imageContainerRef, window resize, the base image's
+  // onLoad) all depend on something ELSE changing size or firing at the
+  // right moment, which isn't reliable for one real case found in review:
+  // overlayRef.current can still be null the very first time
+  // attachImageContainerRef's callback ref fires mid-commit, since it can
+  // race ahead of the overlay's own (later, plain) ref -- measureOverlayAnchor
+  // now bails out rather than falling back to a wrong body-relative
+  // measurement, so something has to guarantee a real one happens once
+  // refs settle. useLayoutEffect (not useEffect) specifically: runs
+  // synchronously after the DOM commits and every ref in it is assigned,
+  // but before the browser paints -- exactly what's needed to avoid a
+  // visible flash at the wrong position.
+  useLayoutEffect(() => {
+    measureOverlayAnchor();
+  }, [
+    step,
+    resultImage,
+    uploadedImage,
+    showOriginal,
+    showFeedback,
+    downloadButtonConfirmed,
+    // Same reason as downloadButtonConfirmed just above: the share
+    // button's own confirmation label ("Kopierad ✓" / "Nedladdad ✓") can
+    // be longer than "Dela" in some languages, wrapping to a second line
+    // within the tertiary row's flex:1 1 0 columns (see tertiaryButtonStyle)
+    // -- which grows the row's height (minHeight, not a fixed height,
+    // specifically so it CAN grow) and therefore the footer's, the same
+    // class of shift downloadButtonConfirmed already covers. Not
+    // addedToBasketVisible: that button has a fixed height (54px, doesn't
+    // grow with content) so its own label swap can't affect footer height.
+    shareButtonStatus,
+    // useEmbedConfig re-reads window.GetRoomlyEmbedConfig on every
+    // 'getroomly-open-modal' event without remounting the modal (see its
+    // own comment) -- a host page can call GetRoomly.open() again for a
+    // locale change while this exact component instance stays mounted,
+    // changing config.language without changing step/resultImage/etc.
+    // That both changes the header's rendered text (which can move
+    // imageContainerRef without resizing it, so neither the image
+    // observer nor window.resize necessarily fires) and changes the
+    // overlay's own translated toggle text, so this needs to be an
+    // explicit dependency rather than relying on some other value
+    // happening to change at the same time. Found in review.
+    config?.language,
+    // Same class of gap, found in a later review round, for a DIFFERENT
+    // reason than these three flags had back when footer-distance was
+    // still tracked here (see measureOverlayAnchor's own comment for why
+    // that tracking was removed entirely). .getroomly-modal-container is
+    // position:fixed with top:50% + transform:translate(-50%,-50%)
+    // (App.tsx) -- it's vertically RE-CENTERED around its own total
+    // height. Hiding/showing a footer row (add-to-basket, favorite,
+    // save/share) changes the modal's total height, which shifts the
+    // modal's rendered top position on the page to keep it centered --
+    // and therefore shifts the image's absolute viewport position too,
+    // even though the image's OWN size never changes. Neither the image's
+    // ResizeObserver (fires on size change only) nor window resize (the
+    // window itself hasn't changed) catches a shift like that.
+    showAddToBasket,
+    showFavorite,
+    showSaveShare,
+    // Same class of gap as showSaveShare just above, one level more
+    // specific -- found in review: supportsNativeShare hides just the
+    // Download button (not the whole save/share row) when the CURRENT
+    // image can be shared as a file, and it's derived from
+    // currentResultMimeType, which follows the Before/After toggle. If
+    // the uploaded photo and the generated result ever have different
+    // MIME types with different canShare support (jpeg vs webp, say),
+    // toggling Before/After can show/hide Download without showSaveShare
+    // itself changing, shifting the tertiary row's height the same way
+    // showSaveShare's own toggle already does.
+    supportsNativeShare,
+    measureOverlayAnchor,
+  ]);
 
   // Result step handlers
   const handleAddToBasket = () => {
@@ -974,6 +1568,16 @@ export function RoomVisualizationFlow({
         },
       })
     );
+
+    setAddedToBasketVisible(true);
+    if (addedToBasketTimerRef.current) {
+      clearTimeout(addedToBasketTimerRef.current);
+    }
+    addedToBasketTimerRef.current = window.setTimeout(() => {
+      if (isMountedRef.current) {
+        setAddedToBasketVisible(false);
+      }
+    }, 2400);
   };
 
   const handleFavorite = () => {
@@ -994,11 +1598,25 @@ export function RoomVisualizationFlow({
     );
   };
 
+  // Shared by handleLike/handleDislike: shows the confirmation pill on the
+  // image for 2200ms, then clears it, leaving nothing at that position.
+  const thankForFeedback = () => {
+    setFeedbackState('thanks');
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current);
+    }
+    feedbackTimerRef.current = window.setTimeout(() => {
+      if (isMountedRef.current) {
+        setFeedbackState('gone');
+      }
+    }, 2200);
+  };
+
   const handleLike = () => {
-    if (hasSubmittedFeedback) {
+    if (feedbackState !== 'open') {
       return;
     }
-    setHasSubmittedFeedback(true);
+    thankForFeedback();
 
     config?.callbacks?.onLike?.(resultImage || '', productId);
 
@@ -1018,10 +1636,10 @@ export function RoomVisualizationFlow({
   };
 
   const handleDislike = () => {
-    if (hasSubmittedFeedback) {
+    if (feedbackState !== 'open') {
       return;
     }
-    setHasSubmittedFeedback(true);
+    thankForFeedback();
 
     config?.callbacks?.onDislike?.(resultImage || '', productId);
 
@@ -1038,48 +1656,200 @@ export function RoomVisualizationFlow({
     }
   };
 
-  const handleShowOriginal = () => {
-    setShowOriginalImage(!showOriginalImage);
-    const imageToShow = !showOriginalImage ? uploadedImage : resultImage;
+  // Före/Efter toggle pill sets a specific side directly (not a blind
+  // toggle) -- it's two buttons, not one, so a no-op guard on the already-
+  // active side avoids firing onShowOriginal redundantly on a repeat click.
+  const handleSetShowOriginal = (showOriginal: boolean) => {
+    if (showOriginal === showOriginalImage) {
+      return;
+    }
+    setShowOriginalImage(showOriginal);
+    const imageToShow = showOriginal ? uploadedImage : resultImage;
     config?.callbacks?.onShowOriginal?.(imageToShow || '', productId);
   };
 
-  const handleDownloadToDevice = () => {
-    const imageToDownload = showOriginalImage ? uploadedImage : resultImage;
+  // Core download mechanics + the host-page callback -- shared by the
+  // download button's own click handler and the share button's tier-3
+  // fallback below. Deliberately does NOT touch either button's own
+  // confirmation state: which button shows "Nedladdad ✓" depends on which
+  // one the user actually clicked, not on what physically happened.
+  const triggerDownload = (imageToDownload: string | null) => {
     config?.callbacks?.onSaveShare?.(imageToDownload || '', productId);
-    const link = document.createElement('a');
-    link.download = `${productName}-${showOriginalImage ? 'original' : 'visualization'}.jpg`;
-    link.href = imageToDownload || '';
-    link.click();
-    setSaveShareDropdownOpen(false);
-  };
-
-  const handleShareWithFriends = async () => {
-    if (!resultImage) {
+    if (!imageToDownload) {
       return;
     }
 
-    try {
-      if (navigator.share) {
-        const response = await fetch(resultImage);
-        const blob = await response.blob();
-        const file = new File([blob], `getroomly-design-${Date.now()}.png`, { type: 'image/png' });
+    const extension = extensionForMimeType(mimeTypeFromDataUrl(imageToDownload) ?? '');
+    const filename = `${productName}-${showOriginalImage ? 'original' : 'visualization'}.${extension}`;
+    const link = document.createElement('a');
+    link.download = filename;
 
-        await navigator.share({
-          files: [file],
-          title: `${productName} Room Visualization`,
-          text: `Check out how the ${productName} looks in a room!`,
-        });
-        setSaveShareDropdownOpen(false);
-        return;
-      }
-      handleDownloadToDevice();
-    } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') {
-        handleDownloadToDevice();
-      }
+    // imageToDownload is a `data:` URI (generateRoomVisualization returns
+    // the image inline as base64 — see ai-generation.ts), and iOS Safari
+    // frequently ignores the `download` attribute on a link pointing at a
+    // `data:` URI — it just navigates to/opens the image instead of
+    // downloading it, with no error thrown. Converting to a blob: URL
+    // fixes that (Safari honors `download` reliably for blob: URLs), but
+    // the conversion and the click() must both happen synchronously, with
+    // no `await` in between — resuming after an awaited fetch()/blob()
+    // runs in a later task on iOS Safari, which can lose the transient
+    // user activation the download needs, on the very platform this is
+    // fixing. dataUrlToBlob decodes the base64 payload synchronously for
+    // exactly that reason. There's deliberately no async fetch-based
+    // fallback for a non-data: URL: our own images are always data: URIs,
+    // never a real cross-origin URL, and an async conversion would
+    // reintroduce the same activation-loss risk for a case that can't
+    // currently happen.
+    const blob = dataUrlToBlob(imageToDownload);
+    if (blob) {
+      const blobUrl = URL.createObjectURL(blob);
+      link.href = blobUrl;
+      link.click();
+      // Revoking synchronously can race Safari's actual (async) download
+      // start and invalidate the blob before it's read. Deferring to the
+      // next macrotask lets the browser begin consuming the blob URL first.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+    } else {
+      link.href = imageToDownload;
+      link.click();
     }
-    setSaveShareDropdownOpen(false);
+  };
+
+  const handleDownloadToDevice = () => {
+    triggerDownload(currentResultImage);
+
+    setDownloadButtonConfirmed(true);
+    if (downloadButtonTimerRef.current) {
+      clearTimeout(downloadButtonTimerRef.current);
+    }
+    downloadButtonTimerRef.current = window.setTimeout(() => {
+      if (isMountedRef.current) {
+        setDownloadButtonConfirmed(false);
+      }
+    }, 2400);
+  };
+
+  // Three-tier chain, tried in order:
+  //   1. Native share sheet (most common) -- the menu itself is the
+  //      confirmation, the button's own label never changes. Cancelling
+  //      the sheet (AbortError) isn't a failure -- it's a deliberate
+  //      choice not to share, so nothing falls through from there either.
+  //   2. Clipboard -- writes the image as a ClipboardItem, button label
+  //      swaps to copiedLabel ("Kopierad ✓") for 2400ms. Silent download
+  //      after a "Dela" click was misleading in the old two-tier version:
+  //      nothing was actually SHARED, so a file quietly landing in
+  //      Downloads didn't match what the user asked for. "Kopierad ✓" is
+  //      true and lets them paste the image directly into whatever app
+  //      they meant to share it through -- closer to the original intent
+  //      than a downloads-folder file.
+  //   3. Download -- reuses triggerDownload (the same mechanics the
+  //      download button itself uses), but sets THIS button's own status
+  //      to 'downloaded' rather than calling handleDownloadToDevice
+  //      directly, which would wrongly confirm on the download button
+  //      instead of the one actually clicked.
+  //
+  // Deliberately no custom share sheet with app icons (WhatsApp,
+  // Telegram, SMS, ...): the browser already knows which apps the user
+  // has installed, we'd only be guessing. Tier 1 already does that job.
+  const handleShareWithFriends = async () => {
+    if (!currentResultImage || isSharingRef.current) {
+      return;
+    }
+    isSharingRef.current = true;
+
+    const showShareConfirmation = (status: 'copied' | 'downloaded') => {
+      setShareButtonStatus(status);
+      if (shareButtonTimerRef.current) {
+        clearTimeout(shareButtonTimerRef.current);
+      }
+      shareButtonTimerRef.current = window.setTimeout(() => {
+        if (isMountedRef.current) {
+          setShareButtonStatus('idle');
+        }
+      }, 2400);
+    };
+
+    try {
+      // Decoded lazily on click -- capability probing above only needs MIME
+      // type, so it intentionally does not decode the full payload during
+      // render. Still respects the Before/After toggle for the actual shared
+      // file.
+      const blob = currentResultImage ? dataUrlToBlob(currentResultImage) : null;
+      const file =
+        blob && typeof File !== 'undefined'
+          ? new File([blob], `getroomly-design-${Date.now()}.${extensionForMimeType(blob.type)}`, {
+              type: blob.type,
+            })
+          : null;
+
+      if (navigator.share && blob && file) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: `${productName} Room Visualization`,
+            text: `Check out how the ${productName} looks in a room!`,
+          });
+          return;
+        } catch (error) {
+          // Checked structurally, not via `instanceof Error` -- the Web
+          // Share API rejects with a DOMException, which doesn't reliably
+          // satisfy `instanceof Error` across browsers/realms, so that
+          // check could silently fail and fall through even on a plain
+          // user cancellation. Also covers InvalidStateError (a second
+          // share attempted while isSharingRef should already have
+          // blocked it, or a rare race) the same way -- neither name is a
+          // real failure worth falling through the tiers for.
+          const errorName = (error as { name?: string } | null)?.name;
+          if (errorName === 'AbortError' || errorName === 'InvalidStateError') {
+            return;
+          }
+          // A real failure (share API present but the call itself failed) --
+          // fall through to tier 2.
+        }
+      }
+
+      // Tier 2: clipboard. ClipboardItem is unavailable in some browsers
+      // (most notably Firefox, which doesn't support writing images to the
+      // clipboard via this API) -- typeof-checked the same way
+      // ResizeObserver is elsewhere in this file, rather than assuming
+      // support.
+      try {
+        if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined' && blob) {
+          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+          showShareConfirmation('copied');
+          return;
+        }
+      } catch {
+        // Clipboard write failed (unsupported MIME type, permission denied,
+        // document not focused, ...) -- fall through to tier 3 below,
+        // regardless of the specific reason.
+      }
+
+      // Tier 3: download. Known limitation, accepted rather than solved:
+      // triggerDownload's own click() is synchronous, but by the time
+      // execution reaches here it has already resumed after tier 1's
+      // `await navigator.share(...)` and/or tier 2's
+      // `await navigator.clipboard.write(...)` rejecting -- both are real,
+      // unavoidable browser API calls this three-tier design has to
+      // attempt before it can know tier 3 is needed, so (unlike
+      // handleDownloadToDevice's direct click, which truly never awaits
+      // anything first) this path can't guarantee the click still lands
+      // inside the original user gesture on browsers with strict
+      // transient-activation rules. In practice this only matters for the
+      // narrow combination of: native share unavailable or declined by
+      // the browser, AND the clipboard tier available but failing at
+      // runtime (not just unsupported) -- on a browser strict enough for
+      // activation loss to silently drop the download. Fully closing this
+      // would mean not auto-triggering tier 3 at all and instead
+      // surfacing a manual "tap to download" affordance, which trades the
+      // silent three-tier fallback this was explicitly designed around
+      // for an extra tap in this one edge case -- decided against for
+      // now.
+      triggerDownload(currentResultImage);
+      showShareConfirmation('downloaded');
+    } finally {
+      isSharingRef.current = false;
+    }
   };
 
   const renderResultStep = () => {
@@ -1093,34 +1863,80 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
         }}
       >
-        {/* Wrapper is display:inline-block so it shrinks to the image's actual
-            rendered dimensions. Overlays (label, favorite, thumbs) positioned
-            absolute against this wrapper are guaranteed to sit on the image
-            regardless of viewport size or image aspect ratio — no JS dimension
-            computation needed. */}
+        {/* Wrapper is display:inline-block so it shrinks to the base image's
+            actual rendered dimensions -- deliberately NOT switched to a
+            fixed-aspect flex:1 well with objectFit:cover to match the
+            design literally: this codebase has a long, hard-won history of
+            image-cropping regressions (see git log for
+            "objectFit:contain"/"no cropping"/reverts of exactly this kind
+            of change), so the sizing mechanism here is intentionally
+            unchanged. Overlays (badge, favorite, thumbs, toggle pill)
+            positioned absolute against this wrapper are guaranteed to sit
+            on the image regardless of viewport size or image aspect ratio
+            — no JS dimension computation needed. */}
         <div
-          ref={imageContainerRef}
+          ref={attachImageContainerRef}
           style={{
             position: 'relative',
             display: 'inline-block',
             maxWidth: '100%',
-            borderRadius: '8px',
+            borderRadius: 'var(--getroomly-radius-image)',
             overflow: 'hidden',
+            // Design's dark image-well background -- visible in any gap
+            // between the image's actual rendered box and its container
+            // (there normally isn't one, since the wrapper sizes to the
+            // image), and behind the cross-fade transition between layers.
+            background: '#221a17',
             cursor: imageScale > 1 ? 'grab' : 'default',
           }}
         >
+          {/* Base layer = the AI visualisation ("Efter"). Defines the
+              wrapper's actual size via normal flow -- the overlay below is
+              absolutely positioned against this box, not the other way
+              around, so this is the one layer whose sizing must stay
+              exactly as before. */}
           {(resultImage || uploadedImage) && (
             <img
-              src={showOriginalImage ? uploadedImage || '' : resultImage || ''}
-              alt={showOriginalImage ? t.labelOriginal : t.labelNew}
+              src={resultImage || uploadedImage || ''}
+              alt={t.labelNew}
+              aria-hidden={showOriginalImage}
+              // Belt-and-suspenders alongside the ResizeObserver on
+              // imageContainerRef: that observer only fires once this
+              // image has actually decoded and the wrapper's shrink-to-fit
+              // box changes size to match -- which it always eventually
+              // does, but onLoad re-measures immediately on the load event
+              // itself rather than waiting on the observer's own timing,
+              // and is the only measurement path left at all in browsers
+              // without ResizeObserver support (found in review).
+              onLoad={measureOverlayAnchor}
               style={{
                 display: 'block',
                 maxWidth: '100%',
-                // 55dvh (dynamic viewport height) auto-adjusts as iOS Safari's
-                // browser chrome shows/hides. Leaves ~45dvh for header + action
-                // buttons. Percentage max-height on inline-block wrapper
-                // collapses to zero — dvh sidesteps the cascade issue.
-                maxHeight: '55dvh',
+                // Available space, measured off resultContentRef via
+                // ResizeObserver (see its declaration) -- correct regardless
+                // of header/footer height, which varies by language and by
+                // which optional footer rows are currently showing. A static
+                // dvh-based CSS formula was tried first and found to
+                // sometimes still leave the image taller than the wrapper's
+                // real shrunk box (Puppeteer measured ~39px of clipping at a
+                // 375x568 viewport), since the wrapper's overflow:hidden +
+                // minHeight:0 lets it shrink independently of any fixed
+                // guess.
+                //
+                // Deliberately NOT padded with extra headroom for the
+                // photo overlay (toggle + thumbs) -- an earlier version of
+                // this tried that, but it couldn't have worked:
+                // resultContentRef is a SEPARATE overflow:hidden ancestor
+                // with its own independently flex-resolved height,
+                // unaffected by whatever this maxHeight claims, so padding
+                // the image taller than what's actually measured just gets
+                // clipped by resultContentRef itself. The real fix
+                // (renderPhotoOverlay, overlayAnchor) renders the overlay
+                // OUTSIDE resultContentRef entirely, as a sibling
+                // positioned via measured coordinates -- so it no longer
+                // depends on this image's own maxHeight at all. This stays
+                // exactly the real available space, nothing more.
+                maxHeight: `${availableImageHeightPx ?? 150}px`,
                 width: 'auto',
                 height: 'auto',
                 transform: `scale(${imageScale})`,
@@ -1131,285 +1947,718 @@ export function RoomVisualizationFlow({
             />
           )}
 
-          {/* Design Label */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '16px',
-              left: '16px',
-              background: 'rgba(0, 0, 0, 0.5)',
-              color: 'white',
-              padding: '8px 12px',
-              borderRadius: '16px',
-              fontSize: '12px',
-              fontWeight: '500',
-              backdropFilter: 'blur(4px)',
-              zIndex: 10,
-            }}
-          >
-            {showOriginalImage ? t.labelOriginal : t.labelNew}
-          </div>
-
-          {/* Favorite Button */}
-          {showFavorite && (
-            <button
-              onClick={handleFavorite}
+          {/* Overlay layer = the shopper's original photo ("Före"),
+              cross-faded on top of the base layer. objectFit:contain (not
+              cover, matching the base layer's own never-crop behavior)
+              fills exactly the box the base image established above --
+              uploaded photo and AI result share the same aspect ratio in
+              practice (the generation preserves input dimensions), so this
+              is normally an exact fit, not a letterboxed one. */}
+          {resultImage && uploadedImage && (
+            <img
+              src={uploadedImage}
+              alt={t.labelOriginal}
+              aria-hidden={!showOriginalImage}
               style={{
                 position: 'absolute',
-                top: '16px',
-                right: '16px',
-                height: '44px',
-                width: '44px',
-                borderRadius: '6px',
-                background: 'white',
-                border: '1px solid #e5e7eb',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                zIndex: 10,
-                transition: 'all 200ms ease',
+                inset: 0,
+                display: 'block',
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                opacity: showOriginalImage ? 1 : 0,
+                // Same pinch/double-tap zoom transform as the base layer --
+                // without this, zooming while viewing "Before" had no
+                // effect, and switching from a zoomed "After" view briefly
+                // showed an unzoomed original mid cross-fade.
+                transform: `scale(${imageScale})`,
+                transformOrigin: 'center center',
+                transition:
+                  imageScale === 1
+                    ? 'opacity 0.3s ease, transform 0.25s ease'
+                    : 'opacity 0.3s ease',
               }}
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill={isFavorited ? 'var(--getroomly-primary)' : 'none'}
-                stroke={isFavorited ? 'var(--getroomly-primary)' : 'currentColor'}
-                strokeWidth="2"
-              >
-                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-              </svg>
-            </button>
-          )}
-
-          {/* Like/Dislike Feedback */}
-          {showFeedback && !hasSubmittedFeedback && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '16px',
-                right: '16px',
-                display: 'flex',
-                gap: '8px',
-                zIndex: 10,
-              }}
-            >
-              <button
-                onClick={handleLike}
-                aria-label="Like this result"
-                style={{
-                  height: '32px',
-                  width: '32px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  color: '#16a34a',
-                }}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M7 10v12" />
-                  <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
-                </svg>
-              </button>
-              <button
-                onClick={handleDislike}
-                aria-label="Dislike this result"
-                style={{
-                  height: '32px',
-                  width: '32px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  color: '#dc2626',
-                }}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M17 14V2" />
-                  <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
-                </svg>
-              </button>
-            </div>
+            />
           )}
         </div>
       </div>
     );
   };
 
+  // Photo overlay -- Före/Efter toggle in the top-left corner, feedback
+  // thumbs (or the confirmation pill that replaces them) in the
+  // bottom-right corner, both rendered on top of the result image as two
+  // INDEPENDENTLY corner-anchored elements, not a shared row. NOT a child
+  // of imageContainerRef (see overlayAnchor's declaration for why): a
+  // version of this was, and at short viewports resultContentRef -- a
+  // SEPARATE overflow:hidden ancestor with its own independently
+  // flex-resolved height, uninfluenced by anything set on the image
+  // itself -- could clip it before the image's own overflow:hidden ever
+  // came into play, making the only feedback/Before-After controls
+  // genuinely inaccessible. This renders as a sibling of the
+  // header/content/footer stack instead, positioned with overlayAnchor
+  // (imageContainerRef's own on-screen box, kept in sync via
+  // ResizeObserver) and sized to EXACTLY match the image -- see
+  // measureOverlayAnchor's comment for why that makes the footer
+  // irrelevant here.
+  //
+  // Replaces the old status badge: the badge duplicated what the toggle's
+  // own fill + text + aria-pressed already say, so it's removed rather
+  // than moved to another corner -- a deliberate content decision (see
+  // ANDRING-5b-bildkontroller.md), not an accident of the toggle moving
+  // here.
+  //
+  // Two independent corners, not one shared flex-wrap row: an earlier
+  // version of this put both groups in one top row (justify-content:
+  // space-between), which meant they competed for the SAME combined
+  // width AND the same shared height budget -- on a narrow portrait photo
+  // (measured: an 84px-wide 9:16 crop) both groups wrapped internally at
+  // once, and their COMBINED stacked height (~252px measured) blew a
+  // ~128px budget so badly that the thumb group ended up entirely
+  // invisible, not just clipped. Splitting them into separate corners
+  // means each gets the image's FULL width to itself (raising the
+  // "doesn't need to wrap at all" threshold from their combined width
+  // down to each group's own, much smaller individual width -- the thumb
+  // group alone only needs 96px), and each has its own independent
+  // height budget measured from its own corner instead of a shared one --
+  // converting the worst remaining case (an extremely narrow image) from
+  // "one entire group disappears" into "the toggle's own wrapped text
+  // clips by a few pixels at the image's edge" (measured: ~10px past the
+  // image's own bottom edge in the same 84px-wide case), a meaningfully
+  // smaller degradation. Decided directly with the user rather than
+  // unilaterally -- see the PR conversation for the full reasoning and
+  // the measurements behind it.
+  const renderPhotoOverlay = () => {
+    if (!((showOriginal || showFeedback) && (resultImage || uploadedImage))) {
+      return null;
+    }
+    // Always mounts once the conditions above are met, regardless of
+    // whether a real measurement has landed yet -- overlayRef needs to
+    // exist for measureOverlayAnchor's own offsetParent lookup to work at
+    // all (see its comment), and visibility:hidden means a transient
+    // wrong/zeroed position is never actually visible in the meantime.
+    return (
+      <div
+        ref={overlayRef}
+        style={{
+          position: 'absolute',
+          visibility: overlayAnchor ? 'visible' : 'hidden',
+          top: `${overlayAnchor?.top ?? 0}px`,
+          left: `${overlayAnchor?.left ?? 0}px`,
+          width: `${overlayAnchor?.width ?? 0}px`,
+          height: `${overlayAnchor?.height ?? 0}px`,
+          overflow: 'hidden',
+          zIndex: 10,
+          // This box spans the image's full area, including the empty
+          // space between the toggle (top-left) and the thumb group
+          // (bottom-right) -- without this, that empty space still
+          // hit-tests as part of this div (its own box, regardless of
+          // visible content), and since the overlay is a DOM SIBLING of
+          // imageContainerRef, not a descendant, a touch starting there
+          // can never bubble to the pinch/double-tap handlers attached
+          // directly to imageContainerRef -- silently losing zoom
+          // gestures that start anywhere in that empty space, not just
+          // intentionally excluded taps on the controls themselves.
+          // 'none' here makes the empty area transparent to hit-testing
+          // (falling through to the image beneath); each real control
+          // below restores 'auto' so it stays clickable. Found in review.
+          pointerEvents: 'none',
+        }}
+      >
+        {showOriginal && resultImage && uploadedImage && (
+          <div
+            role="group"
+            aria-label={t.toggleGroupLabel}
+            style={{
+              position: 'absolute',
+              top: '14px',
+              left: '14px',
+              display: 'flex',
+              flexShrink: 0,
+              flexWrap: 'wrap',
+              pointerEvents: 'auto',
+              // The well is sized to the uploaded photo's own aspect
+              // ratio, not the modal width -- a narrow/portrait photo
+              // can render a well far narrower than this pill's
+              // natural content width. Without a cap, the overlay's own
+              // overflow:hidden would silently clip the pill's right
+              // side instead of wrapping it. calc(100% - 28px) mirrors
+              // the 14px inset on both sides against the overlay's own
+              // width, which is exactly the image's width (see
+              // measureOverlayAnchor).
+              maxWidth: 'calc(100% - 28px)',
+              boxSizing: 'border-box',
+              gap: '4px',
+              padding: '4px',
+              borderRadius: 'var(--getroomly-radius-pill)',
+              background: 'rgba(255, 255, 255, 0.94)',
+              backdropFilter: 'blur(12px)',
+              boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+              // Caps the toggle's own height so its wrapped text can never
+              // grow down far enough to visually overlap the bottom-right
+              // corner (thumbs / confirmation pill) -- see
+              // bottomControlHeight's own declaration for why this is
+              // always a real measurement now, in every browser, not a
+              // static guess. undefined (no cap) until both the overlay's
+              // real height AND the bottom corner's height are known,
+              // matching the same "undefined until measured" convention
+              // overlayAnchor itself uses -- true only for the first
+              // render, before either effect's initial synchronous
+              // measurement lands.
+              maxHeight:
+                overlayAnchor && bottomControlHeight !== null
+                  ? `${Math.max(0, overlayAnchor.height - 14 - bottomControlHeight - 14 - 8)}px`
+                  : undefined,
+              overflow: 'hidden',
+            }}
+          >
+            <button
+              aria-pressed={showOriginalImage}
+              onClick={() => handleSetShowOriginal(true)}
+              style={{
+                border: 0,
+                borderRadius: 'var(--getroomly-radius-pill)',
+                padding: '9px 16px',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                background: showOriginalImage ? 'var(--getroomly-primary-deep)' : 'transparent',
+                color: showOriginalImage ? '#fff' : 'var(--getroomly-toggle-inactive)',
+                transition: 'all 0.2s',
+                // Falls back to breaking mid-word only when there's
+                // truly no word-boundary room left (e.g. "Nachher" alone
+                // on a steeply portrait photo) -- flex-wrap on the row
+                // above already handles the normal case (the two
+                // buttons dropping to separate lines), this is the one
+                // level deeper: fitting a SINGLE button's own text when
+                // even that doesn't have room.
+                overflowWrap: 'break-word',
+                minWidth: 0,
+                maxWidth: '100%',
+              }}
+            >
+              {t.toggleBefore}
+            </button>
+            <button
+              aria-pressed={!showOriginalImage}
+              onClick={() => handleSetShowOriginal(false)}
+              style={{
+                border: 0,
+                borderRadius: 'var(--getroomly-radius-pill)',
+                padding: '9px 16px',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                background: !showOriginalImage ? 'var(--getroomly-primary-deep)' : 'transparent',
+                color: !showOriginalImage ? '#fff' : 'var(--getroomly-toggle-inactive)',
+                transition: 'all 0.2s',
+                overflowWrap: 'break-word',
+                minWidth: 0,
+                maxWidth: '100%',
+              }}
+            >
+              {t.toggleAfter}
+            </button>
+          </div>
+        )}
+
+        {/* Stable wrapper for the bottom-right corner -- exists whenever
+            showFeedback is true, regardless of which of its two children
+            (thumb group / confirmation pill) is currently mounted, so
+            bottomControlRef's ResizeObserver has one consistent element to
+            observe instead of needing to re-attach across the
+            conditionally-mounted children it wraps. Handles the corner
+            positioning and width cap; the children below only handle their
+            own visual styling. */}
+        {showFeedback && (
+          <div
+            ref={bottomControlRef}
+            style={{
+              position: 'absolute',
+              bottom: '14px',
+              right: '14px',
+              maxWidth: 'calc(100% - 28px)',
+              boxSizing: 'border-box',
+            }}
+          >
+            {feedbackState === 'open' && (
+              <div
+                role="group"
+                aria-label={t.feedbackQuestion}
+                style={{
+                  display: 'flex',
+                  flexShrink: 0,
+                  // The two 44px hit targets (96px combined with the gap)
+                  // don't shrink, and a steeply portrait photo can render
+                  // narrower than that (found in review: a 9:16 crop at
+                  // this component's 150px fallback height works out to
+                  // ~84px wide, well under 96px). flexWrap here lets the
+                  // two buttons stack onto their own lines instead of
+                  // overflowing the overlay's left edge and being clipped
+                  // by its overflow:hidden -- the same graceful-degradation
+                  // approach already used for the toggle pill's own
+                  // buttons.
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  justifyContent: 'flex-end',
+                  pointerEvents: 'auto',
+                }}
+              >
+                {/* Two independent circles, not a segmented pill like the
+                toggle above -- the pill shape signals "a choice
+                between two states, one always active" (the toggle);
+                thumbs are two independent one-shot actions, and
+                reusing the toggle's shape for a different kind of
+                control would teach the wrong affordance. The visible
+                circle is 40px (below the 44px touch-target minimum,
+                with no room to grow on the image without the
+                controls starting to dominate the photo) -- each
+                button's own box is 44px so the real hit target meets
+                WCAG 2.5.8 without enlarging what's actually drawn. */}
+                <button
+                  onClick={handleLike}
+                  aria-label={t.feedbackLikeLabel}
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    padding: 0,
+                    flexShrink: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'rgba(255, 255, 255, 0.94)',
+                      backdropFilter: 'blur(12px)',
+                      boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                      color: 'var(--getroomly-icon-default)',
+                    }}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M7 10v12" />
+                      <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+                    </svg>
+                  </span>
+                </button>
+                <button
+                  onClick={handleDislike}
+                  aria-label={t.feedbackDislikeLabel}
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    padding: 0,
+                    flexShrink: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'rgba(255, 255, 255, 0.94)',
+                      backdropFilter: 'blur(12px)',
+                      boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                      color: 'var(--getroomly-icon-default)',
+                    }}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M17 14V2" />
+                      <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
+                    </svg>
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {feedbackState === 'thanks' && (
+              <div
+                style={{
+                  flexShrink: 0,
+                  // Same reservation as the toggle pill above -- at the
+                  // narrowest realistic well (140px, ~112px inside the
+                  // overlay's own insets) several languages' feedbackThanks
+                  // text is wider than that with no wrap, and the overlay's
+                  // own overflow:hidden would silently clip it instead of
+                  // wrapping (found in review, verified with Puppeteer: even
+                  // English overflowed by ~50px at 140px before this was
+                  // added). No whiteSpace:nowrap here, so text wraps within
+                  // the pill once constrained.
+                  //
+                  // maxWidth alone only caps the pill's own BOX -- it
+                  // doesn't make the TEXT inside able to wrap. Without
+                  // overflow-wrap + minWidth:0 (found in review, verified
+                  // with Puppeteer: scrollWidth exceeded clientWidth at an
+                  // 84px well, meaning the text was overflowing the pill's
+                  // own box even though the box itself measured within
+                  // bounds) the text still overflows the constrained box and
+                  // gets clipped by the overlay's own overflow:hidden one
+                  // level up -- same fix already applied to the toggle
+                  // buttons above.
+                  minWidth: 0,
+                  overflowWrap: 'break-word',
+                  boxSizing: 'border-box',
+                  fontWeight: 600,
+                  fontSize: '11.5px',
+                  lineHeight: 1.25,
+                  color: 'var(--getroomly-icon-default)',
+                  padding: '11px 14px',
+                  borderRadius: 'var(--getroomly-radius-pill)',
+                  background: 'rgba(255, 255, 255, 0.94)',
+                  backdropFilter: 'blur(12px)',
+                  boxShadow: '0 6px 18px -6px rgba(0, 0, 0, 0.45)',
+                }}
+              >
+                {t.feedbackThanks}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* The thank-you pill above replaces the two circle buttons
+            in the DOM rather than updating their text, so unlike a
+            persistent status line, there's nothing for assistive
+            tech to already be listening to when that swap happens.
+            This stays mounted the whole time (text only, visually
+            hidden) specifically so the transition gets announced --
+            a live region that appears already containing its text
+            isn't reliably announced by screen readers, only one
+            that already existed and then changed. */}
+        {showFeedback && (
+          <span
+            role="status"
+            aria-live="polite"
+            style={{
+              position: 'absolute',
+              width: '1px',
+              height: '1px',
+              margin: '-1px',
+              padding: 0,
+              overflow: 'hidden',
+              clip: 'rect(0 0 0 0)',
+              whiteSpace: 'nowrap',
+              border: 0,
+            }}
+          >
+            {feedbackState === 'thanks' ? t.feedbackThanks : ''}
+          </span>
+        )}
+      </div>
+    );
+  };
+
   // Result Footer Component (Step 4)
+  // Tertiary buttons (download/share/new photo) are flat text buttons in one
+  // centred row, not full-width blocks — visually distinct from the primary
+  // row above so they read as secondary actions. Equal-share flex width
+  // (see flex:1 1 0 below), not width:100%.
+  const tertiaryButtonStyle: React.CSSProperties = {
+    gap: '8px',
+    justifyContent: 'center',
+    alignItems: 'center',
+    textAlign: 'center',
+    // minHeight, not a fixed height: at the narrow per-item widths these
+    // three buttons share a row on mobile, several languages' longer
+    // translations ("Partager avec des amis", "Descargar imagen", ...) wrap
+    // to two lines — a fixed height would clip that text. Letting the pill
+    // grow keeps the ≥44px touch target (WCAG 2.5.8) without ever clipping.
+    minHeight: '44px',
+    // flex:1 1 0 + minWidth:0, not the earlier per-button min-width --
+    // found in review that min-width only sets a FLOOR, it doesn't cap
+    // growth, so a longer confirmation label (e.g. "Nedladdad ✓" swapped
+    // in after a download) still grew that one button's own natural width
+    // and pushed its siblings sideways. flex:1 1 0 gives all three an
+    // EQUAL share of the row instead, determined by the row's own width,
+    // not by whichever button's text happens to be longest at that
+    // moment -- a language wrapping to a second line now grows that
+    // button's HEIGHT (via minHeight above), never its neighbors' widths.
+    flex: '1 1 0',
+    minWidth: 0,
+    borderRadius: 'var(--getroomly-radius-pill)',
+    cursor: 'pointer',
+    display: 'flex',
+    fontSize: '14px',
+    padding: '10px 16px',
+    background: 'none',
+    color: 'var(--getroomly-tertiary-text)',
+    fontWeight: '500',
+    border: 'none',
+  };
+
+  // When showSaveShare is false, New Photo is the row's ONLY child -- with
+  // the equal-share flex:1 1 0 above, a lone flex item still has
+  // flex-grow:1 and stretches to fill the entire row width (justifyContent
+  // centering doesn't stop growth, it only centers items that DON'T grow),
+  // turning what should stay a small centred pill into a full-width bar.
+  // flex:'0 1 auto' + the browser's default auto minWidth restores the
+  // original auto-width, non-growing pill for that one-button case, without
+  // touching the equal-share behavior the two/three-button row still needs.
+  const soloTertiaryButtonStyle: React.CSSProperties = {
+    ...tertiaryButtonStyle,
+    flex: '0 1 auto',
+    minWidth: 'auto',
+  };
+
+  // Shared by every visually-hidden role="status" aria-live="polite" node
+  // in this footer (addedToBasketAnnouncement, downloadedAnnouncement,
+  // copiedAnnouncement below) -- the standard clip-rect pattern, kept in
+  // one place so all three stay in sync.
+  const visuallyHiddenStyle: React.CSSProperties = {
+    position: 'absolute',
+    width: '1px',
+    height: '1px',
+    margin: '-1px',
+    padding: 0,
+    overflow: 'hidden',
+    clip: 'rect(0 0 0 0)',
+    whiteSpace: 'nowrap',
+    border: 0,
+  };
+
   const renderResultFooter = () => (
     <div
       style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
+        display: 'flex',
+        flexDirection: 'column',
         gap: '8px',
         width: '100%',
         margin: '0 auto',
       }}
     >
-      {showAddToBasket && (
-        <button
-          onClick={handleAddToBasket}
-          style={{
-            width: '100%',
-            gap: '8px',
-            justifyContent: 'center',
-            textAlign: 'center',
-            fontWeight: '700',
-            height: '44px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            border: 'none',
-            fontSize: '14px',
-            padding: '10px 16px',
-            background: 'var(--getroomly-primary)',
-            color: 'white',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-          }}
-        >
-          {t.addToBasket}
-        </button>
-      )}
+      {/* The feedback question + thumbs now live in a band on the image
+          itself, not here -- see renderResultStep and
+          ANDRING-5b-bildkontroller.md. Removing this row entirely (not
+          just its visible content) is what gives the image its extra
+          height; leaving an empty reserved row here would cancel that
+          out. */}
 
-      {showOriginal && (
-        <button
-          onClick={handleShowOriginal}
-          style={{
-            width: '100%',
-            gap: '8px',
-            justifyContent: 'center',
-            textAlign: 'center',
-            height: '44px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            fontSize: '14px',
-            padding: '10px 16px',
-            border: '1px solid rgba(176, 143, 106, 0.3)',
-            color: 'var(--getroomly-primary)',
-            background: 'white',
-            fontWeight: '700',
-          }}
-        >
-          {showOriginalImage ? t.showNew : t.showOriginal}
-        </button>
-      )}
-
-      {showSaveShare && (
-        <DropdownMenu.Root open={saveShareDropdownOpen} onOpenChange={setSaveShareDropdownOpen}>
-          <DropdownMenu.Trigger asChild>
+      {/* Action row -- favorite moved here from an overlay on the image,
+          next to the cart button, matching the design's action row. */}
+      {(showFavorite || showAddToBasket) && (
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {showFavorite && (
             <button
+              onClick={handleFavorite}
+              aria-label={isFavorited ? t.favoriteLabelActive : t.favoriteLabel}
+              aria-pressed={isFavorited}
               style={{
-                width: '100%',
+                flexShrink: 0,
+                width: '54px',
+                height: '54px',
+                borderRadius: '999px',
+                border: `1.5px solid ${isFavorited ? 'var(--getroomly-primary-deep)' : '#7d7979'}`,
+                background: isFavorited ? 'var(--getroomly-primary-tint)' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill={isFavorited ? 'var(--getroomly-primary-deep)' : 'none'}
+                stroke={
+                  isFavorited ? 'var(--getroomly-primary-deep)' : 'var(--getroomly-icon-default)'
+                }
+                strokeWidth="2"
+              >
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+              </svg>
+            </button>
+          )}
+          {showAddToBasket && (
+            <button
+              onClick={handleAddToBasket}
+              style={{
+                flex: 1,
                 gap: '8px',
                 justifyContent: 'center',
-                alignItems: 'center',
                 textAlign: 'center',
-                height: '44px',
-                borderRadius: '6px',
+                fontWeight: '700',
+                height: '54px',
+                borderRadius: 'var(--getroomly-radius-pill)',
                 cursor: 'pointer',
                 display: 'flex',
+                alignItems: 'center',
+                border: 'none',
                 fontSize: '14px',
                 padding: '10px 16px',
-                background: 'rgba(147, 163, 178, 0.3)',
-                color: '#6b7280',
-                fontWeight: '700',
-                border: '1px solid transparent',
+                background: 'var(--getroomly-primary-deep)',
+                color: 'white',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
               }}
             >
-              {t.saveShare}
+              {addedToBasketVisible ? t.addedToBasketLabel : t.addToBasket}
             </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              style={{
-                background: 'white',
-                borderRadius: '6px',
-                padding: '4px',
-                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                border: '1px solid #e5e7eb',
-                minWidth: '180px',
-                zIndex: 999999,
-              }}
-            >
-              <DropdownMenu.Item
-                onSelect={handleDownloadToDevice}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  borderRadius: '4px',
-                  outline: 'none',
-                }}
-              >
-                {t.downloadToDevice}
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                onSelect={handleShareWithFriends}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  borderRadius: '4px',
-                  outline: 'none',
-                }}
-              >
-                {t.shareWithFriends}
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
+          )}
+        </div>
+      )}
+      {/* Visually-hidden, always-mounted (not conditionally rendered) so
+          it exists before its text changes -- a live region that mounts
+          with its text already set isn't reliably announced, only one
+          that already existed and then changed (same reasoning as the
+          feedback thumbs' own live region in renderPhotoOverlay). A
+          label change on a button that already has focus (the user just
+          clicked it) isn't reliably announced by all screen readers on
+          its own, so this full-sentence node carries the confirmation
+          instead of relying on the visible "Tillagt ✓" swap alone. */}
+      {showAddToBasket && (
+        <span role="status" aria-live="polite" style={visuallyHiddenStyle}>
+          {addedToBasketVisible ? t.addedToBasketAnnouncement : ''}
+        </span>
       )}
 
-      <button
-        onClick={handleNewPhoto}
+      {/* Permanent measurement-accuracy disclaimer -- never replaced by a
+          transient message, and never moved on top of the photo.
+          margin-bottom:-4px (not 0) pulls the tertiary row slightly
+          closer without touching the gap between any of the OTHER rows
+          in this stack (that's controlled by the outer flex column's own
+          gap, set once, above). */}
+      <p
         style={{
-          width: '100%',
-          gap: '8px',
-          justifyContent: 'center',
-          alignItems: 'center',
+          margin: '0 0 -4px',
           textAlign: 'center',
-          height: '44px',
-          borderRadius: '6px',
-          cursor: 'pointer',
-          display: 'flex',
-          fontSize: '14px',
-          padding: '10px 16px',
-          background: 'rgba(147, 163, 178, 0.3)',
-          color: '#6b7280',
-          fontWeight: '700',
-          border: '1px solid transparent',
+          fontSize: '12px',
+          lineHeight: 1.45,
+          color: 'var(--getroomly-disclaimer)',
         }}
       >
-        {t.newPhoto}
-      </button>
+        {t.disclaimer}
+      </p>
+
+      {/* gap:4px, not the row's earlier 6px -- tightened to match the
+          tertiary buttons' own flex:1 1 0 change above (see
+          tertiaryButtonStyle): equal-width columns read better slightly
+          closer together than auto-width buttons did. flexWrap is no
+          longer needed here -- flex:1 1 0 + minWidth:0 on every button
+          guarantees they always fit on one row (shrinking, never wrapping
+          the ROW itself; a button's own TEXT still wraps to a second line
+          internally via tertiaryButtonStyle's minHeight when needed), and
+          re-splits evenly across however many buttons are actually
+          present -- see supportsNativeShare above for why that count can
+          be two, not just three or one. */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
+        {showSaveShare && !supportsNativeShare && (
+          <button onClick={handleDownloadToDevice} style={tertiaryButtonStyle}>
+            {downloadButtonConfirmed ? t.downloadedLabel : t.downloadToDevice}
+          </button>
+        )}
+        {showSaveShare && (
+          <button onClick={handleShareWithFriends} style={tertiaryButtonStyle}>
+            {shareButtonStatus === 'copied'
+              ? t.copiedLabel
+              : shareButtonStatus === 'downloaded'
+                ? t.downloadedLabel
+                : t.shareWithFriends}
+          </button>
+        )}
+        <button
+          onClick={handleNewPhoto}
+          style={showSaveShare ? tertiaryButtonStyle : soloTertiaryButtonStyle}
+        >
+          {t.newPhoto}
+        </button>
+      </div>
+      {/* Same reasoning as addedToBasketAnnouncement above -- a label
+          change on the Download/Share buttons, which already have focus
+          from the click that triggered it, isn't reliably announced by all
+          screen readers on its own. Two SEPARATE nodes, not one shared
+          node -- downloadButtonConfirmed and shareButtonStatus are
+          independent states (found in review: downloading, then sharing
+          via the clipboard tier before the download's own 2400ms
+          confirmation expires, is a real sequence a shopper can trigger),
+          so a shared node with one state taking precedence could silently
+          drop the other's announcement, or fail to re-announce at all if
+          the winning state's text happened to stay the same. */}
+      {showSaveShare && (
+        <>
+          <span role="status" aria-live="polite" style={visuallyHiddenStyle}>
+            {downloadButtonConfirmed ? t.downloadedAnnouncement : ''}
+          </span>
+          <span role="status" aria-live="polite" style={visuallyHiddenStyle}>
+            {shareButtonStatus === 'copied'
+              ? t.copiedAnnouncement
+              : shareButtonStatus === 'downloaded'
+                ? t.downloadedAnnouncement
+                : ''}
+          </span>
+        </>
+      )}
     </div>
+  );
+
+  // Absolutely positioned against the footer wrapper's own bottom padding
+  // (see the result-step-only 19px bottom padding on the div this renders
+  // inside, in the main return below) -- NOT a flex child of the column
+  // above, so it can never add to that column's own height or the button
+  // row's spacing.
+  //
+  // bottom:4px -- found in review (Markus): matches the SAME 4px gap
+  // already used between the disclaimer and the button row above it
+  // (measured: 8px column gap - the disclaimer's own -4px margin = 4px
+  // net), applied symmetrically on both sides of this 11px-tall line --
+  // 4px above (from the button row) + 11px (this text) + 4px below (to
+  // the widget's own edge) = the 19px bottom padding on the wrapper,
+  // deliberately sized for exactly this rhythm rather than an arbitrary
+  // leftover value.
+  //
+  // Literal, not t.xyz -- explicitly NOT translated per the user's
+  // instruction: the brand name stays "Powered by GetRoomly" in every
+  // language. --getroomly-tertiary-text (same token as the Ladda ner/Dela/
+  // Nytt foto row above) keeps this the same muted tone in the default
+  // widget and on both Nordic Nest/Svensson, which flatten it to black in
+  // brand.ts -- no separate per-brand value needed.
+  const renderResultFooterCredit = () => (
+    <p
+      style={{
+        position: 'absolute',
+        bottom: '4px',
+        left: 0,
+        right: 0,
+        margin: 0,
+        textAlign: 'center',
+        fontSize: '11px',
+        lineHeight: '1',
+        color: 'var(--getroomly-tertiary-text)',
+      }}
+    >
+      Powered by GetRoomly
+    </p>
   );
 
   // Processing Footer Component (Step 2)
@@ -1434,7 +2683,12 @@ export function RoomVisualizationFlow({
           display: 'flex',
           justifyContent: 'center',
           marginTop: '4px',
-          color: 'color-mix(in srgb, var(--getroomly-primary) 70%, transparent)',
+          // Flat --getroomly-primary-deep, not a transparent mix of the
+          // lighter --getroomly-primary: at 70% opacity over the white
+          // footer, that effective color measured ~2.5:1 against white --
+          // this is real text (the progress percentage), not decoration,
+          // and needs the 4.5:1 AA minimum.
+          color: 'var(--getroomly-primary-deep)',
           fontWeight: '700',
           fontSize: '10px',
           letterSpacing: '0.1em',
@@ -1453,7 +2707,7 @@ export function RoomVisualizationFlow({
         onClick={handleOpenTerms}
         style={{
           fontSize: '10px',
-          color: 'hsla(20, 8%, 45%, 0.6)',
+          color: 'var(--getroomly-terms-link)',
           textDecoration: 'underline',
           fontStyle: 'italic',
           background: 'none',
@@ -1463,10 +2717,10 @@ export function RoomVisualizationFlow({
           transition: 'color 0.2s ease',
         }}
         onMouseEnter={e => {
-          e.currentTarget.style.color = 'hsla(20, 8%, 45%, 0.8)';
+          e.currentTarget.style.color = 'var(--getroomly-terms-link-hover)';
         }}
         onMouseLeave={e => {
-          e.currentTarget.style.color = 'hsla(20, 8%, 45%, 0.6)';
+          e.currentTarget.style.color = 'var(--getroomly-terms-link)';
         }}
       >
         {t.termsLink}
@@ -1501,6 +2755,19 @@ export function RoomVisualizationFlow({
             shadow). The CSS class adds dvh max-height + mobile margin/radius
             overrides that require two-value fallbacks or media queries. */}
         <div
+          ref={termsDialogRef}
+          role="dialog"
+          // Found in review: without these, a screen reader announces an
+          // unnamed overlay and may still expose the (covered) upload step
+          // behind it as browsable -- aria-modal marks this as the only
+          // interactive surface while open, aria-labelledby gives it the
+          // visible "Terms of Use & Privacy" heading as its accessible name.
+          aria-modal="true"
+          aria-labelledby="getroomly-terms-title"
+          // -1, not absent -- a valid useFocusTrap focus() target without
+          // joining the normal Tab order itself (matches the outer modal's
+          // own container in App.tsx).
+          tabIndex={-1}
           className="getroomly-terms-content"
           style={{
             backgroundColor: '#ffffff',
@@ -1525,7 +2792,15 @@ export function RoomVisualizationFlow({
               alignItems: 'center',
             }}
           >
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: '#374151' }}>
+            <h2
+              id="getroomly-terms-title"
+              style={{
+                margin: 0,
+                fontSize: '20px',
+                fontWeight: '600',
+                color: 'var(--getroomly-dialog-heading)',
+              }}
+            >
               {t.termsTitle}
             </h2>
             <button
@@ -1540,7 +2815,7 @@ export function RoomVisualizationFlow({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#6b7280',
+                color: 'var(--getroomly-tertiary-text)',
                 fontSize: '16px',
                 fontWeight: 'bold',
                 flexShrink: 0,
@@ -1558,15 +2833,17 @@ export function RoomVisualizationFlow({
               padding: '16px 20px',
               fontSize: '14px',
               lineHeight: '1.6',
-              color: '#4b5563',
+              color: 'var(--getroomly-dialog-body)',
             }}
           >
+            <p style={{ margin: '0 0 16px 0' }}>{t.termsIntro}</p>
+
             <div style={{ marginBottom: '16px' }}>
               <h3
                 style={{
                   fontSize: '16px',
                   fontWeight: '600',
-                  color: '#374151',
+                  color: 'var(--getroomly-dialog-heading)',
                   marginBottom: '8px',
                 }}
               >
@@ -1580,7 +2857,7 @@ export function RoomVisualizationFlow({
                 style={{
                   fontSize: '16px',
                   fontWeight: '600',
-                  color: '#374151',
+                  color: 'var(--getroomly-dialog-heading)',
                   marginBottom: '8px',
                 }}
               >
@@ -1600,12 +2877,13 @@ export function RoomVisualizationFlow({
                 style={{
                   fontSize: '16px',
                   fontWeight: '600',
-                  color: '#374151',
+                  color: 'var(--getroomly-dialog-heading)',
                   marginBottom: '8px',
                 }}
               >
                 {t.termsSection3Title}
               </h3>
+              <p style={{ margin: '0 0 8px 0' }}>{t.termsSection3Intro}</p>
               <p style={{ margin: 0 }}>{t.termsSection3Body}</p>
             </div>
 
@@ -1614,7 +2892,7 @@ export function RoomVisualizationFlow({
                 style={{
                   fontSize: '16px',
                   fontWeight: '600',
-                  color: '#374151',
+                  color: 'var(--getroomly-dialog-heading)',
                   marginBottom: '8px',
                 }}
               >
@@ -1636,10 +2914,10 @@ export function RoomVisualizationFlow({
             <button
               onClick={() => setShowTermsDialog(false)}
               style={{
-                backgroundColor: 'var(--getroomly-primary)',
+                backgroundColor: 'var(--getroomly-primary-deep)',
                 color: 'white',
                 border: 'none',
-                borderRadius: '6px',
+                borderRadius: 'var(--getroomly-radius-sm)',
                 padding: '10px 20px',
                 fontSize: '14px',
                 fontWeight: '600',
@@ -1678,6 +2956,7 @@ export function RoomVisualizationFlow({
         <div style={{ width: '28px', flexShrink: 0 }} />
 
         <h2
+          id="getroomly-modal-title"
           style={{
             flex: 1,
             textAlign: 'center',
@@ -1685,7 +2964,7 @@ export function RoomVisualizationFlow({
             fontWeight: 'bold',
             letterSpacing: '-0.025em',
             margin: '0',
-            color: 'rgba(0, 0, 0, 0.8)',
+            color: 'var(--getroomly-header-title)',
           }}
         >
           {step === 'upload' && t.stepUpload}
@@ -1708,7 +2987,7 @@ export function RoomVisualizationFlow({
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: 'rgba(0, 0, 0, 0.06)',
-              color: '#374151',
+              color: 'var(--getroomly-dialog-heading)',
               transition: 'all var(--getroomly-transition-fast)',
             }}
             onMouseEnter={e => {
@@ -1740,6 +3019,7 @@ export function RoomVisualizationFlow({
 
       {/* Content - Like original content structure */}
       <div
+        ref={resultContentRef}
         style={{
           flex: '1 1 auto',
           width: '100%',
@@ -1760,17 +3040,36 @@ export function RoomVisualizationFlow({
         {step === 'result' && renderResultStep()}
       </div>
 
+      {/* Photo overlay (Before/After toggle + feedback thumbs) --
+          deliberately NOT nested inside the content wrapper above; see
+          renderPhotoOverlay's own comment for why. */}
+      {step === 'result' && renderPhotoOverlay()}
+
       {/* Footer - Dynamic based on step */}
       <div
         style={{
-          padding: '8px var(--getroomly-space-sm) var(--getroomly-space-sm)',
+          // Bottom padding only, only on the result step -- found in
+          // review (Markus): 19px = the SAME 4px gap already used between
+          // the disclaimer and the button row above (measured, not
+          // guessed: 8px column gap - the disclaimer's own -4px margin =
+          // 4px net), applied symmetrically around the credit line's own
+          // 11px height (4px + 11px + 4px = 19px), replacing the arbitrary
+          // var(--getroomly-space-sm) bottom padding that existed before
+          // any credit line did. Upload/processing keep the original
+          // token value -- they never render the credit line at all.
+          padding: `8px var(--getroomly-space-sm) ${step === 'result' ? '19px' : 'var(--getroomly-space-sm)'}`,
           backgroundColor: '#ffffff',
           flexShrink: 0,
+          // position:relative only so renderResultFooterCredit's absolute
+          // positioning anchors against THIS div's own bottom padding
+          // (harmless on the upload/processing steps, which never render it).
+          position: 'relative',
         }}
       >
         {step === 'upload' && renderTermsFooter()}
         {step === 'processing' && renderProcessingFooter()}
         {step === 'result' && renderResultFooter()}
+        {step === 'result' && renderResultFooterCredit()}
       </div>
 
       {/* Terms Dialog */}

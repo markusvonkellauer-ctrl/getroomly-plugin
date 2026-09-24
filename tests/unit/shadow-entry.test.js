@@ -249,3 +249,66 @@ describe('shadow-entry — modal-opened/closed listener registration', () => {
     expect(window.GetRoomly.isOpen()).toBe(false);
   });
 });
+
+describe('shadow-entry — per-brand colour override injection', () => {
+  const originalLocation = window.location;
+
+  function setHostname(hostname) {
+    Object.defineProperty(window, 'location', {
+      value: { hostname },
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  beforeEach(() => {
+    jest.resetModules();
+    delete window.__getroomlyModalListenersRegistered;
+    document.body.innerHTML = '<div id="getroomly-plugin-container"></div>';
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it('appends a second <style> with the brand override when the hostname matches a known brand', () => {
+    setHostname('www.nordicnest.se');
+    require('../../src/shadow-entry');
+    act(() => {
+      window.GetRoomly.open();
+    });
+
+    const shadowRoot = document.querySelector('getroomly-plugin').shadowRoot;
+    const styles = shadowRoot.querySelectorAll('style');
+    expect(styles).toHaveLength(2);
+    expect(styles[1].textContent).toContain('--getroomly-primary: #000000;');
+  });
+
+  it("injects the correct per-brand tint for svensson, not nordicnest's", () => {
+    setHostname('svensson.se');
+    require('../../src/shadow-entry');
+    act(() => {
+      window.GetRoomly.open();
+    });
+
+    const shadowRoot = document.querySelector('getroomly-plugin').shadowRoot;
+    const styles = shadowRoot.querySelectorAll('style');
+    expect(styles[1].textContent).toContain('--getroomly-primary-tint: #F1EFED;');
+    expect(styles[1].textContent).not.toContain('#F3F3F3');
+  });
+
+  it('appends no second <style> at all when the hostname matches no known brand -- default theme only', () => {
+    setHostname('example.com');
+    require('../../src/shadow-entry');
+    act(() => {
+      window.GetRoomly.open();
+    });
+
+    const shadowRoot = document.querySelector('getroomly-plugin').shadowRoot;
+    expect(shadowRoot.querySelectorAll('style')).toHaveLength(1);
+  });
+});

@@ -3,7 +3,10 @@
 //
 // Language is resolved once per config read using this priority chain:
 //   1. window.GetRoomlyEmbedConfig.language  (host page sets this explicitly)
-//   2. TLD detection                         (see TLD_MAP below, default -> "en")
+//   2. TLD detection                         (see TLD_MAP below)
+//   3. Staging-label detection               (see detectLanguageFromStagingLabel,
+//                                              e.g. "stage-de.nordicnest.dev")
+//   4. Default -> "en"
 // See use-embed-config.ts for where this is applied to the resolved config.
 //
 // Each language's strings live in their own file under ./locales/ — every
@@ -52,13 +55,40 @@ export interface TranslationStrings {
   labelOriginal: string;
   labelNew: string;
   addToBasket: string;
-  showNew: string;
-  showOriginal: string;
-  saveShare: string;
+  /** The Add to Basket button's own label swaps to this short confirmation (e.g. "Tillagt ✓") for 2400ms after a click, then reverts -- same pattern as downloadedLabel/copiedLabel. Not a status line: the button that triggered the action is the one that changes. */
+  addedToBasketLabel: string;
+  /** Visually-hidden role="status" aria-live="polite" text announced alongside addedToBasketLabel -- a label change on a button that already has focus isn't reliably announced by all screen readers on its own, so this full-sentence node (stays mounted, only its text changes) carries the confirmation instead. */
+  addedToBasketAnnouncement: string;
+  /** Before/After toggle pill on the result image (short, e.g. "Före"/"Efter") -- distinct from labelOriginal/labelNew, which are the base/overlay images' alt text and need to work as full sentence fragments there too. */
+  toggleBefore: string;
+  toggleAfter: string;
+  toggleGroupLabel: string;
+  /** aria-label on the feedback thumb group (bottom-right of the result image) -- not visible text; there's no written question on the image itself, a deliberate tradeoff (see ANDRING-5b-bildkontroller.md, "Ändring 4"). */
+  feedbackQuestion: string;
+  /** Shown in a confirmation pill on the image, replacing the two thumb circles in place, for 2200ms after either is clicked, then clears -- see thankForFeedback in RoomVisualizationFlow.tsx. */
+  feedbackThanks: string;
+  feedbackLikeLabel: string;
+  feedbackDislikeLabel: string;
+  favoriteLabel: string;
+  favoriteLabelActive: string;
+  /** Permanent measurement-accuracy disclaimer under the action row -- never replaced by a transient message. */
+  disclaimer: string;
   downloadToDevice: string;
+  /** The download button's own label swaps to this short confirmation (e.g. "Nedladdad ✓") for 2400ms after a click, then reverts to downloadToDevice -- replaces a separate, permanently-mounted status line that stayed empty nearly all the time. Also reused by the share button (shareWithFriends) for its own download fallback -- see handleShareWithFriends. */
+  downloadedLabel: string;
+  /** Visually-hidden role="status" aria-live="polite" text announced alongside downloadedLabel, on either the download or share button -- same reasoning as addedToBasketAnnouncement: a label change on a button that already has focus isn't reliably announced by all screen readers on its own. */
+  downloadedAnnouncement: string;
   shareWithFriends: string;
+  /** The share button's own label swaps to this short confirmation (e.g. "Kopierad ✓") for 2400ms when its clipboard fallback succeeds (see handleShareWithFriends's 3-tier chain: native share sheet -> clipboard -> download). */
+  copiedLabel: string;
+  /** Visually-hidden role="status" aria-live="polite" text announced alongside copiedLabel -- same reasoning as downloadedAnnouncement above. */
+  copiedAnnouncement: string;
   newPhoto: string;
   termsTitle: string;
+  /** Intro paragraph shown once, above section 1 -- deliberately generic
+   * (no partner name) since this same string renders on every partner's
+   * site, not just one. */
+  termsIntro: string;
   termsSection1Title: string;
   termsSection1Body: string;
   termsSection2Title: string;
@@ -67,6 +97,10 @@ export interface TranslationStrings {
   termsQualityRetentionTitle: string;
   termsQualityRetentionBody: string;
   termsSection3Title: string;
+  /** New lead paragraph, rendered before termsSection3Body -- the general
+   * GDPR/international-standards commitment, distinct from the specific
+   * cloud-platform paragraph that follows it. */
+  termsSection3Intro: string;
   termsSection3Body: string;
   termsSection4Title: string;
   termsSection4Body: string;
@@ -174,18 +208,66 @@ const TLD_MAP: ReadonlyMap<string, SupportedLanguage> = new Map([
   ['it', 'it'],
 ]);
 
-/** TLD-based fallback: see TLD_MAP above. Unmapped TLDs (incl. .com) -> English. */
+// Staging/preview environments are commonly named with an environment
+// keyword and a market code joined by a hyphen in one hostname label (e.g.
+// Nordic Nest's "stage-de.nordicnest.dev", "stage-no.nordicnest.dev") — the
+// TLD itself (.dev) never matches TLD_MAP, so without this, every staging
+// domain silently falls back to English regardless of market.
+//
+// Deliberately narrow to reduce false positives: requires an EXACT
+// environment keyword AND an exact market code as the two hyphen-separated
+// parts of one label — not a substring search. A substring search would
+// also match unrelated things like "de-luxe-collection" (contains "de") or
+// "no-reply" (contains "no"). This pattern only fires for the specific
+// {env}-{code} / {code}-{env} shape, so those don't match at all.
+const ENVIRONMENT_LABEL_KEYWORDS: ReadonlySet<string> = new Set([
+  'stage',
+  'staging',
+  'test',
+  'dev',
+  'qa',
+  'preprod',
+  'uat',
+]);
+
+function detectLanguageFromStagingLabel(hostname: string): SupportedLanguage {
+  for (const label of hostname.split('.')) {
+    const parts = label.split('-');
+    if (parts.length !== 2) {
+      continue;
+    }
+    const [first, second] = parts;
+    if (ENVIRONMENT_LABEL_KEYWORDS.has(first) && TLD_MAP.has(second)) {
+      return TLD_MAP.get(second) as SupportedLanguage;
+    }
+    if (ENVIRONMENT_LABEL_KEYWORDS.has(second) && TLD_MAP.has(first)) {
+      return TLD_MAP.get(first) as SupportedLanguage;
+    }
+  }
+  return 'en';
+}
+
+/**
+ * TLD-based detection: see TLD_MAP above. Checked first (production domains
+ * always resolve here) — only when that finds no match does this fall
+ * through to detectLanguageFromStagingLabel's narrower staging-hostname
+ * pattern. Unmapped/unmatched on both -> English.
+ */
 export function detectLanguageFromTLD(): SupportedLanguage {
   const hostname = window.location.hostname.toLowerCase();
   const tld = hostname.split('.').pop();
   const mapped = tld && TLD_MAP.get(tld);
-  return mapped || 'en';
+  if (mapped) {
+    return mapped;
+  }
+  return detectLanguageFromStagingLabel(hostname);
 }
 
 /**
- * Full priority chain: explicit host-page override, then TLD, then English.
- * Use this when there's no already-resolved `config.language` to read from
- * (e.g. inside use-embed-config.ts, before defaults are applied).
+ * Full priority chain: explicit host-page override, then TLD, then the
+ * staging-label fallback (see detectLanguageFromStagingLabel above), then
+ * English. Use this when there's no already-resolved `config.language` to
+ * read from (e.g. inside use-embed-config.ts, before defaults are applied).
  */
 export function detectLanguage(): SupportedLanguage {
   const configLang = window.GetRoomlyEmbedConfig?.language;

@@ -13,13 +13,79 @@
   --social-bg: rgba(244, 243, 236, 0.5);
   --shadow: rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
-  /* GetRoomly Design System */
-  --getroomly-primary: hsl(176, 51%, 36%);
+  /* GetRoomly Design System
+   * --getroomly-primary is for decorative/non-text use only (icon strokes,
+   * borders, focus rings) -- 4.02:1 against white, which clears the 3:1 AA
+   * minimum for non-text UI components but NOT the 4.5:1 minimum for text.
+   * Any plain text or white-on-filled-background use must use
+   * --getroomly-primary-deep instead (5.64:1 against white, passes AA for
+   * text). Splitting these two roles fixes a real contrast bug: the old
+   * single --getroomly-primary (~4.09:1) was used directly under white
+   * button text in several places, below the 4.5:1 AA text minimum. */
+  --getroomly-primary: #3a8c7d;
+  --getroomly-primary-deep: #2f7267;
+  --getroomly-primary-press: #24594f;
+  --getroomly-primary-tint: #e9f3f0;
   --getroomly-heading: #2a2522cc;
   --getroomly-muted: hsl(20, 8%, 45%);
   --getroomly-border-light: hsl(30, 12%, 88%);
   --getroomly-success: hsl(140, 30%, 50%);
   --getroomly-modal-backdrop: rgba(0, 0, 0, 0.5);
+
+  /* Text-role tokens -- one per distinct grey/tinted shade RoomVisualizationFlow.tsx
+   * used to hardcode inline (icons, dialog copy, hints, ...), split out so a
+   * per-partner brand theme (see src/lib/brand.ts) can override them without
+   * touching component code. Values below are exactly what was already
+   * hardcoded at each call site, so this introduction is a no-op for the
+   * default (no brand match) theme -- only a brand override changes anything. */
+  --getroomly-icon-default: #201e1d;
+  --getroomly-tip-label: hsla(20, 10%, 15%, 0.8);
+  --getroomly-tips-heading: hsla(176, 51%, 36%, 0.8);
+  --getroomly-toggle-inactive: #605d5d;
+  --getroomly-tertiary-text: #6b7280;
+  --getroomly-disclaimer: #444141;
+  --getroomly-terms-link: hsla(20, 8%, 45%, 0.6);
+  --getroomly-terms-link-hover: hsla(20, 8%, 45%, 0.8);
+  --getroomly-dialog-heading: #374151;
+  --getroomly-dialog-body: #4b5563;
+  --getroomly-header-title: rgba(0, 0, 0, 0.8);
+  --getroomly-upload-hint: rgba(107, 114, 126, 0.5);
+  --getroomly-guidance-border: hsla(176, 51%, 36%, 0.05);
+  /* Processing-step spinner gradient (see loading-spinner.css) -- 3 stops,
+   * light to dark, same as the default teal so a brand override only needs
+   * to redefine these three, not touch the animation/shape rules. */
+  --getroomly-spinner-start: #6ff3dc;
+  --getroomly-spinner-mid: #00c9a7;
+  --getroomly-spinner-end: #00806e;
+  /* Processing-step linear progress bar fill -- same teal as the spinner's
+   * mid stop today, but its own variable (not a var(--getroomly-spinner-mid)
+   * reference) since it's a brand accent element like a button, not part of
+   * the spinner's own gradient -- a brand override maps it to the primary
+   * black, not the spinner's interpolated grey mid-tone. */
+  --getroomly-progress-fill: #00c9a7;
+
+  /* Upload button's own drop shadow -- a brand-tinted glow (matches
+   * --getroomly-primary), so it needs to be a token too rather than a
+   * hardcoded rgba(): baking the green in literally would leave a green
+   * glow under an otherwise fully black button on a branded page, exactly
+   * the "leftover brand colour" bug already fixed elsewhere in this file. */
+  --getroomly-upload-button-shadow: 0 10px 24px -10px rgba(58, 140, 125, 0.6);
+
+  /* Corner radius tokens -- one per distinct value already hardcoded on a
+   * rectangular/pill element (see RoomVisualizationFlow.tsx), split out the
+   * same way the text-role colours above are, so a brand override can flatten
+   * them to square corners without touching every call site. Deliberately
+   * NOT applied to any circular element (favourite button, feedback thumbs,
+   * close buttons, tip/step number badges) -- those use border-radius:50%
+   * to be circles, a different shape language entirely, not "very rounded
+   * corners"; a brand wanting square corners on rectangles doesn't imply it
+   * also wants its icon buttons turned into squares. */
+  --getroomly-radius-pill: 999px;
+  --getroomly-radius-card: 8px;
+  --getroomly-radius-image: 18px;
+  --getroomly-radius-modal: 1rem;
+  --getroomly-radius-sm: 6px;
+  --getroomly-radius-xs: 4px;
 
   /* Spacing */
   --getroomly-space-xs: 8px;
@@ -237,14 +303,19 @@ code {
   max-height: 80vh;
   max-height: 80dvh;
 }
-/* Upload step — on wider/desktop viewports the square container is much taller
-   than on mobile, so space-between pushes the icon to the very top. Switch to
-   center so the icon+button and guidance box are grouped in the middle instead.
-   Mobile (≤480px) keeps the original space-between layout which looks fine. */
+/* Upload step — on wider/desktop viewports the square container is much
+   taller than on mobile; centering the (flex:1) dropzone + tips card as a
+   group here keeps them visually grouped in the middle instead of flush to
+   the top, which is how they'd otherwise render at the default
+   justify-content. Narrow viewports (≤480px) are already tight/square
+   enough that the default looks fine without this override.
+   Note: no `gap` override here (checked in review of PR #114's Copilot
+   comment) -- the component's own inline `gap` (RoomVisualizationFlow.tsx)
+   has no `!important`, so it already wins over any gap this rule could set;
+   adding one back would be dead code. */
 @media (min-width: 481px) {
   .getroomly-upload-step {
     justify-content: center !important;
-    gap: var(--getroomly-space-lg);
   }
 }
 

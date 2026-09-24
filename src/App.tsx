@@ -1,7 +1,7 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AppConfig } from '@/config/app-config';
 import { useEmbedConfig } from '@/hooks/use-embed-config';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { EmbedButton } from '@/components/EmbedButton';
 import { RoomVisualizationFlow } from '@/components/RoomVisualizationFlow';
 import { trackInteraction } from '@/lib/analytics';
@@ -222,14 +222,53 @@ function App() {
     };
   }, []);
 
+  // Defined here (before the loading/error early returns below), as
+  // useCallback, and referenced by both useFocusTrap's Escape handling and
+  // the modal's own close affordances (X button, backdrop click) further
+  // down -- hooks must run unconditionally on every render (can't be
+  // declared after an early return), and useFocusTrap's Tab/Escape effect
+  // needs this reference to stay stable across renders so it doesn't tear
+  // down and reattach its keydown listener on every unrelated App
+  // re-render (e.g. the availability check resolving). config may still be
+  // null/undefined here (before the `!config` check below has run), unlike
+  // every other use of `config.x` further down in this component.
+  const handleModalClose = useCallback(() => {
+    setIsModalOpen(false);
+    config?.callbacks?.onModalClose?.();
+    // 'getroomly-modal-closed' is dispatched by the centralized isModalOpen
+    // effect above, not here — keeps it a single-writer event regardless of
+    // which close path (this one, or the 'getroomly-close-modal' listener)
+    // caused isModalOpen to become false.
+  }, [config]);
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // isModalOpen alone isn't the same thing as "the dialog is actually
+  // rendered" -- found in review: isReady/error/config can change while
+  // isModalOpen stays true (e.g. useEmbedConfig revalidates a changed host
+  // config and briefly rejects it), swapping this component to the
+  // loading/error branch below and unmounting the dialog div without
+  // isModalOpen ever toggling. Since useFocusTrap's activation effect is
+  // keyed on this value, isModalOpen alone would never re-fire it when the
+  // dialog later re-mounts (a fresh dialogRef.current) once config becomes
+  // valid again, leaving Tab/Escape untrapped indefinitely. Matching the
+  // exact condition that gates the dialog JSX below keeps the two in sync.
+  const dialogActuallyRendered = isModalOpen && isReady && !error && !!config;
+  useFocusTrap(dialogRef, dialogActuallyRendered, handleModalClose);
+
   // Show loading state while config is being loaded
   if (!isReady) {
     return (
+      // No explicit fontFamily -- found in review: an inline value here
+      // always beat brand.ts's font-family:inherit override (inline
+      // styles win over any injected <style> rule), and defaultLanguage is
+      // only ever 'en'/'sv' (both Latin-script -- see app-config.ts), so
+      // the 'en'-vs-other split never had a real non-Latin-glyph-coverage
+      // reason to preserve. index.css's own :root, :host rule already
+      // supplies the same system font stack by default.
       <div
         style={{
           padding: '20px',
           textAlign: 'center',
-          fontFamily: AppConfig.ui.defaultLanguage === 'en' ? 'system-ui' : 'sans-serif',
         }}
       >
         <p>GetRoomly: Loading configuration...</p>
@@ -246,7 +285,6 @@ function App() {
           padding: '20px',
           textAlign: 'center',
           color: '#e74c3c',
-          fontFamily: AppConfig.ui.defaultLanguage === 'en' ? 'system-ui' : 'sans-serif',
         }}
       >
         <p>⚠️ GetRoomly Configuration Error</p>
@@ -254,16 +292,6 @@ function App() {
       </div>
     );
   }
-
-  const handleModalClose = () => {
-    setIsModalOpen(false);
-    // Call callback if provided
-    config.callbacks?.onModalClose?.();
-    // 'getroomly-modal-closed' is dispatched by the centralized isModalOpen
-    // effect above, not here — keeps it a single-writer event regardless of
-    // which close path (this one, or the 'getroomly-close-modal' listener)
-    // caused isModalOpen to become false.
-  };
 
   // Shadow DOM mode: shows button + modal (modal can also be opened externally via window.GetRoomly.open())
   const hideButton = config.hideButton === true;
@@ -288,7 +316,23 @@ function App() {
               onClick={handleModalClose}
             />
             <div
+              ref={dialogRef}
               role="dialog"
+              // Found in review: role="dialog" alone doesn't tell assistive
+              // tech this is the ONLY interactive surface (aria-modal) or
+              // give it an accessible name (aria-labelledby) -- without
+              // these a screen reader announces an unnamed dialog and may
+              // still expose the (visually hidden) page behind it.
+              // getroomly-modal-title is RoomVisualizationFlow's own step
+              // heading (Upload Photo / Transforming.../Your New Room),
+              // always present whenever this dialog is open.
+              aria-modal="true"
+              aria-labelledby="getroomly-modal-title"
+              // -1, not absent -- makes the container a valid programmatic
+              // focus() target (useFocusTrap moves focus here when the
+              // modal opens) without adding it to the normal Tab order
+              // itself.
+              tabIndex={-1}
               className="getroomly-modal-container rounded-2xl flex flex-col gap-0 transition-all duration-300 overflow-hidden bg-background border shadow-2xl"
               style={{
                 pointerEvents: 'auto',
@@ -299,6 +343,7 @@ function App() {
                 zIndex: 50,
                 width: '100%',
                 maxWidth: '520px',
+                borderRadius: 'var(--getroomly-radius-modal)',
               }}
               onClick={e => e.stopPropagation()}
             >

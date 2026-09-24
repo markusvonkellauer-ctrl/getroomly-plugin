@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { AppConfig } from './config/app-config';
 import { getAvailability } from './lib/availability-state';
+import { detectBrand, brandThemeCss } from './lib/brand';
 
 // Import styles as text to inject into Shadow DOM
 import styleContent from './index.css?inline';
@@ -31,6 +32,20 @@ class GetRoomlyPlugin extends HTMLElement {
 
     // Add elements to Shadow DOM
     shadowRoot.appendChild(style);
+
+    // Per-brand colour override (Nordic Nest / Svensson -- see brand.ts) --
+    // a SEPARATE, later <style> element in the same shadow root, not an
+    // edit to styleContent above: this keeps the override purely additive
+    // (empty string when no brand hostname matches, so nothing is appended
+    // at all) and lets it win the cascade on plain declaration order,
+    // without needing !important against the base :root, :host rule.
+    const brandCss = brandThemeCss(detectBrand());
+    if (brandCss) {
+      const brandStyle = document.createElement('style');
+      brandStyle.textContent = brandCss;
+      shadowRoot.appendChild(brandStyle);
+    }
+
     shadowRoot.appendChild(container);
 
     // Set default config if not provided
