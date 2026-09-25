@@ -803,6 +803,16 @@ export function RoomVisualizationFlow({
             startScale: imageScaleRef.current,
           };
           dragRef.current = null;
+          // A real pinch almost never starts with both fingers landing in
+          // the same event -- the first finger typically fires its own
+          // single-touch touchstart (stamping lastTapRef below) a few ms
+          // before the second finger turns it into this branch. Without
+          // clearing it here, an immediate pan right after a quick pinch
+          // (pinch to zoom in, then look around -- the natural next thing
+          // to do) could land within the 300ms double-tap window and get
+          // misread as the second tap, resetting the zoom (found in review).
+          // A pinch is never a tap sequence either way.
+          lastTapRef.current = 0;
         } else if (e.touches.length === 1) {
           // Belt-and-suspenders guard against any button inside this
           // container registering as a double-tap-to-reset-zoom gesture.

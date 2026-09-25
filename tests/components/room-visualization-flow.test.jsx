@@ -2106,6 +2106,50 @@ describe('RoomVisualizationFlow', () => {
 
       expect(img.style.transform).toBe('translate(25px, 0px) scale(2)');
     });
+
+    test('an immediate pan right after a pinch is not mistaken for a double-tap, even when the pinch itself began with a stray single-finger touchstart', async () => {
+      // Found in review: on real touchscreens, a pinch almost never starts
+      // with both fingers landing in the same event -- the first finger
+      // typically fires its own single-touch touchstart (stamping
+      // lastTapRef) a few ms before the second finger turns it into a
+      // two-finger touchstart. Without clearing lastTapRef when the pinch
+      // begins, panning immediately after a quick pinch -- the natural next
+      // thing to do -- could land within the 300ms double-tap window and
+      // get misread as the second tap, resetting the zoom right as the
+      // user tries to explore it.
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await act(async () => {
+        // The stray first-finger touchstart that (on real hardware)
+        // precedes the second finger landing.
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+      });
+
+      await pinchZoomTo2x(container);
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(2)');
+
+      // Pan immediately after releasing the pinch -- well within the 300ms
+      // double-tap window measured from the stray touchstart above.
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 35, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(35px, 0px) scale(2)');
+    });
   });
 
   // ─── Favorite button ───────────────────────────────────────────────────────
