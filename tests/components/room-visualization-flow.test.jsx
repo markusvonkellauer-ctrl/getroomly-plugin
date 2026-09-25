@@ -2065,6 +2065,47 @@ describe('RoomVisualizationFlow', () => {
         global.ResizeObserver = originalResizeObserver;
       }
     });
+
+    test('clears drag and tap state on touchcancel, so an interrupted gesture cannot misfire the next touch as a double-tap', async () => {
+      // Found in review: the browser can interrupt a gesture mid-flight
+      // with touchcancel instead of touchend (iOS Safari's edge-swipe-back,
+      // Android's system back gesture, a notification taking focus, etc.).
+      // Without its own cleanup, an interrupted touchstart would leave
+      // lastTapRef stamped, letting the very next touch within 300ms be
+      // misread as the second tap of a double-tap and reset zoom/pan.
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await pinchZoomTo2x(container);
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        // Cancelled before any real movement -- e.g. the OS claims the
+        // gesture for a system edge-swipe.
+        container.dispatchEvent(new TouchEvent('touchcancel', { touches: [], bubbles: true }));
+      });
+
+      // A brand-new touch immediately after (well within the 300ms
+      // double-tap window) must start a fresh pan, not get reset to scale 1.
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 25, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(25px, 0px) scale(2)');
+    });
   });
 
   // ─── Favorite button ───────────────────────────────────────────────────────

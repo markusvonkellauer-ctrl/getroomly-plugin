@@ -863,9 +863,24 @@ export function RoomVisualizationFlow({
         dragRef.current = null;
       };
 
+      // The browser can interrupt a gesture mid-flight with touchcancel
+      // instead of touchend (iOS Safari's edge-swipe-back, Android's system
+      // back gesture, a notification/permission prompt taking focus, etc.)
+      // -- without its own cleanup, a cancelled gesture would leave
+      // lastTapRef stamped from an interrupted pan, letting the next real
+      // touch within 300ms be misread as the second tap of a double-tap
+      // (found in review). An interrupted gesture isn't a real tap either,
+      // so this also clears lastTapRef, unlike onTouchEnd above.
+      const onTouchCancel = () => {
+        pinchRef.current = null;
+        dragRef.current = null;
+        lastTapRef.current = 0;
+      };
+
       el.addEventListener('touchstart', onTouchStart, { passive: true });
       el.addEventListener('touchmove', onTouchMove, { passive: false });
       el.addEventListener('touchend', onTouchEnd, { passive: true });
+      el.addEventListener('touchcancel', onTouchCancel, { passive: true });
 
       // Re-measures the overlay's anchor whenever imageContainerRef's own
       // rendered size changes (image maxHeight resolving, aspect ratio,
@@ -901,6 +916,7 @@ export function RoomVisualizationFlow({
         el.removeEventListener('touchstart', onTouchStart);
         el.removeEventListener('touchmove', onTouchMove);
         el.removeEventListener('touchend', onTouchEnd);
+        el.removeEventListener('touchcancel', onTouchCancel);
         resizeObserver?.disconnect();
       };
     },
