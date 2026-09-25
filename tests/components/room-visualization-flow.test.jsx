@@ -1732,14 +1732,14 @@ describe('RoomVisualizationFlow', () => {
           })
         );
       });
-      expect(img.style.transform).toBe('scale(2)');
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(2)');
 
       await act(async () => {
         dispatchTouchStart(container, [touch(img)]);
         dispatchTouchStart(container, [touch(img)]);
       });
 
-      expect(img.style.transform).toBe('scale(1)');
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(1)');
     });
 
     test('rapidly switching Before -> After via the toggle does not reset an already-zoomed image', async () => {
@@ -1764,7 +1764,7 @@ describe('RoomVisualizationFlow', () => {
           })
         );
       });
-      expect(img.style.transform).toBe('scale(2)');
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(2)');
 
       // Two taps on two DIFFERENT buttons, both within the 300ms
       // double-tap window -- would have reset zoom before this fix, since
@@ -1775,7 +1775,188 @@ describe('RoomVisualizationFlow', () => {
         dispatchTouchStart(container, [touch(afterButton)]);
       });
 
-      expect(img.style.transform).toBe('scale(2)');
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(2)');
+    });
+  });
+
+  // ─── Single-finger pan while zoomed in ─────────────────────────────────────
+  // Found in review: pinch-zoom had no way to look around a zoomed-in photo
+  // -- only the center was ever reachable, since the transform was scale()
+  // alone with no translate. These verify the pan added alongside it.
+
+  describe('pinch-zoom + single-finger pan', () => {
+    const renderAtResult = async generationResult => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    const touch = (target, x = 0, y = 0) => ({ target, clientX: x, clientY: y, identifier: 0 });
+
+    // clampPan reads the container's own offsetWidth/offsetHeight to bound
+    // pan against its actual on-screen size -- jsdom has no real layout
+    // engine and reports 0 for both by default, which would clamp every
+    // pan in these tests to (0, 0) regardless of the drag distance. Mocked
+    // to a realistic box so the clamp math has something real to bound
+    // against.
+    const mockContainerSize = (container, width = 300, height = 300) => {
+      Object.defineProperty(container, 'offsetWidth', { value: width, configurable: true });
+      Object.defineProperty(container, 'offsetHeight', { value: height, configurable: true });
+    };
+
+    const pinchZoomTo2x = async container => {
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', {
+            touches: [touch(container, 0, 0), touch(container, 100, 0)],
+            bubbles: true,
+          })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 0, 0), touch(container, 200, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+    };
+
+    test('a single-finger drag at scale 1 does not pan -- normal page scrolling stays untouched', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 100, 100)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 150, 150)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(1)');
+    });
+
+    test('a single-finger drag pans the image once zoomed in, matching the finger movement', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await pinchZoomTo2x(container);
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(2)');
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 100, 100)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 130, 115)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      // At scale 2 on a 300px container, max pan is (300*(2-1))/2 = 150px
+      // either way -- a 30px/15px drag is well inside that, so it should
+      // land untouched by clamping.
+      expect(img.style.transform).toBe('translate(30px, 15px) scale(2)');
+    });
+
+    test('clamps pan so the zoomed image can never be dragged past its own edge', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container, 300, 300);
+
+      await pinchZoomTo2x(container);
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        // Drag 1000px right/down -- far past what a 300px container at 2x
+        // zoom could ever reveal (max is 150px either way).
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 1000, 1000)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(150px, 150px) scale(2)');
+    });
+
+    test('double-tap resets both zoom AND pan back to (0, 0), not just zoom', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await pinchZoomTo2x(container);
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 50, 50)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+      expect(img.style.transform).toBe('translate(50px, 50px) scale(2)');
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container)], bubbles: true })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(1)');
+    });
+
+    test('applies the same pan to the "Before" overlay layer, so panning stays in sync across the toggle', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const afterImg = screen.getByAltText('New Design');
+      const beforeImg = screen.getByAltText('Original Room');
+      const container = afterImg.parentElement;
+      mockContainerSize(container);
+
+      await pinchZoomTo2x(container);
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 40, 20)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(afterImg.style.transform).toBe('translate(40px, 20px) scale(2)');
+      expect(beforeImg.style.transform).toBe('translate(40px, 20px) scale(2)');
     });
   });
 

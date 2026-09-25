@@ -155,16 +155,39 @@ export function RoomVisualizationFlow({
     return () => observer.disconnect();
   }, []);
 
-  // Pinch-to-zoom: scale is stored alongside the image it belongs to so it
-  // resets automatically whenever resultImage changes — no effect needed.
-  const [zoomState, setZoomState] = useState<{ scale: number; forImage: string | null }>({
+  // Pinch-to-zoom + pan: scale/pan are stored alongside the image they
+  // belong to so they reset automatically whenever resultImage changes — no
+  // effect needed. panX/panY are plain screen pixels (not scaled), matching
+  // finger movement 1:1 — see the transform below (translate is written
+  // BEFORE scale, so CSS applies it in the parent's untransformed pixel
+  // space, not the zoomed-in one).
+  const [zoomState, setZoomState] = useState<{
+    scale: number;
+    panX: number;
+    panY: number;
+    forImage: string | null;
+  }>({
     scale: 1,
+    panX: 0,
+    panY: 0,
     forImage: null,
   });
   const imageScale = zoomState.forImage === resultImage ? zoomState.scale : 1;
+  const imagePanX = zoomState.forImage === resultImage ? zoomState.panX : 0;
+  const imagePanY = zoomState.forImage === resultImage ? zoomState.panY : 0;
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null);
+  // Single-finger pan, only ever armed while already zoomed in (imageScale >
+  // 1) -- see onTouchStart. null whenever a drag isn't in progress, so
+  // onTouchMove's drag branch is a no-op during normal (non-zoomed) touch
+  // scrolling.
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    startPanX: number;
+    startPanY: number;
+  } | null>(null);
   const lastTapRef = useRef(0);
 
   // The photo overlay (Before/After toggle, top-left corner; feedback
@@ -308,15 +331,55 @@ export function RoomVisualizationFlow({
   // Mutable refs so touch handlers can read latest values without being in the
   // effect dep array (avoids re-registering listeners on every scale update).
   const imageScaleRef = useRef(imageScale);
+  const imagePanRef = useRef({ x: imagePanX, y: imagePanY });
   const resultImageRef = useRef(resultImage);
   useEffect(() => {
     imageScaleRef.current = imageScale;
+    imagePanRef.current = { x: imagePanX, y: imagePanY };
     resultImageRef.current = resultImage;
   });
 
+  // Bounds pan so the zoomed image's edge can never be dragged past the
+  // container's own edge (which would otherwise reveal the container's
+  // background instead of more of the photo). At scale s, the image grows by
+  // (s-1)*size around its centered transform-origin, so half of that growth
+  // is the max distance either edge can be pulled in from center.
+  const clampPan = useCallback((x: number, y: number, scale: number) => {
+    const el = imageContainerRef.current;
+    if (!el || scale <= 1) {
+      return { x: 0, y: 0 };
+    }
+    const maxX = (el.offsetWidth * (scale - 1)) / 2;
+    const maxY = (el.offsetHeight * (scale - 1)) / 2;
+    return { x: Math.min(Math.max(x, -maxX), maxX), y: Math.min(Math.max(y, -maxY), maxY) };
+  }, []);
+
   const setImageScale = useCallback(
-    (next: number) => setZoomState({ scale: next, forImage: resultImageRef.current }),
-    []
+    (next: number) => {
+      setZoomState(prev => {
+        const currentPan =
+          prev.forImage === resultImageRef.current
+            ? { x: prev.panX, y: prev.panY }
+            : { x: 0, y: 0 };
+        const clamped = clampPan(currentPan.x, currentPan.y, next);
+        return { scale: next, panX: clamped.x, panY: clamped.y, forImage: resultImageRef.current };
+      });
+    },
+    [clampPan]
+  );
+
+  // Only ever called from the drag branch of onTouchMove, which already
+  // guards on imageScaleRef.current > 1 -- so prev.scale here is always the
+  // current in-progress zoom level, not a stale one from a previous image.
+  const setImagePan = useCallback(
+    (x: number, y: number) => {
+      setZoomState(prev => {
+        const scale = prev.forImage === resultImageRef.current ? prev.scale : 1;
+        const clamped = clampPan(x, y, scale);
+        return { ...prev, panX: clamped.x, panY: clamped.y, forImage: resultImageRef.current };
+      });
+    },
+    [clampPan]
   );
 
   // Listen for external favorite state changes from host page
@@ -735,6 +798,7 @@ export function RoomVisualizationFlow({
             startDist: getDistance(e.touches[0], e.touches[1]),
             startScale: imageScaleRef.current,
           };
+          dragRef.current = null;
         } else if (e.touches.length === 1) {
           // Belt-and-suspenders guard against any button inside this
           // container registering as a double-tap-to-reset-zoom gesture.
@@ -751,6 +815,17 @@ export function RoomVisualizationFlow({
           const now = Date.now();
           if (now - lastTapRef.current < 300) {
             setImageScale(1);
+            dragRef.current = null;
+          } else if (imageScaleRef.current > 1) {
+            // Only armed while already zoomed in -- at scale 1 a single
+            // finger should still scroll the page normally, not pan a
+            // full-size image.
+            dragRef.current = {
+              startX: e.touches[0].clientX,
+              startY: e.touches[0].clientY,
+              startPanX: imagePanRef.current.x,
+              startPanY: imagePanRef.current.y,
+            };
           }
           lastTapRef.current = now;
         }
@@ -763,11 +838,17 @@ export function RoomVisualizationFlow({
           const ratio = newDist / pinchRef.current.startDist;
           const next = Math.min(Math.max(pinchRef.current.startScale * ratio, 1), 4);
           setImageScale(next);
+        } else if (e.touches.length === 1 && dragRef.current) {
+          e.preventDefault();
+          const dx = e.touches[0].clientX - dragRef.current.startX;
+          const dy = e.touches[0].clientY - dragRef.current.startY;
+          setImagePan(dragRef.current.startPanX + dx, dragRef.current.startPanY + dy);
         }
       };
 
       const onTouchEnd = () => {
         pinchRef.current = null;
+        dragRef.current = null;
       };
 
       el.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -796,7 +877,7 @@ export function RoomVisualizationFlow({
         resizeObserver?.disconnect();
       };
     },
-    [getDistance, setImageScale, measureOverlayAnchor]
+    [getDistance, setImageScale, setImagePan, measureOverlayAnchor]
   );
 
   const renderStepIndicator = (currentStep: 'upload' | 'processing' | 'result') => {
@@ -1939,7 +2020,11 @@ export function RoomVisualizationFlow({
                 maxHeight: `${availableImageHeightPx ?? 150}px`,
                 width: 'auto',
                 height: 'auto',
-                transform: `scale(${imageScale})`,
+                // translate BEFORE scale: CSS applies the rightmost function
+                // first (in the element's own pre-scale coordinate space),
+                // so translate's pixel amounts here always match finger
+                // movement 1:1, regardless of the current zoom level.
+                transform: `translate(${imagePanX}px, ${imagePanY}px) scale(${imageScale})`,
                 transformOrigin: 'center center',
                 transition: imageScale === 1 ? 'transform 0.25s ease' : 'none',
                 willChange: 'transform',
@@ -1967,11 +2052,11 @@ export function RoomVisualizationFlow({
                 height: '100%',
                 objectFit: 'contain',
                 opacity: showOriginalImage ? 1 : 0,
-                // Same pinch/double-tap zoom transform as the base layer --
-                // without this, zooming while viewing "Before" had no
-                // effect, and switching from a zoomed "After" view briefly
-                // showed an unzoomed original mid cross-fade.
-                transform: `scale(${imageScale})`,
+                // Same pinch/double-tap/pan transform as the base layer --
+                // without this, zooming or panning while viewing "Before"
+                // had no effect, and switching from a zoomed "After" view
+                // briefly showed an unzoomed original mid cross-fade.
+                transform: `translate(${imagePanX}px, ${imagePanY}px) scale(${imageScale})`,
                 transformOrigin: 'center center',
                 transition:
                   imageScale === 1
