@@ -1732,14 +1732,14 @@ describe('RoomVisualizationFlow', () => {
           })
         );
       });
-      expect(img.style.transform).toBe('scale(2)');
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(2)');
 
       await act(async () => {
         dispatchTouchStart(container, [touch(img)]);
         dispatchTouchStart(container, [touch(img)]);
       });
 
-      expect(img.style.transform).toBe('scale(1)');
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(1)');
     });
 
     test('rapidly switching Before -> After via the toggle does not reset an already-zoomed image', async () => {
@@ -1764,7 +1764,7 @@ describe('RoomVisualizationFlow', () => {
           })
         );
       });
-      expect(img.style.transform).toBe('scale(2)');
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(2)');
 
       // Two taps on two DIFFERENT buttons, both within the 300ms
       // double-tap window -- would have reset zoom before this fix, since
@@ -1775,7 +1775,380 @@ describe('RoomVisualizationFlow', () => {
         dispatchTouchStart(container, [touch(afterButton)]);
       });
 
-      expect(img.style.transform).toBe('scale(2)');
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(2)');
+    });
+  });
+
+  // ─── Single-finger pan while zoomed in ─────────────────────────────────────
+  // Found in review: pinch-zoom had no way to look around a zoomed-in photo
+  // -- only the center was ever reachable, since the transform was scale()
+  // alone with no translate. These verify the pan added alongside it.
+
+  describe('pinch-zoom + single-finger pan', () => {
+    const renderAtResult = async generationResult => {
+      generateRoomVisualization.mockResolvedValueOnce(generationResult);
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Review Your New Room'));
+    };
+
+    const touch = (target, x = 0, y = 0) => ({ target, clientX: x, clientY: y, identifier: 0 });
+
+    // clampPan reads the container's own offsetWidth/offsetHeight to bound
+    // pan against its actual on-screen size -- jsdom has no real layout
+    // engine and reports 0 for both by default, which would clamp every
+    // pan in these tests to (0, 0) regardless of the drag distance. Mocked
+    // to a realistic box so the clamp math has something real to bound
+    // against.
+    const mockContainerSize = (container, width = 300, height = 300) => {
+      Object.defineProperty(container, 'offsetWidth', { value: width, configurable: true });
+      Object.defineProperty(container, 'offsetHeight', { value: height, configurable: true });
+    };
+
+    const pinchZoomTo2x = async container => {
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', {
+            touches: [touch(container, 0, 0), touch(container, 100, 0)],
+            bubbles: true,
+          })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 0, 0), touch(container, 200, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+    };
+
+    test('a single-finger drag at scale 1 does not pan -- normal page scrolling stays untouched', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 100, 100)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 150, 150)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(1)');
+    });
+
+    test('a single-finger drag pans the image once zoomed in, matching the finger movement', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await pinchZoomTo2x(container);
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(2)');
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 100, 100)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 130, 115)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      // At scale 2 on a 300px container, max pan is (300*(2-1))/2 = 150px
+      // either way -- a 30px/15px drag is well inside that, so it should
+      // land untouched by clamping.
+      expect(img.style.transform).toBe('translate(30px, 15px) scale(2)');
+    });
+
+    test('clamps pan so the zoomed image can never be dragged past its own edge', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container, 300, 300);
+
+      await pinchZoomTo2x(container);
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        // Drag 1000px right/down -- far past what a 300px container at 2x
+        // zoom could ever reveal (max is 150px either way).
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 1000, 1000)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(150px, 150px) scale(2)');
+    });
+
+    test('double-tap resets both zoom AND pan back to (0, 0), not just zoom', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await pinchZoomTo2x(container);
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 50, 50)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+      expect(img.style.transform).toBe('translate(50px, 50px) scale(2)');
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container)], bubbles: true })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(1)');
+    });
+
+    test('applies the same pan to the "Before" overlay layer, so panning stays in sync across the toggle', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const afterImg = screen.getByAltText('New Design');
+      const beforeImg = screen.getByAltText('Original Room');
+      const container = afterImg.parentElement;
+      mockContainerSize(container);
+
+      await pinchZoomTo2x(container);
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 40, 20)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(afterImg.style.transform).toBe('translate(40px, 20px) scale(2)');
+      expect(beforeImg.style.transform).toBe('translate(40px, 20px) scale(2)');
+    });
+
+    test('a second pan started shortly after the first is not mistaken for a double-tap and does not reset zoom', async () => {
+      // Found in review: onTouchStart stamps lastTapRef on every
+      // single-finger touchstart, including ones that turn into a pan, not
+      // just genuine taps. Without invalidating that timestamp once real
+      // movement happens, a second pan started within the 300ms double-tap
+      // window (very plausible when someone swipes twice in a row to
+      // explore a zoomed photo) would be misread as the second tap of a
+      // double-tap and reset zoom/pan mid-exploration.
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await pinchZoomTo2x(container);
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 30, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+        container.dispatchEvent(new TouchEvent('touchend', { touches: [], bubbles: true }));
+      });
+      expect(img.style.transform).toBe('translate(30px, 0px) scale(2)');
+
+      // Second pan, started immediately after (well within the 300ms
+      // double-tap window) -- must keep panning, not reset to scale 1.
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 20, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(50px, 0px) scale(2)');
+    });
+
+    test('re-clamps an existing pan when the container resizes while zoomed in', async () => {
+      // Found in review: pan bounds were only applied during a scale/pan
+      // update -- if the wrapper resized while zoomed (orientation change,
+      // the measured maxHeight changing, etc.), a previously-valid pan
+      // could stay outside the new, smaller bounds indefinitely.
+      class MockResizeObserver {
+        constructor(callback) {
+          this.callback = callback;
+        }
+        observe(element) {
+          this.element = element;
+          MockResizeObserver.instances.push(this);
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      MockResizeObserver.instances = [];
+      const originalResizeObserver = global.ResizeObserver;
+      global.ResizeObserver = MockResizeObserver;
+
+      try {
+        await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+        const img = screen.getByAltText('New Design');
+        const container = img.parentElement;
+        mockContainerSize(container, 300, 300);
+
+        const containerObserver = MockResizeObserver.instances.find(i => i.element === container);
+
+        await pinchZoomTo2x(container);
+        // Pan to the max allowed offset at the current (300px) size: (300*1)/2 = 150.
+        await act(async () => {
+          container.dispatchEvent(
+            new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+          );
+          container.dispatchEvent(
+            new TouchEvent('touchmove', {
+              touches: [touch(container, 150, 0)],
+              bubbles: true,
+              cancelable: true,
+            })
+          );
+        });
+        expect(img.style.transform).toBe('translate(150px, 0px) scale(2)');
+
+        // Shrink the container (e.g. orientation change) and fire the same
+        // ResizeObserver this component already attaches for
+        // measureOverlayAnchor -- new max pan at 200px is (200*1)/2 = 100,
+        // so the existing 150px pan must be pulled back in.
+        mockContainerSize(container, 200, 200);
+        act(() => {
+          containerObserver.callback([{ contentRect: { height: 200 } }]);
+        });
+
+        expect(img.style.transform).toBe('translate(100px, 0px) scale(2)');
+      } finally {
+        global.ResizeObserver = originalResizeObserver;
+      }
+    });
+
+    test('clears drag and tap state on touchcancel, so an interrupted gesture cannot misfire the next touch as a double-tap', async () => {
+      // Found in review: the browser can interrupt a gesture mid-flight
+      // with touchcancel instead of touchend (iOS Safari's edge-swipe-back,
+      // Android's system back gesture, a notification taking focus, etc.).
+      // Without its own cleanup, an interrupted touchstart would leave
+      // lastTapRef stamped, letting the very next touch within 300ms be
+      // misread as the second tap of a double-tap and reset zoom/pan.
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await pinchZoomTo2x(container);
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        // Cancelled before any real movement -- e.g. the OS claims the
+        // gesture for a system edge-swipe.
+        container.dispatchEvent(new TouchEvent('touchcancel', { touches: [], bubbles: true }));
+      });
+
+      // A brand-new touch immediately after (well within the 300ms
+      // double-tap window) must start a fresh pan, not get reset to scale 1.
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 25, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(25px, 0px) scale(2)');
+    });
+
+    test('an immediate pan right after a pinch is not mistaken for a double-tap, even when the pinch itself began with a stray single-finger touchstart', async () => {
+      // Found in review: on real touchscreens, a pinch almost never starts
+      // with both fingers landing in the same event -- the first finger
+      // typically fires its own single-touch touchstart (stamping
+      // lastTapRef) a few ms before the second finger turns it into a
+      // two-finger touchstart. Without clearing lastTapRef when the pinch
+      // begins, panning immediately after a quick pinch -- the natural next
+      // thing to do -- could land within the 300ms double-tap window and
+      // get misread as the second tap, resetting the zoom right as the
+      // user tries to explore it.
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await act(async () => {
+        // The stray first-finger touchstart that (on real hardware)
+        // precedes the second finger landing.
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+      });
+
+      await pinchZoomTo2x(container);
+      expect(img.style.transform).toBe('translate(0px, 0px) scale(2)');
+
+      // Pan immediately after releasing the pinch -- well within the 300ms
+      // double-tap window measured from the stray touchstart above.
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 35, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(35px, 0px) scale(2)');
     });
   });
 
