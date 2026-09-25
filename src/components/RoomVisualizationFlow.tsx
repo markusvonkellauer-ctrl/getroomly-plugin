@@ -766,6 +766,10 @@ export function RoomVisualizationFlow({
   };
 
   // Pinch-to-zoom helpers (non-passive listeners required for e.preventDefault())
+  // Below this many pixels of movement, a single-finger touch still counts
+  // as a stationary tap for double-tap-to-reset purposes; above it, it's a
+  // real pan (see the TAP_MOVE_THRESHOLD_PX check in onTouchMove).
+  const TAP_MOVE_THRESHOLD_PX = 10;
   const getDistance = useCallback(
     (t1: Touch, t2: Touch) =>
       Math.sqrt(Math.pow(t2.clientX - t1.clientX, 2) + Math.pow(t2.clientY - t1.clientY, 2)),
@@ -842,6 +846,14 @@ export function RoomVisualizationFlow({
           e.preventDefault();
           const dx = e.touches[0].clientX - dragRef.current.startX;
           const dy = e.touches[0].clientY - dragRef.current.startY;
+          // Once real movement happens, this gesture is a pan, not a tap --
+          // invalidate the double-tap timestamp so a second pan started
+          // shortly after this one's touchstart isn't misread as the
+          // second tap of a double-tap and resets zoom/pan mid-gesture
+          // (found in review).
+          if (Math.abs(dx) > TAP_MOVE_THRESHOLD_PX || Math.abs(dy) > TAP_MOVE_THRESHOLD_PX) {
+            lastTapRef.current = 0;
+          }
           setImagePan(dragRef.current.startPanX + dx, dragRef.current.startPanY + dy);
         }
       };
@@ -866,6 +878,21 @@ export function RoomVisualizationFlow({
       if (typeof ResizeObserver !== 'undefined') {
         resizeObserver = new ResizeObserver(() => {
           measureOverlayAnchor();
+          // A wrapper resize (viewport/orientation change, or the measured
+          // maxHeight changing) can leave a previously-valid pan outside
+          // the new bounds -- without this the image edge could stay
+          // pulled past the container until the next gesture happens to
+          // move it back in range (found in review).
+          setZoomState(prev => {
+            if (prev.forImage !== resultImageRef.current || prev.scale <= 1) {
+              return prev;
+            }
+            const clamped = clampPan(prev.panX, prev.panY, prev.scale);
+            if (clamped.x === prev.panX && clamped.y === prev.panY) {
+              return prev;
+            }
+            return { ...prev, panX: clamped.x, panY: clamped.y };
+          });
         });
         resizeObserver.observe(el);
       }
@@ -877,7 +904,7 @@ export function RoomVisualizationFlow({
         resizeObserver?.disconnect();
       };
     },
-    [getDistance, setImageScale, setImagePan, measureOverlayAnchor]
+    [getDistance, setImageScale, setImagePan, measureOverlayAnchor, clampPan]
   );
 
   const renderStepIndicator = (currentStep: 'upload' | 'processing' | 'result') => {

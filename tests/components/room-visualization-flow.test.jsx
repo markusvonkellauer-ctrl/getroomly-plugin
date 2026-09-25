@@ -1958,6 +1958,113 @@ describe('RoomVisualizationFlow', () => {
       expect(afterImg.style.transform).toBe('translate(40px, 20px) scale(2)');
       expect(beforeImg.style.transform).toBe('translate(40px, 20px) scale(2)');
     });
+
+    test('a second pan started shortly after the first is not mistaken for a double-tap and does not reset zoom', async () => {
+      // Found in review: onTouchStart stamps lastTapRef on every
+      // single-finger touchstart, including ones that turn into a pan, not
+      // just genuine taps. Without invalidating that timestamp once real
+      // movement happens, a second pan started within the 300ms double-tap
+      // window (very plausible when someone swipes twice in a row to
+      // explore a zoomed photo) would be misread as the second tap of a
+      // double-tap and reset zoom/pan mid-exploration.
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+      const img = screen.getByAltText('New Design');
+      const container = img.parentElement;
+      mockContainerSize(container);
+
+      await pinchZoomTo2x(container);
+
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 30, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+        container.dispatchEvent(new TouchEvent('touchend', { touches: [], bubbles: true }));
+      });
+      expect(img.style.transform).toBe('translate(30px, 0px) scale(2)');
+
+      // Second pan, started immediately after (well within the 300ms
+      // double-tap window) -- must keep panning, not reset to scale 1.
+      await act(async () => {
+        container.dispatchEvent(
+          new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+        );
+        container.dispatchEvent(
+          new TouchEvent('touchmove', {
+            touches: [touch(container, 20, 0)],
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      });
+
+      expect(img.style.transform).toBe('translate(50px, 0px) scale(2)');
+    });
+
+    test('re-clamps an existing pan when the container resizes while zoomed in', async () => {
+      // Found in review: pan bounds were only applied during a scale/pan
+      // update -- if the wrapper resized while zoomed (orientation change,
+      // the measured maxHeight changing, etc.), a previously-valid pan
+      // could stay outside the new, smaller bounds indefinitely.
+      class MockResizeObserver {
+        constructor(callback) {
+          this.callback = callback;
+        }
+        observe(element) {
+          this.element = element;
+          MockResizeObserver.instances.push(this);
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+      MockResizeObserver.instances = [];
+      const originalResizeObserver = global.ResizeObserver;
+      global.ResizeObserver = MockResizeObserver;
+
+      try {
+        await renderAtResult({ imageUrl: 'data:image/jpeg;base64,result' });
+        const img = screen.getByAltText('New Design');
+        const container = img.parentElement;
+        mockContainerSize(container, 300, 300);
+
+        const containerObserver = MockResizeObserver.instances.find(i => i.element === container);
+
+        await pinchZoomTo2x(container);
+        // Pan to the max allowed offset at the current (300px) size: (300*1)/2 = 150.
+        await act(async () => {
+          container.dispatchEvent(
+            new TouchEvent('touchstart', { touches: [touch(container, 0, 0)], bubbles: true })
+          );
+          container.dispatchEvent(
+            new TouchEvent('touchmove', {
+              touches: [touch(container, 150, 0)],
+              bubbles: true,
+              cancelable: true,
+            })
+          );
+        });
+        expect(img.style.transform).toBe('translate(150px, 0px) scale(2)');
+
+        // Shrink the container (e.g. orientation change) and fire the same
+        // ResizeObserver this component already attaches for
+        // measureOverlayAnchor -- new max pan at 200px is (200*1)/2 = 100,
+        // so the existing 150px pan must be pulled back in.
+        mockContainerSize(container, 200, 200);
+        act(() => {
+          containerObserver.callback([{ contentRect: { height: 200 } }]);
+        });
+
+        expect(img.style.transform).toBe('translate(100px, 0px) scale(2)');
+      } finally {
+        global.ResizeObserver = originalResizeObserver;
+      }
+    });
   });
 
   // ─── Favorite button ───────────────────────────────────────────────────────
