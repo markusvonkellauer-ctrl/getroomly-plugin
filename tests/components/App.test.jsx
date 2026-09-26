@@ -12,6 +12,7 @@ jest.mock('../../src/services/partner-status', () => ({
 import { checkPartnerAvailability } from '../../src/services/partner-status';
 import { __resetAvailabilityStateForTests } from '../../src/lib/availability-state';
 import { FOCUSABLE_SELECTOR } from '../../src/hooks/use-focus-trap';
+import { AppConfig } from '@/config/app-config';
 
 const baseEmbedConfig = {
   apiKey: 'grm_pub_test',
@@ -426,6 +427,91 @@ describe('App — getroomly-open-modal safety net', () => {
     } finally {
       window.removeEventListener('getroomly-modal-closed', closedHandler);
     }
+  });
+});
+
+describe('App — GA4 widget lifecycle tracking', () => {
+  // A partner's own GA4-export pipeline (BigQuery) can already be built to
+  // key off exactly this event shape for a given content_type -- see
+  // analytics.ts's trackWidgetLifecycle doc comment. These tests pin that
+  // contract at the integration level (real open/close transitions), not
+  // just analytics.ts's own unit tests, since a future refactor of App.tsx's
+  // centralized isModalOpen effect is exactly the kind of change that could
+  // silently stop calling it while every DOM-event test here kept passing.
+  let originalEnableAnalytics;
+  let originalGaId;
+  let gtagSpy;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    __resetAvailabilityStateForTests();
+    window.GetRoomlyEmbedConfig = { ...baseEmbedConfig, hideButton: true };
+
+    originalEnableAnalytics = AppConfig.features.enableAnalytics;
+    originalGaId = AppConfig.services.analytics.googleAnalyticsId;
+    AppConfig.features.enableAnalytics = true;
+    AppConfig.services.analytics.googleAnalyticsId = 'G-TEST123';
+    gtagSpy = jest.fn();
+    window.gtag = gtagSpy;
+  });
+
+  afterEach(() => {
+    delete window.GetRoomlyEmbedConfig;
+    AppConfig.features.enableAnalytics = originalEnableAnalytics;
+    AppConfig.services.analytics.googleAnalyticsId = originalGaId;
+    delete window.gtag;
+  });
+
+  it('fires select_content with content_action "open" and the config SKU when the modal actually opens', async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(true);
+    render(<App />);
+    await waitForAvailability();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+
+    expect(gtagSpy).toHaveBeenCalledWith('event', 'select_content', {
+      content_type: 'getroomly_widget',
+      content_action: 'open',
+      content_id: baseEmbedConfig.sku,
+      items: [],
+    });
+  });
+
+  it('fires select_content with content_action "close" when the modal closes', async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(true);
+    render(<App />);
+    await waitForAvailability();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+    gtagSpy.mockClear();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-close-modal'));
+    });
+
+    expect(gtagSpy).toHaveBeenCalledWith('event', 'select_content', {
+      content_type: 'getroomly_widget',
+      content_action: 'close',
+      content_id: baseEmbedConfig.sku,
+      items: [],
+    });
+  });
+
+  it('does not fire select_content when the open request is refused (unavailable) — no real transition happened', async () => {
+    checkPartnerAvailability.mockResolvedValueOnce(false);
+    render(<App />);
+    await waitForAvailability();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('getroomly-open-modal'));
+    });
+
+    expect(gtagSpy).not.toHaveBeenCalled();
   });
 });
 
