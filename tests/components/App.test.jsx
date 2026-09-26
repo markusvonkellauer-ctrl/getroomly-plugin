@@ -2,6 +2,7 @@
  * App Component Tests — partner-availability-gated trigger button
  */
 
+import { StrictMode } from 'react';
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import App from '../../src/App';
 
@@ -512,6 +513,39 @@ describe('App — GA4 widget lifecycle tracking', () => {
     });
 
     expect(gtagSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not fire a spurious close under React.StrictMode's development double-invoke of mount effects", async () => {
+    // Found in review: both production entry points (main.tsx, shadow-
+    // entry.tsx) mount App under StrictMode, which in development re-runs a
+    // freshly-mounted effect once (setup -> cleanup -> setup again) while
+    // preserving refs across the replay. A one-shot "have I run yet" flag
+    // consumed by the first pass looked already-consumed on the replay and
+    // dispatched a spurious close -- this pins that the value-comparison
+    // guard survives the replay instead.
+    //
+    // Asserts on the DOM event, not just gtagSpy: the analytics call is
+    // additionally gated behind skuRef.current, which config's own async
+    // load may not have populated yet at the exact moment of the mount
+    // double-invoke -- checking gtagSpy alone could pass even with the bug
+    // present, purely from that timing, and miss the real regression.
+    checkPartnerAvailability.mockResolvedValueOnce(true);
+    const closedHandler = jest.fn();
+    window.addEventListener('getroomly-modal-closed', closedHandler);
+
+    try {
+      render(
+        <StrictMode>
+          <App />
+        </StrictMode>
+      );
+      await waitForAvailability();
+
+      expect(closedHandler).not.toHaveBeenCalled();
+      expect(gtagSpy).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('getroomly-modal-closed', closedHandler);
+    }
   });
 });
 

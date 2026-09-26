@@ -182,15 +182,23 @@ function App() {
   // manually, which both missed the EmbedButton path entirely and would
   // have double-fired once the close path was added to match).
   //
-  // isFirstRender guards against firing a spurious "closed" confirmation
-  // for the initial isModalOpen === false on mount, before anything has
-  // ever actually opened.
-  const isFirstRender = useRef(true);
+  // Guards against firing a spurious "closed" confirmation for the initial
+  // isModalOpen === false on mount, before anything has ever actually
+  // opened — by comparing against the last value this effect actually saw,
+  // not a one-shot "has this run before" flag. Both production entry points
+  // mount App under React.StrictMode, which re-invokes a freshly-mounted
+  // effect once in development (setup → cleanup → setup again) while
+  // preserving refs across the replay — a one-shot flag consumed by the
+  // first pass would see itself already consumed on the replay and treat it
+  // as a real transition, dispatching a spurious close (found in review).
+  // Comparing values instead of "have I run yet" makes the guard correct no
+  // matter how many times the effect happens to run for the same value.
+  const previousIsModalOpenRef = useRef(isModalOpen);
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
+    if (previousIsModalOpenRef.current === isModalOpen) {
       return;
     }
+    previousIsModalOpenRef.current = isModalOpen;
     window.dispatchEvent(
       new CustomEvent(isModalOpen ? 'getroomly-modal-opened' : 'getroomly-modal-closed')
     );
