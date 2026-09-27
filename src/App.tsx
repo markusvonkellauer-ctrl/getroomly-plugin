@@ -4,7 +4,7 @@ import { useEmbedConfig } from '@/hooks/use-embed-config';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { EmbedButton } from '@/components/EmbedButton';
 import { RoomVisualizationFlow } from '@/components/RoomVisualizationFlow';
-import { trackInteraction } from '@/lib/analytics';
+import { trackInteraction, trackWidgetLifecycle } from '@/lib/analytics';
 import {
   getAvailability,
   notifyAvailabilityChanged,
@@ -117,6 +117,15 @@ function App() {
     categoryRef.current = config?.category;
   }, [config]);
 
+  // Same pattern, for the open/close lifecycle-tracking effect below — kept
+  // as a ref rather than a dependency so that effect still fires exactly
+  // once per isModalOpen transition (its own comment explains why that
+  // guarantee matters), not also whenever config/sku happens to change.
+  const skuRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    skuRef.current = config?.sku;
+  }, [config]);
+
   // Mirrors the same readiness/validity check the early-return JSX below
   // uses to decide whether the modal can render at all. Read by handleOpen
   // (below) via a ref rather than a dependency array, so the mount-once
@@ -173,18 +182,29 @@ function App() {
   // manually, which both missed the EmbedButton path entirely and would
   // have double-fired once the close path was added to match).
   //
-  // isFirstRender guards against firing a spurious "closed" confirmation
-  // for the initial isModalOpen === false on mount, before anything has
-  // ever actually opened.
-  const isFirstRender = useRef(true);
+  // Guards against firing a spurious "closed" confirmation for the initial
+  // isModalOpen === false on mount, before anything has ever actually
+  // opened — by comparing against the last value this effect actually saw,
+  // not a one-shot "has this run before" flag. Both production entry points
+  // mount App under React.StrictMode, which re-invokes a freshly-mounted
+  // effect once in development (setup → cleanup → setup again) while
+  // preserving refs across the replay — a one-shot flag consumed by the
+  // first pass would see itself already consumed on the replay and treat it
+  // as a real transition, dispatching a spurious close (found in review).
+  // Comparing values instead of "have I run yet" makes the guard correct no
+  // matter how many times the effect happens to run for the same value.
+  const previousIsModalOpenRef = useRef(isModalOpen);
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
+    if (previousIsModalOpenRef.current === isModalOpen) {
       return;
     }
+    previousIsModalOpenRef.current = isModalOpen;
     window.dispatchEvent(
       new CustomEvent(isModalOpen ? 'getroomly-modal-opened' : 'getroomly-modal-closed')
     );
+    if (skuRef.current) {
+      trackWidgetLifecycle(isModalOpen ? 'open' : 'close', skuRef.current);
+    }
   }, [isModalOpen]);
 
   // Listen for external open/close events from host page
