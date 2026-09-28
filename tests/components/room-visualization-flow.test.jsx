@@ -3634,6 +3634,26 @@ describe('RoomVisualizationFlow', () => {
       });
     });
 
+    test('only fires result_viewed after the result DOM has actually committed', async () => {
+      generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+      let resultVisibleAtCallTime = null;
+      trackWidgetEvent.mockImplementation((...args) => {
+        if (args[1] === 'result_viewed') {
+          resultVisibleAtCallTime = screen.queryByText('New Photo') !== null;
+        }
+      });
+      render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+
+      await waitFor(() => {
+        expect(resultVisibleAtCallTime).not.toBeNull();
+      });
+      expect(resultVisibleAtCallTime).toBe(true);
+    });
+
     test('does not fire result_viewed when generation fails', async () => {
       generateRoomVisualization.mockRejectedValueOnce(new Error('boom'));
       render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);

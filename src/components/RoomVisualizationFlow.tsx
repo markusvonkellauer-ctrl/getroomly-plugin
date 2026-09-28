@@ -523,6 +523,18 @@ export function RoomVisualizationFlow({
     };
   }, [step, isGenerating, t.loadingMessages.length]);
 
+  // result_viewed — fired from an effect keyed on `step`, not inline in
+  // handleGenerate, so it only reports once React has actually committed
+  // the result step's DOM (setStep only schedules the update; firing right
+  // after the call, like the other funnel events do inline, could record a
+  // shopper "viewing" a result that hadn't rendered yet — or that never
+  // rendered at all, if onComplete's host callback closed the modal first).
+  useEffect(() => {
+    if (step === 'result') {
+      trackWidgetEvent(config?.apiKey, 'result_viewed', sessionId, productId);
+    }
+  }, [step, config?.apiKey, productId, sessionId]);
+
   const handleGenerate = async (file: File) => {
     setIsGenerating(true);
     setProgress(0);
@@ -547,7 +559,6 @@ export function RoomVisualizationFlow({
       setResultImage(result.imageUrl);
       setGenerationId(result.generationId ?? null);
       setStep('result');
-      trackWidgetEvent(config?.apiKey, 'result_viewed', sessionId, productId);
       onComplete?.(result.imageUrl);
     } catch (err) {
       console.error('Generation error:', err);
