@@ -3567,6 +3567,42 @@ describe('RoomVisualizationFlow', () => {
       );
     });
 
+    test('widget_closed uses the ORIGINAL apiKey/productId, not a value swapped in after widget_opened', () => {
+      // Regression test: found in review of the fix above. The cleanup must
+      // capture identity at effect-setup time, not re-read a mutable ref at
+      // actual unmount time -- otherwise a live config swap that happens
+      // between open and close pairs widget_opened's original identity with
+      // widget_closed's NEW one under the same sessionId, splitting one
+      // lifecycle across two partners/products.
+      const { rerender, unmount } = render(
+        <RoomVisualizationFlow
+          {...defaultProps}
+          productId="rug-001"
+          config={{ apiKey: 'partner-abc' }}
+        />
+      );
+      const openedSessionId = trackWidgetEvent.mock.calls.find(
+        call => call[1] === 'widget_opened'
+      )[2];
+
+      rerender(
+        <RoomVisualizationFlow
+          {...defaultProps}
+          productId="rug-002"
+          config={{ apiKey: 'partner-xyz' }}
+        />
+      );
+
+      unmount();
+
+      expect(trackWidgetEvent).toHaveBeenCalledWith(
+        'partner-abc',
+        'widget_closed',
+        openedSessionId,
+        'rug-001'
+      );
+    });
+
     test('fires terms_clicked when the terms link is clicked', () => {
       render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
       trackWidgetEvent.mockClear();

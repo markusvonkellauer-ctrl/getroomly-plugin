@@ -93,12 +93,19 @@ export function RoomVisualizationFlow({
   // unmount. apiKey/productId come from the ref above instead of being
   // listed here, specifically so a live config swap (see ref's comment)
   // can't make this effect replay as a spurious close+reopen.
+  //
+  // Captured into a local const at setup time, not re-read from the ref
+  // inside the cleanup — found in review: the ref can have moved on to a
+  // newer apiKey/productId by the time cleanup actually runs (real
+  // unmount), which would send widget_closed under a different partner/
+  // product than the widget_opened it's supposed to pair with, despite
+  // sharing the same sessionId. Capturing once keeps both calls on the
+  // identity that was actually active for this open/close lifecycle.
   useEffect(() => {
     const { apiKey, productId: pid } = latestWidgetIdentityRef.current;
     trackWidgetEvent(apiKey, 'widget_opened', sessionId, pid);
     return () => {
-      const { apiKey: closeApiKey, productId: closePid } = latestWidgetIdentityRef.current;
-      trackWidgetEvent(closeApiKey, 'widget_closed', sessionId, closePid);
+      trackWidgetEvent(apiKey, 'widget_closed', sessionId, pid);
     };
   }, [sessionId]);
 
