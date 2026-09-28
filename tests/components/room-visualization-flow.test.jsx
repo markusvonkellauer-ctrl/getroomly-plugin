@@ -27,6 +27,12 @@ import {
   validateImageFile,
 } from '../../src/services/ai-generation';
 
+jest.mock('../../src/services/event-tracking', () => ({
+  trackWidgetEvent: jest.fn(),
+}));
+
+import { trackWidgetEvent } from '../../src/services/event-tracking';
+
 const mockHeicTo = jest.fn();
 jest.mock('heic-to/csp', () => ({ heicTo: (...args) => mockHeicTo(...args) }));
 
@@ -3487,6 +3493,184 @@ describe('RoomVisualizationFlow', () => {
       expect(resultFooter).not.toBeNull();
       const values = paddingSpy.valuesFor(resultFooter);
       expect(values.at(-1)).toBe('8px var(--getroomly-space-sm) 19px');
+    });
+  });
+
+  // ─── Widget UX-funnel event tracking (backend /v1/event) ──────────────────
+  // Distinct from the GA4 tracking in lib/analytics.ts (widget_opened/closed
+  // there is fired from App.tsx, keyed on config.sku, aimed at a partner's
+  // own attribution report). These are GetRoomly's own funnel events, all
+  // sharing this component's own sessionId so a session can be reconstructed
+  // end to end.
+
+  describe('widget UX-funnel event tracking', () => {
+    test("fires widget_opened on mount, with this session's sessionId and productId", () => {
+      render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+
+      expect(trackWidgetEvent).toHaveBeenCalledWith(
+        'partner-abc',
+        'widget_opened',
+        expect.any(String),
+        'rug-001'
+      );
+    });
+
+    test('fires widget_closed on unmount, with the SAME sessionId widget_opened used', () => {
+      const { unmount } = render(
+        <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+      );
+
+      const openedSessionId = trackWidgetEvent.mock.calls.find(
+        call => call[1] === 'widget_opened'
+      )[2];
+      trackWidgetEvent.mockClear();
+
+      unmount();
+
+      expect(trackWidgetEvent).toHaveBeenCalledWith(
+        'partner-abc',
+        'widget_closed',
+        openedSessionId,
+        'rug-001'
+      );
+    });
+
+    test('fires terms_clicked when the terms link is clicked', () => {
+      render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+      trackWidgetEvent.mockClear();
+
+      fireEvent.click(screen.getByText(translations.en.termsLink));
+
+      expect(trackWidgetEvent).toHaveBeenCalledWith(
+        'partner-abc',
+        'terms_clicked',
+        expect.any(String),
+        'rug-001'
+      );
+    });
+
+    test('fires upload_clicked when the dropzone is clicked', () => {
+      const { container } = render(
+        <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+      );
+      trackWidgetEvent.mockClear();
+
+      fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+
+      expect(trackWidgetEvent).toHaveBeenCalledWith(
+        'partner-abc',
+        'upload_clicked',
+        expect.any(String),
+        'rug-001'
+      );
+    });
+
+    test('fires upload_clicked on a drag-and-drop upload too, not just the click path', () => {
+      const { container } = render(
+        <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+      );
+      trackWidgetEvent.mockClear();
+
+      const dropzone = container.querySelector('[style*="cursor: pointer"]');
+      fireEvent.drop(dropzone, { dataTransfer: { files: [makeFile()] } });
+
+      expect(trackWidgetEvent).toHaveBeenCalledWith(
+        'partner-abc',
+        'upload_clicked',
+        expect.any(String),
+        'rug-001'
+      );
+    });
+
+    test('fires upload_completed after a successful file read, before generation starts', async () => {
+      render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+      trackWidgetEvent.mockClear();
+
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+
+      expect(trackWidgetEvent).toHaveBeenCalledWith(
+        'partner-abc',
+        'upload_completed',
+        expect.any(String),
+        'rug-001'
+      );
+    });
+
+    test('does not fire upload_completed when file validation fails', async () => {
+      validateImageFile.mockReturnValueOnce({ isValid: false, error: 'nope' });
+      render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+      trackWidgetEvent.mockClear();
+
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+
+      expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'upload_completed',
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
+    test('fires result_viewed once the result step is actually shown', async () => {
+      generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+      render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+      trackWidgetEvent.mockClear();
+
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+
+      await waitFor(() => {
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'result_viewed',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+    });
+
+    test('only fires result_viewed after the result DOM has actually committed', async () => {
+      generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+      let resultVisibleAtCallTime = null;
+      trackWidgetEvent.mockImplementation((...args) => {
+        if (args[1] === 'result_viewed') {
+          resultVisibleAtCallTime = screen.queryByText('New Photo') !== null;
+        }
+      });
+      render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+
+      await waitFor(() => {
+        expect(resultVisibleAtCallTime).not.toBeNull();
+      });
+      expect(resultVisibleAtCallTime).toBe(true);
+    });
+
+    test('does not fire result_viewed when generation fails', async () => {
+      generateRoomVisualization.mockRejectedValueOnce(new Error('boom'));
+      render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+      trackWidgetEvent.mockClear();
+
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+
+      await waitFor(() => {
+        expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'result_viewed',
+          expect.anything(),
+          expect.anything()
+        );
+      });
     });
   });
 });
