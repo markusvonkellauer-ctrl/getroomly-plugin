@@ -11,6 +11,7 @@ import { getTranslations } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
 import { dataUrlToBlob, extensionForMimeType, mimeTypeFromDataUrl } from '@/lib/data-url';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
+import { trackWidgetEvent } from '@/services/event-tracking';
 
 interface RoomVisualizationFlowProps {
   productImages: string[];
@@ -59,6 +60,54 @@ export function RoomVisualizationFlow({
     () =>
       crypto.randomUUID?.() ?? `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
   );
+
+  // Read inside the two effects below via a ref, not listed as a dependency
+  // — found in review: useEmbedConfig re-reads window.GetRoomlyEmbedConfig
+  // on every 'getroomly-open-modal' event WITHOUT remounting this component
+  // (App.tsx renders RoomVisualizationFlow with no `key`, so it only mounts
+  // /unmounts on isModalOpen's own transitions — see its own comments on
+  // this at ~1610 and ~1690). If a host dispatches that event again for a
+  // different product while the modal is already open, config?.apiKey/
+  // productId change on a live, still-mounted instance.
+  //
+  // Synced via a deps-less effect, not a write during render (refs can't be
+  // written during render — see react-hooks/refs), so it's already current
+  // by the time any effect declared below it runs on the same commit,
+  // including this same render's own widget_opened/result_viewed effects.
+  const latestWidgetIdentityRef = useRef({ apiKey: config?.apiKey, productId });
+  useEffect(() => {
+    latestWidgetIdentityRef.current = { apiKey: config?.apiKey, productId };
+  });
+
+  // widget_opened/widget_closed — this component only mounts while the
+  // modal is open (App.tsx renders it exactly while isModalOpen is true),
+  // so its mount/unmount lifecycle IS the widget's open/close lifecycle.
+  // Fired from here (not App.tsx) specifically so both share the same
+  // sessionId as every other funnel event below, letting a session's full
+  // funnel be reconstructed by joining WidgetEvent rows on sessionId —
+  // App.tsx has no access to this component's sessionId, which is only
+  // generated once this component actually mounts.
+  //
+  // sessionId is the only real dependency: it's stable for this component's
+  // whole lifetime, so this still only fires once on mount and once on
+  // unmount. apiKey/productId come from the ref above instead of being
+  // listed here, specifically so a live config swap (see ref's comment)
+  // can't make this effect replay as a spurious close+reopen.
+  //
+  // Captured into a local const at setup time, not re-read from the ref
+  // inside the cleanup — found in review: the ref can have moved on to a
+  // newer apiKey/productId by the time cleanup actually runs (real
+  // unmount), which would send widget_closed under a different partner/
+  // product than the widget_opened it's supposed to pair with, despite
+  // sharing the same sessionId. Capturing once keeps both calls on the
+  // identity that was actually active for this open/close lifecycle.
+  useEffect(() => {
+    const { apiKey, productId: pid } = latestWidgetIdentityRef.current;
+    trackWidgetEvent(apiKey, 'widget_opened', sessionId, pid);
+    return () => {
+      trackWidgetEvent(apiKey, 'widget_closed', sessionId, pid);
+    };
+  }, [sessionId]);
 
   // Sophisticated loading state
   const [progress, setProgress] = useState(0);
@@ -500,6 +549,25 @@ export function RoomVisualizationFlow({
     };
   }, [step, isGenerating, t.loadingMessages.length]);
 
+  // result_viewed — fired from an effect keyed on `step`, not inline in
+  // handleGenerate, so it only reports once React has actually committed
+  // the result step's DOM (setStep only schedules the update; firing right
+  // after the call, like the other funnel events do inline, could record a
+  // shopper "viewing" a result that hadn't rendered yet — or that never
+  // rendered at all, if onComplete's host callback closed the modal first).
+  //
+  // apiKey/productId come from latestWidgetIdentityRef (see its comment
+  // above), not the dependency array — otherwise a live config swap while
+  // already on the result step (same scenario as widget_opened/closed
+  // above) would replay this effect and record a second result_viewed for
+  // a result the shopper never re-viewed.
+  useEffect(() => {
+    if (step === 'result') {
+      const { apiKey, productId: pid } = latestWidgetIdentityRef.current;
+      trackWidgetEvent(apiKey, 'result_viewed', sessionId, pid);
+    }
+  }, [step, sessionId]);
+
   const handleGenerate = async (file: File) => {
     setIsGenerating(true);
     setProgress(0);
@@ -703,6 +771,7 @@ export function RoomVisualizationFlow({
       const dataUrl = reader.result;
       uploadedImageRef.current = dataUrl;
       setUploadedImage(dataUrl);
+      trackWidgetEvent(config?.apiKey, 'upload_completed', sessionId, productId);
       handleGenerate(imageFile);
     };
     reader.onerror = () => {
@@ -763,6 +832,7 @@ export function RoomVisualizationFlow({
 
   const handleOpenTerms = () => {
     setShowTermsDialog(true);
+    trackWidgetEvent(config?.apiKey, 'terms_clicked', sessionId, productId);
   };
 
   // Pinch-to-zoom helpers (non-passive listeners required for e.preventDefault())
@@ -1077,7 +1147,10 @@ export function RoomVisualizationFlow({
             : '2px dashed transparent',
           transition: 'transform 0.2s ease, border-color 0.15s ease',
         }}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => {
+          trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId);
+          fileInputRef.current?.click();
+        }}
         onMouseEnter={e => {
           e.currentTarget.style.transform = 'scale(1.05)';
           setIsUploadButtonHovered(true);
@@ -1115,6 +1188,10 @@ export function RoomVisualizationFlow({
           setIsDraggingFileOver(false);
           const file = e.dataTransfer.files[0];
           if (file) {
+            // Drag-and-drop never goes through the dropzone's own onClick
+            // above, so it needs its own upload_clicked — the drop IS the
+            // click-equivalent "user initiated an upload" moment here.
+            trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId);
             const event = { target: { files: [file] } } as any;
             handleFileSelect(event);
           }
