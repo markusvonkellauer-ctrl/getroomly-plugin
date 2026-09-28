@@ -11,6 +11,7 @@ import { getTranslations } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
 import { dataUrlToBlob, extensionForMimeType, mimeTypeFromDataUrl } from '@/lib/data-url';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
+import { trackWidgetEvent } from '@/services/event-tracking';
 
 interface RoomVisualizationFlowProps {
   productImages: string[];
@@ -59,6 +60,28 @@ export function RoomVisualizationFlow({
     () =>
       crypto.randomUUID?.() ?? `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
   );
+
+  // widget_opened/widget_closed — this component only mounts while the
+  // modal is open (App.tsx renders it exactly while isModalOpen is true),
+  // so its mount/unmount lifecycle IS the widget's open/close lifecycle.
+  // Fired from here (not App.tsx) specifically so both share the same
+  // sessionId as every other funnel event below, letting a session's full
+  // funnel be reconstructed by joining WidgetEvent rows on sessionId —
+  // App.tsx has no access to this component's sessionId, which is only
+  // generated once this component actually mounts.
+  //
+  // config?.apiKey/productId/sessionId are listed for exhaustive-deps, not
+  // because this is meant to re-run on their change — they're effectively
+  // constant for this component's whole lifetime (a genuinely different
+  // product means a fresh modal open, i.e. a fresh mount of this
+  // component entirely), so in practice this still only fires once on
+  // mount and once on unmount.
+  useEffect(() => {
+    trackWidgetEvent(config?.apiKey, 'widget_opened', sessionId, productId);
+    return () => {
+      trackWidgetEvent(config?.apiKey, 'widget_closed', sessionId, productId);
+    };
+  }, [config?.apiKey, productId, sessionId]);
 
   // Sophisticated loading state
   const [progress, setProgress] = useState(0);
@@ -524,6 +547,7 @@ export function RoomVisualizationFlow({
       setResultImage(result.imageUrl);
       setGenerationId(result.generationId ?? null);
       setStep('result');
+      trackWidgetEvent(config?.apiKey, 'result_viewed', sessionId, productId);
       onComplete?.(result.imageUrl);
     } catch (err) {
       console.error('Generation error:', err);
@@ -703,6 +727,7 @@ export function RoomVisualizationFlow({
       const dataUrl = reader.result;
       uploadedImageRef.current = dataUrl;
       setUploadedImage(dataUrl);
+      trackWidgetEvent(config?.apiKey, 'upload_completed', sessionId, productId);
       handleGenerate(imageFile);
     };
     reader.onerror = () => {
@@ -763,6 +788,7 @@ export function RoomVisualizationFlow({
 
   const handleOpenTerms = () => {
     setShowTermsDialog(true);
+    trackWidgetEvent(config?.apiKey, 'terms_clicked', sessionId, productId);
   };
 
   // Pinch-to-zoom helpers (non-passive listeners required for e.preventDefault())
@@ -1077,7 +1103,10 @@ export function RoomVisualizationFlow({
             : '2px dashed transparent',
           transition: 'transform 0.2s ease, border-color 0.15s ease',
         }}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => {
+          trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId);
+          fileInputRef.current?.click();
+        }}
         onMouseEnter={e => {
           e.currentTarget.style.transform = 'scale(1.05)';
           setIsUploadButtonHovered(true);
@@ -1115,6 +1144,10 @@ export function RoomVisualizationFlow({
           setIsDraggingFileOver(false);
           const file = e.dataTransfer.files[0];
           if (file) {
+            // Drag-and-drop never goes through the dropzone's own onClick
+            // above, so it needs its own upload_clicked — the drop IS the
+            // click-equivalent "user initiated an upload" moment here.
+            trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId);
             const event = { target: { files: [file] } } as any;
             handleFileSelect(event);
           }
