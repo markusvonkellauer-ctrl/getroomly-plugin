@@ -3535,6 +3535,38 @@ describe('RoomVisualizationFlow', () => {
       );
     });
 
+    test('does not re-fire widget_closed/widget_opened when config/productId change while still mounted', () => {
+      // Regression test: App.tsx renders this component with no `key`, and
+      // useEmbedConfig can re-read config (new apiKey/productId) on a
+      // 'getroomly-open-modal' event without remounting it — a live config
+      // swap on an instance that never actually closed and reopened.
+      const { rerender } = render(
+        <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+      );
+      trackWidgetEvent.mockClear();
+
+      rerender(
+        <RoomVisualizationFlow
+          {...defaultProps}
+          productId="rug-002"
+          config={{ apiKey: 'partner-xyz' }}
+        />
+      );
+
+      expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'widget_closed',
+        expect.anything(),
+        expect.anything()
+      );
+      expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'widget_opened',
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
     test('fires terms_clicked when the terms link is clicked', () => {
       render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
       trackWidgetEvent.mockClear();
@@ -3632,6 +3664,43 @@ describe('RoomVisualizationFlow', () => {
           'rug-001'
         );
       });
+    });
+
+    test('does not re-fire result_viewed when config/productId change while already on the result step', async () => {
+      // Same live-config-swap scenario as the widget_opened/closed
+      // regression test above, but hitting the result step's effect instead.
+      generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+      const { rerender } = render(
+        <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+      );
+
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => {
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'result_viewed',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+      trackWidgetEvent.mockClear();
+
+      rerender(
+        <RoomVisualizationFlow
+          {...defaultProps}
+          productId="rug-002"
+          config={{ apiKey: 'partner-xyz' }}
+        />
+      );
+
+      expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'result_viewed',
+        expect.anything(),
+        expect.anything()
+      );
     });
 
     test('only fires result_viewed after the result DOM has actually committed', async () => {
