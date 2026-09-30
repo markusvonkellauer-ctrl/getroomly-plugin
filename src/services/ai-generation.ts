@@ -203,7 +203,11 @@ export class AIGenerationError extends Error {
   constructor(
     message: string,
     public readonly code: string,
-    public readonly status: number
+    public readonly status: number,
+    /** Backend's response.meta, when present — e.g. { reason: 'ipWeeklyCap' }
+     * on a quotaExceeded error, which the UI uses to pick between the
+     * per-IP and partner-quota messages. See RoomVisualizationFlow.tsx. */
+    public readonly meta?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'AIGenerationError';
@@ -286,14 +290,13 @@ export async function generateRoomVisualization(
     const err = await res.json().catch(() => ({}) as Record<string, unknown>);
     const code = (err.code as string) ?? 'BACKEND_ERROR';
     const description = (err.description as string) ?? res.statusText;
-    const modelResponse = (err.meta as Record<string, unknown>)?.modelResponse as
-      | string
-      | undefined;
+    const meta = err.meta as Record<string, unknown> | undefined;
+    const modelResponse = meta?.modelResponse as string | undefined;
     console.error(`[Plugin] Backend error ${res.status} (${code}):`, description);
     if (modelResponse) {
       console.error(`[Plugin] Model response:`, modelResponse);
     }
-    throw new AIGenerationError(description, code, res.status);
+    throw new AIGenerationError(description, code, res.status, meta);
   }
 
   const result = await res.json();

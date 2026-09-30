@@ -71,6 +71,8 @@ export const el: TranslationStrings = {
   termsClose: 'Κλείσιμο',
   errorTemporarilyUnavailable:
     'Αυτή η λειτουργία είναι προσωρινά μη διαθέσιμη. Δοκιμάστε ξανά αργότερα.',
+  errorWeeklyLimitReached:
+    'Έχετε φτάσει το εβδομαδιαίο όριο των 50 απεικονίσεων. Δοκιμάστε ξανά την επόμενη εβδομάδα.',
   loadingProgressLabel: 'Πρόοδος δημιουργίας',
   errorUnsupportedImageFormat:
     'Αυτή η μορφή εικόνας δεν υποστηρίζεται. Εξαγάγετε τη φωτογραφία ως JPEG, PNG ή WebP και δοκιμάστε ξανά.',

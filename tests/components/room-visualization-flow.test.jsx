@@ -652,6 +652,34 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
+  test('calls onError with the specific weekly-limit message when meta.reason is ipWeeklyCap', async () => {
+    // Same error code as the test above (quotaExceeded), but this one is
+    // about THIS shopper's own usage specifically (the backend's per-IP
+    // anti-abuse cap, distinguished via meta.reason) — so unlike the
+    // partner-quota case, it's safe and more helpful to name the actual
+    // limit instead of showing the generic message.
+    const { AIGenerationError } = jest.requireActual('../../src/services/ai-generation');
+    generateRoomVisualization.mockRejectedValueOnce(
+      new AIGenerationError(
+        "You've reached the weekly limit of 50 visualizations. Please try again next week.",
+        'quotaExceeded',
+        429,
+        { reason: 'ipWeeklyCap' }
+      )
+    );
+    const onError = jest.fn();
+
+    render(<RoomVisualizationFlow {...defaultProps} onError={onError} />);
+
+    await act(async () => {
+      uploadFile(document.querySelector('input[type="file"]'), makeFile());
+    });
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith(translations.en.errorWeeklyLimitReached);
+    });
+  });
+
   test('the file input accepts HEIC/HEIF, so a genuinely-named .heic file is selectable at all', () => {
     // Regression coverage for a Copilot review finding on PR #92: without
     // HEIC/HEIF in `accept`, the OS file picker filters real .heic/.heif
