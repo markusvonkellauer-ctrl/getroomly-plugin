@@ -271,7 +271,7 @@ describe('AI Generation Service', () => {
     });
 
     test('carries response.meta through onto the thrown AIGenerationError', async () => {
-      // Backends distinguishes the per-IP weekly cap from the partner-wide
+      // Backend distinguishes the per-IP weekly cap from the partner-wide
       // quota via this field — both throw the same 'quotaExceeded' code, but
       // the UI needs meta.reason to pick the right customer-facing message
       // (see RoomVisualizationFlow.tsx).
