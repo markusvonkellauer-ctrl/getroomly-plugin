@@ -270,6 +270,31 @@ describe('AI Generation Service', () => {
       });
     });
 
+    test('carries response.meta through onto the thrown AIGenerationError', async () => {
+      // Backend distinguishes the per-IP weekly cap from the partner-wide
+      // quota via this field — both throw the same 'quotaExceeded' code, but
+      // the UI needs meta.reason to pick the right customer-facing message
+      // (see RoomVisualizationFlow.tsx).
+      fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        json: () =>
+          Promise.resolve({
+            code: 'quotaExceeded',
+            description:
+              "You've reached the weekly limit of 50 visualizations. Please try again next week.",
+            meta: { reason: 'ipWeeklyCap' },
+          }),
+      });
+
+      await expect(generateRoomVisualization(baseParams)).rejects.toMatchObject({
+        name: 'AIGenerationError',
+        code: 'quotaExceeded',
+        meta: { reason: 'ipWeeklyCap' },
+      });
+    });
+
     test('throws AIGenerationError when response contains no image data', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,

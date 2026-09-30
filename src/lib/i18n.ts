@@ -106,13 +106,31 @@ export interface TranslationStrings {
   termsSection4Body: string;
   termsClose: string;
   /**
-   * Shown when the backend refuses a generation because the partner has hit
-   * their render quota (AIGenerationError.code === 'quotaExceeded') — see
-   * RoomVisualizationFlow.tsx's catch block. Deliberately generic: "quota"
-   * is an internal partner/billing concept with no meaning to the shopper
-   * seeing this, not something to explain to them.
+   * Shown when the backend refuses a generation because the PARTNER has hit
+   * their own render quota (AIGenerationError.code === 'quotaExceeded', no
+   * meta.reason) — see RoomVisualizationFlow.tsx's catch block. Deliberately
+   * generic: "quota" is an internal partner/billing concept with no meaning
+   * to the shopper seeing this, not something to explain to them. This case
+   * should be rare in practice — the launch button is normally hidden
+   * before a shopper could ever trigger it (see App.tsx's partnerAvailable)
+   * — but a race condition (partner gets suspended mid-session) or a host
+   * page's own custom trigger button can still reach it, so it needs a
+   * message too.
    */
   errorTemporarilyUnavailable: string;
+  /**
+   * Shown when THIS shopper's own IP has hit the weekly anti-abuse cap
+   * (AIGenerationError.code === 'quotaExceeded', meta.reason === 'ipWeeklyCap')
+   * — see RoomVisualizationFlow.tsx's catch block. Unlike
+   * errorTemporarilyUnavailable, this case is about the shopper's own usage
+   * specifically, so it's safe (and more helpful) to name the actual limit.
+   * Keep "next week" rather than a precise day/countdown — vaguer on timing
+   * is intentional, not a gap: it still answers "when can I try again" for a
+   * genuine shopper without giving an abuser exact retry timing to plan
+   * around. The cap value itself must stay in sync with
+   * PARTNER_DEFAULT_WEEKLY_IP_REQUEST_CAP in getroomly-backend.
+   */
+  errorWeeklyLimitReached: string;
   /**
    * aria-label for the processing-step progress bar — the visible percentage
    * is decorative-adjacent text, not a programmatic label, so the

@@ -71,6 +71,8 @@ export const nl: TranslationStrings = {
   termsClose: 'Sluiten',
   errorTemporarilyUnavailable:
     'Deze functie is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
+  errorWeeklyLimitReached:
+    'U hebt de wekelijkse limiet van 50 visualisaties bereikt. Probeer het volgende week opnieuw.',
   loadingProgressLabel: 'Genereringsvoortgang',
   errorUnsupportedImageFormat:
     'Dit afbeeldingsformaat wordt niet ondersteund. Exporteer de foto als JPEG, PNG of WebP en probeer het opnieuw.',

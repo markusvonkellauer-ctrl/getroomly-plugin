@@ -73,6 +73,8 @@ export const pt: TranslationStrings = {
   termsClose: 'Fechar',
   errorTemporarilyUnavailable:
     'Esta funcionalidade está temporariamente indisponível. Tente novamente mais tarde.',
+  errorWeeklyLimitReached:
+    'Atingiu o limite semanal de 50 visualizações. Tente novamente na próxima semana.',
   loadingProgressLabel: 'Progresso da geração',
   errorUnsupportedImageFormat:
     'Este formato de imagem não é suportado. Exporte a foto como JPEG, PNG ou WebP e tente novamente.',

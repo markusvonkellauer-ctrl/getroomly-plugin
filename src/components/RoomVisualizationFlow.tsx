@@ -603,7 +603,9 @@ export function RoomVisualizationFlow({
       // to the backend's description rather than a blank message.
       const errorMsg =
         err instanceof AIGenerationError && err.code === 'quotaExceeded'
-          ? t.errorTemporarilyUnavailable
+          ? err.meta?.reason === 'ipWeeklyCap'
+            ? t.errorWeeklyLimitReached
+            : t.errorTemporarilyUnavailable
           : err instanceof Error
             ? err.message
             : 'Failed to generate image';
