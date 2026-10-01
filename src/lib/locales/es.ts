@@ -57,7 +57,7 @@ export const es: TranslationStrings = {
   termsSection2Title: '2. Minimización de datos y privacidad',
   termsLimitedDataCollectionTitle: 'Recopilación de datos limitada',
   termsLimitedDataCollectionBody:
-    'No recopilamos nombres ni direcciones de correo electrónico. Sí recopilamos tu dirección IP, utilizada únicamente para aplicar un límite semanal de 50 visualizaciones y prevenir abusos; se elimina automáticamente después de 7 días y nunca se vincula a tu nombre o correo electrónico.',
+    'No recopilamos nombres ni direcciones de correo electrónico. Sí recopilamos tu dirección IP, pero únicamente para aplicar un límite semanal de 50 visualizaciones y prevenir abusos. Se elimina automáticamente después de 7 días y nunca se vincula a tu nombre o correo electrónico.',
   termsQualityRetentionTitle: 'Conservación para control de calidad',
   termsQualityRetentionBody:
     'Tu foto y la visualización generada se almacenan en servidores seguros dentro del EEE durante un máximo de 14 días para revisión interna de calidad, y luego se eliminan automáticamente. Nunca se utilizan para entrenar modelos de IA ni se comparten con terceros, y solo se vinculan a una referencia de sesión temporal — nunca a tu nombre, correo electrónico o dirección IP. Si se rechaza un intento de generación, se conservan la misma foto y los detalles técnicos de ese intento bajo estas mismas condiciones, para que podamos investigar y mejorar la fiabilidad.',
