@@ -56,7 +56,7 @@ export const nl: TranslationStrings = {
   termsSection2Title: '2. Dataminimalisatie & Privacy',
   termsLimitedDataCollectionTitle: 'Beperkte gegevensverzameling',
   termsLimitedDataCollectionBody:
-    'Wij verzamelen geen namen, e-mailadressen of IP-adressen die aan uw identiteit gekoppeld zijn.',
+    'Wij verzamelen geen namen of e-mailadressen. Wij verzamelen uw IP-adres — uitsluitend gebruikt om een wekelijkse limiet van 50 visualisaties te handhaven en misbruik te voorkomen — dat na 7 dagen automatisch wordt verwijderd en nooit wordt gekoppeld aan uw naam of e-mailadres.',
   termsQualityRetentionTitle: 'Bewaring voor kwaliteitsborging',
   termsQualityRetentionBody:
     'Uw foto en de gegenereerde visualisatie worden maximaal 14 dagen opgeslagen op beveiligde servers binnen de EU/EER voor interne kwaliteitscontrole, en daarna automatisch verwijderd. Ze worden nooit gebruikt om AI-modellen te trainen of gedeeld met derden, en zijn alleen gekoppeld aan een tijdelijke sessiereferentie — nooit aan uw naam, e-mail of IP-adres. Als een generatiepoging wordt geweigerd, worden dezelfde foto en de technische details van die poging onder dezelfde voorwaarden bewaard, zodat we de betrouwbaarheid kunnen onderzoeken en verbeteren.',

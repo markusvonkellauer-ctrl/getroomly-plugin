@@ -56,7 +56,7 @@ export const da: TranslationStrings = {
   termsSection2Title: '2. Dataminimering & privatliv',
   termsLimitedDataCollectionTitle: 'Begrænset dataindsamling',
   termsLimitedDataCollectionBody:
-    'Vi indsamler ikke navne, e-mailadresser eller IP-adresser knyttet til din identitet.',
+    'Vi indsamler ikke navne eller e-mailadresser. Vi indsamler din IP-adresse — som udelukkende bruges til at håndhæve en ugentlig grænse på 50 visualiseringer og forhindre misbrug — og den slettes automatisk efter 7 dage og knyttes aldrig til dit navn eller din e-mailadresse.',
   termsQualityRetentionTitle: 'Opbevaring til kvalitetssikring',
   termsQualityRetentionBody:
     'Dit foto og den genererede visualisering opbevares på sikre servere inden for EU/EØS i op til 14 dage til intern kvalitetsgennemgang og slettes derefter automatisk. De bruges aldrig til at træne AI-modeller eller deles med tredjeparter, og de knyttes kun til en midlertidig sessionsreference — aldrig til dit navn, din e-mail eller IP-adresse. Hvis et genereringsforsøg afvises, opbevares det samme foto og de tekniske detaljer om forsøget på samme vilkår, så vi kan undersøge og forbedre pålideligheden.',
