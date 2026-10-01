@@ -71,6 +71,8 @@ export const pl: TranslationStrings = {
     'Zachowujesz pełne prawo własności do swoich oryginalnych zdjęć. GetRoomly i jego partnerzy zachowują wszelkie prawa do wizualizacji produktów oraz leżącej u ich podstaw technologii AI.',
   termsClose: 'Zamknij',
   errorTemporarilyUnavailable: 'Ta funkcja jest tymczasowo niedostępna. Spróbuj ponownie później.',
+  errorWeeklyLimitReached:
+    'Osiągnięto tygodniowy limit 50 wizualizacji. Spróbuj ponownie w przyszłym tygodniu.',
   loadingProgressLabel: 'Postęp generowania',
   errorUnsupportedImageFormat:
     'Ten format obrazu nie jest obsługiwany. Wyeksportuj zdjęcie jako JPEG, PNG lub WebP i spróbuj ponownie.',

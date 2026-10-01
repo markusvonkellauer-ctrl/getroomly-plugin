@@ -71,6 +71,8 @@ export const sv: TranslationStrings = {
   termsClose: 'Stäng',
   errorTemporarilyUnavailable:
     'Den här funktionen är tillfälligt otillgänglig. Försök igen senare.',
+  errorWeeklyLimitReached:
+    'Du har nått veckogränsen på 50 visualiseringar. Försök igen nästa vecka.',
   loadingProgressLabel: 'Genereringsförlopp',
   errorUnsupportedImageFormat:
     'Det här bildformatet stöds inte. Exportera bilden som JPEG, PNG eller WebP och försök igen.',
