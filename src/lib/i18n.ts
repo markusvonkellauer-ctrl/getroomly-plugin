@@ -104,6 +104,8 @@ export interface TranslationStrings {
   termsSection3Body: string;
   termsSection4Title: string;
   termsSection4Body: string;
+  /** Links out to getroomly.ai/privacy (full policy) from the sticky footer, next to termsClose. */
+  termsFullPolicyLink: string;
   termsClose: string;
   /**
    * Shown when the backend refuses a generation because the PARTNER has hit

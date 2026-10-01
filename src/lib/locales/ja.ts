@@ -68,6 +68,7 @@ export const ja: TranslationStrings = {
   termsSection4Title: '4. 所有権',
   termsSection4Body:
     'お客様は、オリジナルの写真に関するすべての所有権を保持します。GetRoomlyおよびそのパートナーは、製品のビジュアライゼーションおよびその基盤となるAI技術に関するすべての権利を保持します。',
+  termsFullPolicyLink: 'プライバシーポリシー全文を読む',
   termsClose: '閉じる',
   errorTemporarilyUnavailable:
     'この機能は現在ご利用いただけません。しばらくしてから再度お試しください。',

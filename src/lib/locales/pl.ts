@@ -69,6 +69,7 @@ export const pl: TranslationStrings = {
   termsSection4Title: '4. Własność',
   termsSection4Body:
     'Zachowujesz pełne prawo własności do swoich oryginalnych zdjęć. GetRoomly i jego partnerzy zachowują wszelkie prawa do wizualizacji produktów oraz leżącej u ich podstaw technologii AI.',
+  termsFullPolicyLink: 'Przeczytaj naszą pełną politykę prywatności',
   termsClose: 'Zamknij',
   errorTemporarilyUnavailable: 'Ta funkcja jest tymczasowo niedostępna. Spróbuj ponownie później.',
   errorWeeklyLimitReached:
