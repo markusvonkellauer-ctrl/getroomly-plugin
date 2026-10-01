@@ -57,7 +57,7 @@ export const pl: TranslationStrings = {
   termsSection2Title: '2. Minimalizacja danych i prywatność',
   termsLimitedDataCollectionTitle: 'Ograniczone gromadzenie danych',
   termsLimitedDataCollectionBody:
-    'Nie zbieramy imion i nazwisk ani adresów e-mail. Zbieramy Twój adres IP — wykorzystywany wyłącznie do egzekwowania tygodniowego limitu 50 wizualizacji i zapobiegania nadużyciom — który jest automatycznie usuwany po 7 dniach i nigdy nie jest powiązany z Twoim imieniem i nazwiskiem ani adresem e-mail.',
+    'Nie zbieramy imion i nazwisk ani adresów e-mail. Zbieramy Twój adres IP, ale wyłącznie w celu egzekwowania tygodniowego limitu 50 wizualizacji i zapobiegania nadużyciom. Jest on automatycznie usuwany po 7 dniach i nigdy nie jest powiązany z Twoim imieniem i nazwiskiem ani adresem e-mail.',
   termsQualityRetentionTitle: 'Przechowywanie w celu zapewnienia jakości',
   termsQualityRetentionBody:
     'Twoje zdjęcie oraz wygenerowana wizualizacja są przechowywane na bezpiecznych serwerach na terenie UE/EOG przez maksymalnie 14 dni w celu wewnętrznej kontroli jakości, a następnie automatycznie usuwane. Nigdy nie są wykorzystywane do trenowania modeli AI ani udostępniane osobom trzecim, i są powiązane wyłącznie z tymczasowym identyfikatorem sesji — nigdy z Twoim imieniem, e-mailem ani adresem IP. Jeśli próba generowania zostanie odrzucona, to samo zdjęcie oraz szczegóły techniczne tej próby są przechowywane na tych samych zasadach, abyśmy mogli badać i poprawiać niezawodność.',

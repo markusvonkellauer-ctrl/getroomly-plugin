@@ -56,7 +56,7 @@ export const en: TranslationStrings = {
   termsSection2Title: '2. Data Minimisation & Privacy',
   termsLimitedDataCollectionTitle: 'Limited Data Collection',
   termsLimitedDataCollectionBody:
-    'We do not collect names or email addresses. We do collect your IP address — used only to enforce a weekly limit of 50 visualisations and prevent abuse — which is automatically deleted after 7 days and never linked to your name or email.',
+    'We do not collect names or email addresses. We do collect your IP address, but only to enforce a weekly limit of 50 visualisations and prevent abuse. It is automatically deleted after 7 days and never linked to your name or email.',
   termsQualityRetentionTitle: 'Quality Assurance Retention',
   termsQualityRetentionBody:
     'Your photo and the generated visualisation are stored on secure servers within the EU/EEA for up to 14 days for internal quality review, then automatically deleted. They are never used to train AI models or shared with third parties, and are linked only to a temporary session reference — never to your name, email, or IP address. If a generation attempt is refused, the same photo and the technical details of that attempt are stored under these same terms, so we can investigate and improve reliability.',

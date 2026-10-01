@@ -57,7 +57,7 @@ export const fr: TranslationStrings = {
   termsSection2Title: '2. Minimisation des données & Confidentialité',
   termsLimitedDataCollectionTitle: 'Collecte de données limitée',
   termsLimitedDataCollectionBody:
-    "Nous ne collectons ni nom ni adresse e-mail. Nous collectons votre adresse IP, utilisée uniquement pour appliquer une limite hebdomadaire de 50 visualisations et prévenir les abus. Elle est automatiquement supprimée après 7 jours et n'est jamais liée à votre nom ou à votre adresse e-mail.",
+    "Nous ne collectons ni nom ni adresse e-mail. Nous collectons votre adresse IP, mais uniquement pour appliquer une limite hebdomadaire de 50 visualisations et prévenir les abus. Elle est automatiquement supprimée après 7 jours et n'est jamais liée à votre nom ou à votre adresse e-mail.",
   termsQualityRetentionTitle: 'Conservation pour assurance qualité',
   termsQualityRetentionBody:
     "Votre photo et la visualisation générée sont stockées sur des serveurs sécurisés au sein de l'UE/EEE pendant 14 jours maximum pour un contrôle qualité interne, puis supprimées automatiquement. Elles ne sont jamais utilisées pour entraîner des modèles d'IA ni partagées avec des tiers, et ne sont liées qu'à une référence de session temporaire — jamais à votre nom, e-mail ou adresse IP. Si une tentative de génération est refusée, la même photo et les détails techniques de cette tentative sont conservés selon les mêmes conditions, afin que nous puissions étudier et améliorer la fiabilité.",
