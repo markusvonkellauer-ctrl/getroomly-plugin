@@ -68,6 +68,7 @@ export const fi: TranslationStrings = {
   termsSection4Title: '4. Omistusoikeus',
   termsSection4Body:
     'Säilytät kaikki omistusoikeudet alkuperäisiin kuviisi. GetRoomly ja sen kumppanit säilyttävät kaikki oikeudet tuotevisualisointeihin ja niiden taustalla olevaan tekoälyteknologiaan.',
+  termsFullPolicyLink: 'Lue koko tietosuojakäytäntömme',
   termsClose: 'Sulje',
   errorTemporarilyUnavailable:
     'Tämä toiminto ei ole tilapäisesti käytettävissä. Yritä myöhemmin uudelleen.',

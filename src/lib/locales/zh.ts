@@ -69,6 +69,7 @@ export const zh: TranslationStrings = {
   termsSection4Title: '4. 所有权',
   termsSection4Body:
     '您保留对原始照片的全部所有权。GetRoomly及其合作伙伴保留对产品可视化效果图及其底层人工智能技术的所有权利。',
+  termsFullPolicyLink: '阅读完整隐私政策',
   termsClose: '关闭',
   errorTemporarilyUnavailable: '此功能暂时不可用。请稍后再试。',
   errorWeeklyLimitReached: '您本周的50次可视化次数已用完，请下周再试。',

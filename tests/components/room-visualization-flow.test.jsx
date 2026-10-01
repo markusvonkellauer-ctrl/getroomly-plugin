@@ -4,7 +4,7 @@
  * Covers the new coordinate-free upload → processing → result flow.
  */
 
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlow';
 import { translations } from '../../src/lib/i18n';
@@ -3408,6 +3408,41 @@ describe('RoomVisualizationFlow', () => {
       );
       expect(introIndex).toBeGreaterThanOrEqual(0);
       expect(bodyIndex).toBeGreaterThan(introIndex);
+    });
+  });
+
+  describe('terms dialog — full privacy policy link', () => {
+    const openTermsDialogWith = props => {
+      render(<RoomVisualizationFlow {...defaultProps} {...props} />);
+      const lang = props.config?.language ?? 'en';
+      fireEvent.click(screen.getByText(translations[lang].termsLink));
+      return screen.getByRole('dialog');
+    };
+
+    test('links to getroomly.ai/privacy?lang=en by default, opened in a new tab', () => {
+      const termsDialog = openTermsDialogWith({});
+
+      const link = within(termsDialog).getByText(translations.en.termsFullPolicyLink);
+      expect(link).toHaveAttribute('href', 'https://getroomly.ai/privacy?lang=en');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    });
+
+    test('links to the Swedish tab (?lang=sv) when the widget itself is Swedish', () => {
+      // getroomly.ai/privacy only has sv/en -- Swedish shoppers deep-link to
+      // the Swedish tab, every other one of this widget's 16 languages falls
+      // back to English (see the non-Swedish case below).
+      const termsDialog = openTermsDialogWith({ config: { language: 'sv' } });
+
+      const link = within(termsDialog).getByText(translations.sv.termsFullPolicyLink);
+      expect(link).toHaveAttribute('href', 'https://getroomly.ai/privacy?lang=sv');
+    });
+
+    test('falls back to the English tab for a non-Swedish widget language the policy page does not have', () => {
+      const termsDialog = openTermsDialogWith({ config: { language: 'ja' } });
+
+      const link = within(termsDialog).getByText(translations.ja.termsFullPolicyLink);
+      expect(link).toHaveAttribute('href', 'https://getroomly.ai/privacy?lang=en');
     });
   });
 
