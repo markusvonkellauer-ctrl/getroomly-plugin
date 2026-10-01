@@ -58,7 +58,7 @@ export const pt: TranslationStrings = {
   termsSection2Title: '2. Minimização de dados e privacidade',
   termsLimitedDataCollectionTitle: 'Recolha limitada de dados',
   termsLimitedDataCollectionBody:
-    'Não recolhemos nomes, endereços de e-mail ou endereços IP associados à sua identidade.',
+    'Não recolhemos nomes nem endereços de e-mail. Recolhemos o seu endereço IP — utilizado apenas para aplicar um limite semanal de 50 visualizações e prevenir abusos — que é automaticamente eliminado após 7 dias e nunca associado ao seu nome ou e-mail.',
   termsQualityRetentionTitle: 'Conservação para garantia de qualidade',
   termsQualityRetentionBody:
     'A sua fotografia e a visualização gerada são armazenadas em servidores seguros dentro do EEE durante um máximo de 14 dias para revisão interna de qualidade, sendo depois eliminadas automaticamente. Nunca são utilizadas para treinar modelos de IA nem partilhadas com terceiros, e estão associadas apenas a uma referência de sessão temporária — nunca ao seu nome, e-mail ou endereço IP. Se uma tentativa de geração for recusada, a mesma fotografia e os detalhes técnicos dessa tentativa são conservados nos mesmos termos, para que possamos investigar e melhorar a fiabilidade.',

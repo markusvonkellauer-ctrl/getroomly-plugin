@@ -57,7 +57,7 @@ export const de: TranslationStrings = {
   termsSection2Title: '2. Datenminimierung & Datenschutz',
   termsLimitedDataCollectionTitle: 'Eingeschränkte Datenerfassung',
   termsLimitedDataCollectionBody:
-    'Wir erfassen keine Namen, E-Mail-Adressen oder IP-Adressen, die mit Ihrer Identität verknüpft sind.',
+    'Wir erfassen keine Namen oder E-Mail-Adressen. Wir erfassen Ihre IP-Adresse — ausschließlich zur Durchsetzung eines wöchentlichen Limits von 50 Visualisierungen und zur Missbrauchsprävention —, die nach 7 Tagen automatisch gelöscht und niemals mit Ihrem Namen oder Ihrer E-Mail-Adresse verknüpft wird.',
   termsQualityRetentionTitle: 'Aufbewahrung zur Qualitätssicherung',
   termsQualityRetentionBody:
     'Ihr Foto und die generierte Visualisierung werden auf sicheren Servern innerhalb der EU/des EWR bis zu 14 Tage lang zur internen Qualitätsprüfung gespeichert und anschließend automatisch gelöscht. Sie werden niemals zum Training von KI-Modellen verwendet oder an Dritte weitergegeben und sind nur mit einer temporären Sitzungsreferenz verknüpft — niemals mit Ihrem Namen, Ihrer E-Mail-Adresse oder IP-Adresse. Wird ein Generierungsversuch abgelehnt, werden dasselbe Foto und die technischen Details dieses Versuchs unter denselben Bedingungen gespeichert, damit wir die Zuverlässigkeit untersuchen und verbessern können.',

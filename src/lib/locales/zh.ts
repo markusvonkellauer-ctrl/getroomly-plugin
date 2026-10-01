@@ -56,7 +56,8 @@ export const zh: TranslationStrings = {
     '上传图像即表示您授予GetRoomly临时许可，以处理该照片，从而在您的环境中可视化家具产品。人工智能会分析房间的几何结构和光照，以提供逼真的预览效果。',
   termsSection2Title: '2. 数据最小化与隐私',
   termsLimitedDataCollectionTitle: '有限的数据收集',
-  termsLimitedDataCollectionBody: '我们不会收集与您身份相关联的姓名、电子邮件地址或IP地址。',
+  termsLimitedDataCollectionBody:
+    '我们不会收集姓名或电子邮件地址。我们会收集您的IP地址——仅用于执行每周50次可视化的使用上限并防止滥用——该地址会在7天后自动删除，且绝不会与您的姓名或电子邮件关联。',
   termsQualityRetentionTitle: '质量保证留存',
   termsQualityRetentionBody:
     '您的照片和生成的可视化效果图将存储在欧盟/欧洲经济区境内的安全服务器上，最长保留14天用于内部质量审核，之后将自动删除。这些数据绝不会用于训练人工智能模型，也不会与第三方共享，且仅与临时会话标识关联——绝不与您的姓名、电子邮件或IP地址关联。如果生成请求被拒绝，同一照片及该次尝试的技术细节将按相同条款予以保留，以便我们调查并改进可靠性。',
