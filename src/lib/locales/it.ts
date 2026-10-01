@@ -57,7 +57,7 @@ export const it: TranslationStrings = {
   termsSection2Title: '2. Minimizzazione dei dati e privacy',
   termsLimitedDataCollectionTitle: 'Raccolta dati limitata',
   termsLimitedDataCollectionBody:
-    'Non raccogliamo nomi, indirizzi e-mail o indirizzi IP collegati alla tua identità.',
+    'Non raccogliamo nomi o indirizzi e-mail. Raccogliamo il tuo indirizzo IP, ma solo per applicare un limite settimanale di 50 visualizzazioni e prevenire abusi. Viene eliminato automaticamente dopo 7 giorni e non è mai collegato al tuo nome o alla tua e-mail.',
   termsQualityRetentionTitle: 'Conservazione per il controllo qualità',
   termsQualityRetentionBody:
     "La tua foto e la visualizzazione generata vengono conservate su server sicuri all'interno dell'UE/SEE per un massimo di 14 giorni ai fini della revisione interna della qualità, per poi essere eliminate automaticamente. Non vengono mai utilizzate per addestrare modelli di IA né condivise con terze parti, e sono collegate solo a un riferimento di sessione temporaneo — mai al tuo nome, e-mail o indirizzo IP. Se un tentativo di generazione viene rifiutato, la stessa foto e i dettagli tecnici di tale tentativo vengono conservati alle stesse condizioni, in modo da poter indagare e migliorare l'affidabilità.",

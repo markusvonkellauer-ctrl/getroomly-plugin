@@ -56,7 +56,7 @@ export const fi: TranslationStrings = {
   termsSection2Title: '2. Tietojen minimointi & tietosuoja',
   termsLimitedDataCollectionTitle: 'Rajoitettu tiedonkeruu',
   termsLimitedDataCollectionBody:
-    'Emme kerää nimiä, sähköpostiosoitteita tai IP-osoitteita, jotka on yhdistetty henkilöllisyyteesi.',
+    'Emme kerää nimiä tai sähköpostiosoitteita. Keräämme IP-osoitteesi, mutta vain viikoittaisen 50 visualisoinnin rajan valvontaan ja väärinkäytön estämiseen. Se poistetaan automaattisesti 7 päivän kuluttua eikä sitä koskaan yhdistetä nimeesi tai sähköpostiosoitteeseesi.',
   termsQualityRetentionTitle: 'Säilytys laadunvarmistusta varten',
   termsQualityRetentionBody:
     'Kuvasi ja luotu visualisointi tallennetaan tietoturvallisille palvelimille EU:n/ETA:n alueella enintään 14 päiväksi sisäistä laaduntarkastusta varten, minkä jälkeen ne poistetaan automaattisesti. Niitä ei koskaan käytetä tekoälymallien kouluttamiseen tai jaeta kolmansille osapuolille, ja ne yhdistetään ainoastaan väliaikaiseen istuntoviitteeseen — ei koskaan nimeesi, sähköpostiisi tai IP-osoitteeseesi. Jos luontiyritys hylätään, sama kuva ja yrityksen tekniset tiedot säilytetään samoin ehdoin, jotta voimme tutkia ja parantaa luotettavuutta.',

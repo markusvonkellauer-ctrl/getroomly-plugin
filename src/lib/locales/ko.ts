@@ -56,7 +56,7 @@ export const ko: TranslationStrings = {
   termsSection2Title: '2. 데이터 최소화 및 개인정보 보호',
   termsLimitedDataCollectionTitle: '제한된 데이터 수집',
   termsLimitedDataCollectionBody:
-    '저희는 귀하의 신원과 연결된 이름, 이메일 주소 또는 IP 주소를 수집하지 않습니다.',
+    '저희는 이름이나 이메일 주소를 수집하지 않습니다. IP 주소는 수집하지만, 주간 50회 시각화 한도를 적용하고 악용을 방지하기 위한 목적으로만 사용합니다. 7일 후 자동으로 삭제되며 귀하의 이름이나 이메일과 연결되지 않습니다.',
   termsQualityRetentionTitle: '품질 보증을 위한 보관',
   termsQualityRetentionBody:
     '귀하의 사진과 생성된 시각화 결과물은 내부 품질 검토를 위해 EU/EEA 내의 보안 서버에 최대 14일간 저장된 후 자동으로 삭제됩니다. 이는 AI 모델 학습에 사용되거나 제3자와 공유되지 않으며, 임시 세션 참조에만 연결되고 귀하의 이름, 이메일 또는 IP 주소와는 절대 연결되지 않습니다. 생성 시도가 거부될 경우, 신뢰성을 조사하고 개선할 수 있도록 동일한 조건 하에 해당 사진과 시도의 기술적 세부 정보가 보관됩니다.',
