@@ -3713,6 +3713,52 @@ describe('RoomVisualizationFlow', () => {
       );
     });
 
+    test('clears the file input value synchronously on every selection, so re-picking the identical file fires change rather than a false native cancel', async () => {
+      // Found in review (Copilot, PR #138): a file input only fires
+      // 'change' again if its value actually differs -- re-selecting the
+      // SAME file (e.g. retrying after an unrelated backend error) leaves
+      // it unchanged, so the browser fires 'cancel' instead, which would
+      // otherwise be wrongly recorded as upload_cancelled despite a real
+      // photo being chosen. This can't be verified by the browser's own
+      // cancel-vs-change decision in jsdom (it doesn't implement that
+      // heuristic), so this instead confirms OUR half of the fix is in
+      // place: the value is cleared synchronously, independent of whether
+      // the read that follows succeeds or fails.
+      //
+      // Asserting input.value === '' afterward (an earlier version of this
+      // test) was vacuous (found in review, Copilot PR #138): uploadFile
+      // only ever defines `files`, so jsdom leaves `value` at its default
+      // '' regardless of whether the production code's reset line exists
+      // at all -- the assertion would pass either way. A real browser also
+      // refuses to let JS set a NON-empty value on a file input (verified:
+      // throws "may only be programmatically set to the empty string"), so
+      // this instead spies on the underlying setter itself -- proving the
+      // reset actually ran, independent of jsdom's starting value.
+      const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      const setValueCalls = [];
+      Object.defineProperty(HTMLInputElement.prototype, 'value', {
+        configurable: true,
+        get: descriptor.get,
+        set(value) {
+          setValueCalls.push({ element: this, value });
+          descriptor.set.call(this, value);
+        },
+      });
+
+      try {
+        render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+        const input = document.querySelector('input[type="file"]');
+
+        await act(async () => {
+          uploadFile(input, makeFile());
+        });
+
+        expect(setValueCalls.filter(c => c.element === input).map(c => c.value)).toContain('');
+      } finally {
+        Object.defineProperty(HTMLInputElement.prototype, 'value', descriptor);
+      }
+    });
+
     test('fires upload_completed after a successful file read, before generation starts', async () => {
       render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
       trackWidgetEvent.mockClear();
@@ -3744,6 +3790,339 @@ describe('RoomVisualizationFlow', () => {
         expect.anything(),
         expect.anything()
       );
+    });
+
+    describe('upload_cancelled (file picker opened but no photo chosen)', () => {
+      // Primary signal is the file input's own standard 'cancel' event
+      // (fires exactly when the native picker is dismissed without a
+      // selection -- see the two tests right below). The focus/visibility
+      // tests further down exercise the FALLBACK path in isolation, by
+      // never firing 'cancel' at all -- that's deliberate, not an oversight:
+      // it's what lets them prove the fallback alone is still sufficient.
+      afterEach(() => {
+        jest.useRealTimers();
+        // Removes the own-property override set by setVisibilityState below,
+        // so jsdom's own (prototype) getter -- reporting 'visible' -- shows
+        // through again for every other test in this file.
+        delete document.visibilityState;
+      });
+
+      const setVisibilityState = value => {
+        Object.defineProperty(document, 'visibilityState', {
+          value,
+          configurable: true,
+        });
+      };
+
+      test('fires upload_cancelled immediately via the native file-input cancel event', () => {
+        // Found in review (Copilot, PR #137): <input type="file"> has a
+        // standard 'cancel' event, fired exactly when the native picker is
+        // dismissed without a selection -- within this project's stated
+        // evergreen-current+1 browser support matrix (README.md), it's the
+        // primary signal, not the focus/visibility fallback below.
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear(); // drop the upload_clicked call from above
+
+        const input = document.querySelector('input[type="file"]');
+        fireEvent(input, new Event('cancel', { bubbles: true }));
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'upload_cancelled',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
+      test('fires upload_cancelled via the native cancel event on the REPLACEMENT input after New Photo remounts it', async () => {
+        // Regression for Copilot review on PR #138: the callback ref exists
+        // specifically because the file input unmounts/remounts across
+        // "New Photo" -- this proves the listener actually gets attached to
+        // the NEW node, not left dangling on the original (now-detached)
+        // one dispatching 'cancel' there would prove nothing).
+        generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        const originalInput = document.querySelector('input[type="file"]');
+
+        await act(async () => {
+          uploadFile(originalInput, makeFile());
+        });
+        await waitFor(() => screen.getByText('Review Your New Room'));
+
+        await act(async () => {
+          fireEvent.click(screen.getByText('New Photo'));
+        });
+
+        const replacementInput = document.querySelector('input[type="file"]');
+        expect(replacementInput).not.toBe(originalInput);
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear(); // drop upload_clicked
+
+        fireEvent(replacementInput, new Event('cancel', { bubbles: true }));
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'upload_cancelled',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
+      test('does not double-report when the native cancel event is followed by a focus event for the same dismissal', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        const input = document.querySelector('input[type="file"]');
+        fireEvent(input, new Event('cancel', { bubbles: true }));
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        const cancelCalls = trackWidgetEvent.mock.calls.filter(
+          call => call[1] === 'upload_cancelled'
+        );
+        expect(cancelCalls).toHaveLength(1);
+      });
+
+      test('fires upload_cancelled once the picker-closed grace period elapses with no file chosen', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear(); // drop the upload_clicked call from above
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'upload_cancelled',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
+      test('does not fire upload_cancelled when a file was actually chosen before focus returns', async () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        await act(async () => {
+          uploadFile(document.querySelector('input[type="file"]'), makeFile());
+        });
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'upload_cancelled',
+          expect.anything(),
+          expect.anything()
+        );
+      });
+
+      test('does not fire upload_cancelled for the drag-and-drop path, which never opens the native picker', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        const dropzone = container.querySelector('[style*="cursor: pointer"]');
+        fireEvent.drop(dropzone, { dataTransfer: { files: [makeFile()] } });
+        trackWidgetEvent.mockClear();
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'upload_cancelled',
+          expect.anything(),
+          expect.anything()
+        );
+      });
+
+      test('fires upload_cancelled via visibilitychange too, not just focus -- the more reliable signal on mobile browsers', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        setVisibilityState('visible');
+        jest.useFakeTimers();
+        act(() => {
+          document.dispatchEvent(new Event('visibilitychange'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'upload_cancelled',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
+      test('does not fire on visibilitychange while the document is becoming hidden, only when it becomes visible again', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        setVisibilityState('hidden');
+        jest.useFakeTimers();
+        act(() => {
+          document.dispatchEvent(new Event('visibilitychange'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'upload_cancelled',
+          expect.anything(),
+          expect.anything()
+        );
+      });
+
+      test('reports upload_cancelled only once even if both focus and visibilitychange fire for the same cancel', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        setVisibilityState('visible');
+        jest.useFakeTimers();
+        act(() => {
+          document.dispatchEvent(new Event('visibilitychange'));
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        const cancelCalls = trackWidgetEvent.mock.calls.filter(
+          call => call[1] === 'upload_cancelled'
+        );
+        expect(cancelCalls).toHaveLength(1);
+      });
+
+      test("does not let a stale grace timeout from a cancelled attempt swallow a newer attempt's own cancellation", () => {
+        // Regression for Copilot review on PR #135: reopening the picker
+        // (attempt 2) while attempt 1's 300ms grace timeout is still
+        // pending used to let that stale timeout see filePickerPendingRef
+        // freshly set to true by attempt 2, wrongly report+clear it for
+        // attempt 1, and so silently swallow attempt 2's own later cancel.
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        // Attempt 1: open the picker, then cancel it -- schedules a grace timeout.
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+        });
+
+        // Before attempt 1's grace period elapses, the shopper reopens the
+        // picker -- attempt 2.
+        act(() => {
+          jest.advanceTimersByTime(100);
+          fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        });
+        trackWidgetEvent.mockClear(); // drop attempt 2's own upload_clicked call
+
+        // Attempt 1's stale timeout fires now (300ms from ITS OWN schedule,
+        // i.e. 200ms from here) -- must no-op instead of mis-reporting.
+        act(() => {
+          jest.advanceTimersByTime(200);
+        });
+        expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'upload_cancelled',
+          expect.anything(),
+          expect.anything()
+        );
+
+        // The shopper now cancels attempt 2 for real -- this must still be
+        // reported, not silently swallowed by attempt 1's stale timeout.
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'upload_cancelled',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
+      test('does not fire after unmount, even if focus returns while a picker was left open', () => {
+        const { container, unmount } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        unmount();
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'upload_cancelled',
+          expect.anything(),
+          expect.anything()
+        );
+      });
     });
 
     test('fires result_viewed once the result step is actually shown', async () => {
