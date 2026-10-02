@@ -3914,6 +3914,60 @@ describe('RoomVisualizationFlow', () => {
         expect(cancelCalls).toHaveLength(1);
       });
 
+      test("does not let a stale grace timeout from a cancelled attempt swallow a newer attempt's own cancellation", () => {
+        // Regression for Copilot review on PR #135: reopening the picker
+        // (attempt 2) while attempt 1's 300ms grace timeout is still
+        // pending used to let that stale timeout see filePickerPendingRef
+        // freshly set to true by attempt 2, wrongly report+clear it for
+        // attempt 1, and so silently swallow attempt 2's own later cancel.
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        // Attempt 1: open the picker, then cancel it -- schedules a grace timeout.
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+        });
+
+        // Before attempt 1's grace period elapses, the shopper reopens the
+        // picker -- attempt 2.
+        act(() => {
+          jest.advanceTimersByTime(100);
+          fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        });
+        trackWidgetEvent.mockClear(); // drop attempt 2's own upload_clicked call
+
+        // Attempt 1's stale timeout fires now (300ms from ITS OWN schedule,
+        // i.e. 200ms from here) -- must no-op instead of mis-reporting.
+        act(() => {
+          jest.advanceTimersByTime(200);
+        });
+        expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'upload_cancelled',
+          expect.anything(),
+          expect.anything()
+        );
+
+        // The shopper now cancels attempt 2 for real -- this must still be
+        // reported, not silently swallowed by attempt 1's stale timeout.
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'upload_cancelled',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
       test('does not fire after unmount, even if focus returns while a picker was left open', () => {
         const { container, unmount } = render(
           <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
