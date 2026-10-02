@@ -3724,17 +3724,39 @@ describe('RoomVisualizationFlow', () => {
       // heuristic), so this instead confirms OUR half of the fix is in
       // place: the value is cleared synchronously, independent of whether
       // the read that follows succeeds or fails.
-      render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
-      // Captured once, checked on this same reference below -- a successful
-      // selection advances step away from 'upload', unmounting this input,
-      // so re-querying the document afterward would find nothing.
-      const input = document.querySelector('input[type="file"]');
-
-      await act(async () => {
-        uploadFile(input, makeFile());
+      //
+      // Asserting input.value === '' afterward (an earlier version of this
+      // test) was vacuous (found in review, Copilot PR #138): uploadFile
+      // only ever defines `files`, so jsdom leaves `value` at its default
+      // '' regardless of whether the production code's reset line exists
+      // at all -- the assertion would pass either way. A real browser also
+      // refuses to let JS set a NON-empty value on a file input (verified:
+      // throws "may only be programmatically set to the empty string"), so
+      // this instead spies on the underlying setter itself -- proving the
+      // reset actually ran, independent of jsdom's starting value.
+      const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      const setValueCalls = [];
+      Object.defineProperty(HTMLInputElement.prototype, 'value', {
+        configurable: true,
+        get: descriptor.get,
+        set(value) {
+          setValueCalls.push({ element: this, value });
+          descriptor.set.call(this, value);
+        },
       });
 
-      expect(input.value).toBe('');
+      try {
+        render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+        const input = document.querySelector('input[type="file"]');
+
+        await act(async () => {
+          uploadFile(input, makeFile());
+        });
+
+        expect(setValueCalls.filter(c => c.element === input).map(c => c.value)).toContain('');
+      } finally {
+        Object.defineProperty(HTMLInputElement.prototype, 'value', descriptor);
+      }
     });
 
     test('fires upload_completed after a successful file read, before generation starts', async () => {
