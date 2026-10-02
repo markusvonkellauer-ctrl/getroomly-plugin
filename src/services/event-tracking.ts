@@ -5,6 +5,7 @@ export type WidgetEventType =
   | 'widget_closed'
   | 'terms_clicked'
   | 'upload_clicked'
+  | 'upload_cancelled'
   | 'upload_completed'
   | 'result_viewed';
 

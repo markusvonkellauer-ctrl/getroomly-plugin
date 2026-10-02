@@ -482,6 +482,15 @@ export function RoomVisualizationFlow({
   // land and call setState / handleGenerate for the wrong file.
   const fileReadTokenRef = useRef(0);
 
+  // Set right before the native file picker opens, cleared the moment the
+  // file input's own onChange fires (a real selection). If the window
+  // regains focus (the dialog closed) while this is still true, no `change`
+  // event ever fired — the shopper opened the picker and backed out without
+  // choosing a photo, as opposed to never opening it at all (upload_clicked
+  // already covers that) or picking a file that then failed validation
+  // (handled separately in handleFileSelect's own failure paths).
+  const filePickerPendingRef = useRef(false);
+
   // Plain write in the cleanup (no read of a prior ref value), so a pending
   // read's onload/onerror can tell the component is gone and no-op instead
   // of calling setState after unmount.
@@ -510,6 +519,33 @@ export function RoomVisualizationFlow({
       }
     };
   }, []);
+
+  // Standing listener for the entire widget lifetime, rather than one
+  // attached/detached per click -- a window 'focus' event is cheap to
+  // no-op on, and this sidesteps having to track/clean up a fresh listener
+  // from inside the dropzone's click handler. No-ops instantly unless the
+  // dropzone's onClick above just set filePickerPendingRef, i.e. a file
+  // picker is believed to be open. See the ref's own comment for why
+  // "focus returned without a change event" means the shopper cancelled.
+  useEffect(() => {
+    const handleWindowFocus = () => {
+      if (!filePickerPendingRef.current) {
+        return;
+      }
+      // handleFileSelect's onChange wrapper clears the pending flag the
+      // moment a real selection comes in, which in every major browser
+      // happens before this focus handler runs; the short delay is just a
+      // safety margin for the rare case it lands a tick later.
+      setTimeout(() => {
+        if (isMountedRef.current && filePickerPendingRef.current) {
+          filePickerPendingRef.current = false;
+          trackWidgetEvent(config?.apiKey, 'upload_cancelled', sessionId, productId);
+        }
+      }, 300);
+    };
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, [config?.apiKey, sessionId, productId]);
 
   // Sophisticated loading progress effect (matches original frontend exactly)
   useEffect(() => {
@@ -1158,6 +1194,10 @@ export function RoomVisualizationFlow({
         }}
         onClick={() => {
           trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId);
+          // Flips on the standing window-focus listener below, which
+          // reports upload_cancelled if the shopper backs out of the native
+          // picker without choosing a photo.
+          filePickerPendingRef.current = true;
           fileInputRef.current?.click();
         }}
         onMouseEnter={e => {
@@ -1435,7 +1475,12 @@ export function RoomVisualizationFlow({
         // the OS file picker filters non-matching files out of the dialog
         // before a selection can even happen.
         accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
-        onChange={handleFileSelect}
+        onChange={e => {
+          // A real selection happened -- the pending-cancel check set up in
+          // the dropzone's onClick above must not fire for this one.
+          filePickerPendingRef.current = false;
+          handleFileSelect(e);
+        }}
         style={{ display: 'none' }}
       />
     </div>

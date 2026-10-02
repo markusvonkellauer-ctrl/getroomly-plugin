@@ -3746,6 +3746,117 @@ describe('RoomVisualizationFlow', () => {
       );
     });
 
+    describe('upload_cancelled (file picker opened but no photo chosen)', () => {
+      // There's no DOM event for "native file dialog cancelled" -- the
+      // component infers it from the window regaining focus (the dialog
+      // closing) with no `change` event having landed first. Simulated here
+      // by clicking the dropzone (opens the picker) then firing a window
+      // 'focus' event without ever firing 'change' on the input -- exactly
+      // what a real cancel looks like from the DOM's perspective.
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      test('fires upload_cancelled once the picker-closed grace period elapses with no file chosen', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear(); // drop the upload_clicked call from above
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'upload_cancelled',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
+      test('does not fire upload_cancelled when a file was actually chosen before focus returns', async () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        await act(async () => {
+          uploadFile(document.querySelector('input[type="file"]'), makeFile());
+        });
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'upload_cancelled',
+          expect.anything(),
+          expect.anything()
+        );
+      });
+
+      test('does not fire upload_cancelled for the drag-and-drop path, which never opens the native picker', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        const dropzone = container.querySelector('[style*="cursor: pointer"]');
+        fireEvent.drop(dropzone, { dataTransfer: { files: [makeFile()] } });
+        trackWidgetEvent.mockClear();
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'upload_cancelled',
+          expect.anything(),
+          expect.anything()
+        );
+      });
+
+      test('does not fire after unmount, even if focus returns while a picker was left open', () => {
+        const { container, unmount } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        unmount();
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'upload_cancelled',
+          expect.anything(),
+          expect.anything()
+        );
+      });
+    });
+
     test('fires result_viewed once the result step is actually shown', async () => {
       generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
       render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
