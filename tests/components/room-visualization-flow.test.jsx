@@ -3747,13 +3747,12 @@ describe('RoomVisualizationFlow', () => {
     });
 
     describe('upload_cancelled (file picker opened but no photo chosen)', () => {
-      // There's no DOM event for "native file dialog cancelled" -- the
-      // component infers it from the window regaining focus OR the document
-      // becoming visible again (the dialog closing) with no `change` event
-      // having landed first. Simulated here by clicking the dropzone (opens
-      // the picker) then firing 'focus'/'visibilitychange' without ever
-      // firing 'change' on the input -- exactly what a real cancel looks
-      // like from the DOM's perspective.
+      // Primary signal is the file input's own standard 'cancel' event
+      // (fires exactly when the native picker is dismissed without a
+      // selection -- see the two tests right below). The focus/visibility
+      // tests further down exercise the FALLBACK path in isolation, by
+      // never firing 'cancel' at all -- that's deliberate, not an oversight:
+      // it's what lets them prove the fallback alone is still sufficient.
       afterEach(() => {
         jest.useRealTimers();
         // Removes the own-property override set by setVisibilityState below,
@@ -3768,6 +3767,55 @@ describe('RoomVisualizationFlow', () => {
           configurable: true,
         });
       };
+
+      test('fires upload_cancelled immediately via the native file-input cancel event', () => {
+        // Found in review (Copilot, PR #137): <input type="file"> has a
+        // standard 'cancel' event, fired exactly when the native picker is
+        // dismissed without a selection -- within this project's stated
+        // evergreen-current+1 browser support matrix (README.md), it's the
+        // primary signal, not the focus/visibility fallback below.
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear(); // drop the upload_clicked call from above
+
+        const input = document.querySelector('input[type="file"]');
+        fireEvent(input, new Event('cancel', { bubbles: true }));
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'upload_cancelled',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
+      test('does not double-report when the native cancel event is followed by a focus event for the same dismissal', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        const input = document.querySelector('input[type="file"]');
+        fireEvent(input, new Event('cancel', { bubbles: true }));
+
+        jest.useFakeTimers();
+        act(() => {
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        const cancelCalls = trackWidgetEvent.mock.calls.filter(
+          call => call[1] === 'upload_cancelled'
+        );
+        expect(cancelCalls).toHaveLength(1);
+      });
 
       test('fires upload_cancelled once the picker-closed grace period elapses with no file chosen', () => {
         const { container } = render(
