@@ -19,6 +19,22 @@ export const de: TranslationStrings = {
   tip3Label: 'Freie Fläche:',
   tip3Body: 'Entfernen Sie Gegenstände von der Fläche, auf der der Teppich platziert werden soll.',
   termsLink: 'Nutzungsbedingungen & Datenschutz',
+  uploadV2HeaderTitle: 'So sieht es bei dir aus',
+  uploadV2HeadlineDefault: 'Sieh das Produkt in deinem eigenen Raum',
+  uploadV2HeadlineCarpets: 'Sieh den Teppich in deinem eigenen Raum',
+  uploadV2Step1Title: 'Fotografiere den Raum',
+  uploadV2Step1Body: 'Ein helles Foto, auf dem der Boden sichtbar ist, liefert das beste Ergebnis.',
+  uploadV2Step2TitleDefault: 'Das Produkt wird in dein Foto eingefügt',
+  uploadV2Step2TitleCarpets: 'Der Teppich wird in dein Foto eingefügt',
+  uploadV2Step2Body: 'Das dauert etwa 15 Sekunden.',
+  uploadV2Step3Title: 'Ergebnis ansehen',
+  uploadV2Step3BodyDefault: 'Das Produkt wird in deinem eigenen Raum angezeigt.',
+  uploadV2Step3BodyCarpets: 'Der Teppich wird in deinem eigenen Raum angezeigt.',
+  uploadV2Hint: 'Max. 10 MB, JPEG oder PNG',
+  uploadV2TrustLinePrefixDefault:
+    'Dein Foto wird verwendet, um das Bild zu erstellen. Mehr dazu in',
+  uploadV2TrustLinePrefixCarpets:
+    'Dein Foto wird verwendet, um den Teppich in deinem Raum zu zeigen. Mehr dazu in',
   loadingMessages: [
     'Raumgeometrie wird analysiert...',
     'Umgebungslicht wird erkannt...',

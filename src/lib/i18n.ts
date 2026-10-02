@@ -51,6 +51,28 @@ export interface TranslationStrings {
   tip3Label: string;
   tip3Body: string;
   termsLink: string;
+  // --- Upload view (redesign, Oct 2026 "D2" handoff) ---
+  /** Header title for the upload step only -- replaces stepUpload there (processing/result keep stepProcessing/stepResult). Rendered next to a small "AI" badge (EmbedButton's own badge markup, recoloured for a white header). */
+  uploadV2HeaderTitle: string;
+  /** Headline shown when the product's category does NOT match a dedicated noun below (see isCarpetCategory in RoomVisualizationFlow.tsx) -- a full pre-formed sentence per language, not a template with an interpolated noun, since word order/agreement/articles differ too much across these 16 languages for a safe {noun} substitution. */
+  uploadV2HeadlineDefault: string;
+  /** Same as uploadV2HeadlineDefault, for category 'carpets' (or any category containing "carpet") -- the Nordic Nest rug launch. */
+  uploadV2HeadlineCarpets: string;
+  uploadV2Step1Title: string;
+  uploadV2Step1Body: string;
+  /** Step 2 title, default-category phrasing -- see uploadV2HeadlineDefault for why this is a full sentence, not a template. Deliberately never says "AI": the header badge and the retailer's own launch button already do. */
+  uploadV2Step2TitleDefault: string;
+  /** Step 2 title, carpets phrasing -- see uploadV2HeadlineCarpets. */
+  uploadV2Step2TitleCarpets: string;
+  uploadV2Step2Body: string;
+  uploadV2Step3Title: string;
+  uploadV2Step3BodyDefault: string;
+  uploadV2Step3BodyCarpets: string;
+  uploadV2Hint: string;
+  /** First half of the trust line for a non-carpet category -- rendered as "{this} {termsLink}", reusing termsLink verbatim as the clickable portion rather than duplicating "Terms of Use & Privacy" in a new key. */
+  uploadV2TrustLinePrefixDefault: string;
+  /** Same as uploadV2TrustLinePrefixDefault, for category 'carpets' (or any category containing "carpet") -- names the product directly ("...to show the rug in your room") rather than the generic "...to create the image". */
+  uploadV2TrustLinePrefixCarpets: string;
   loadingMessages: string[];
   labelOriginal: string;
   labelNew: string;

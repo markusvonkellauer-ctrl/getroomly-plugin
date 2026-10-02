@@ -319,6 +319,102 @@ code {
   }
 }
 
+/* Upload view (D2 redesign, Oct 2026 handoff) — sizing tokens scoped to
+   this one view, base values matching the "regular" layout (ref/png/
+   D2-Mobil.png, 390x844). Elements consume these via var(--gr-uv2-x, Npx),
+   the fallback itself also matching these base values, so the view still
+   renders sensibly even if this class fails to apply for some reason. */
+.getroomly-upload-v2 {
+  --gr-uv2-padding: 20px;
+  --gr-uv2-thumb-size: 48px;
+  --gr-uv2-product-name-size: 15px;
+  --gr-uv2-headline-size: 26px;
+  --gr-uv2-headline-line-height: 1.2;
+  --gr-uv2-headline-margin-top: 20px;
+  --gr-uv2-card-padding: 18px;
+  --gr-uv2-card-margin-top: 20px;
+  --gr-uv2-card-gap: 18px;
+  --gr-uv2-circle-size: 28px;
+  --gr-uv2-circle-font-size: 13px;
+  --gr-uv2-step-title-size: 15px;
+  --gr-uv2-step-body-size: 14px;
+  --gr-uv2-step-body-line-height: 1.45;
+  --gr-uv2-button-height: 60px;
+  --gr-uv2-button-margin-top: 20px;
+  --gr-uv2-button-font-size: 17px;
+  --gr-uv2-trust-margin-top: 14px;
+}
+
+/* Desktop (ref/png/D2-Desktop.png, 560px modal) — only the values that
+   actually differ from the regular/mobile base above; everything else
+   (step sizing, button height, trust-line spacing) is identical between
+   mobile-full and desktop per the handoff markup. Same min-width:1024px
+   breakpoint already used for the modal's own wider-panel width
+   (.lg\:w-\[520px\] below). */
+@media (min-width: 1024px) {
+  .getroomly-upload-v2 {
+    --gr-uv2-padding: 32px 40px;
+    --gr-uv2-headline-size: 32px;
+    --gr-uv2-headline-line-height: 1.15;
+    --gr-uv2-card-padding: 20px;
+    --gr-uv2-card-margin-top: 22px;
+    --gr-uv2-button-margin-top: 24px;
+  }
+}
+
+/* Compact mode — short panels (ref/png/D2-Panel.png and D2-Kort.png).
+   Height-based, consistent with the existing max-height:700px/600px
+   pattern above (marker-image-container), not a container query: the
+   panel's own height is currently a fixed fraction of the viewport
+   (.getroomly-modal-container's 80dvh cap above), not content-driven, so a
+   container query here would have no real height to measure against
+   (and risks a circular dependency if content-driven panel height is
+   enabled later — see the open decision noted in RoomVisualizationFlow.tsx).
+   820px threshold: the regular layout needs roughly 590pt of content height
+   (handoff brief) plus the ~64px header the panel always keeps, so panel
+   height must be at least ~654px; since the panel itself is 80dvh of the
+   viewport, that requires viewport height >= ~654/0.8 ≈ 817px. Verified
+   against the brief's own reference viewports: 390x844 (panel ≈675px,
+   regular) and 390x657 / 375x667 / 360x640 (panel ≤533px, compact) all land
+   on the correct side of this threshold. Deliberately NOT narrowed to
+   exclude wide/desktop viewports -- brief section 1: layout differences by
+   available space only, never by device/width-based branching here; a
+   short desktop window (e.g. 1280x720) correctly also gets compact sizing
+   rather than overflowing.
+   Declared AFTER the min-width:1024px block above: on a viewport that
+   matches both (wide AND short), the two sets of custom-property overrides
+   combine where they don't conflict, and compact's smaller values win
+   for anything both set — fitting the available height takes priority over
+   the desktop-only padding/headline preferences. */
+@media (max-height: 820px) {
+  .getroomly-upload-v2 {
+    --gr-uv2-padding: 16px 20px;
+    --gr-uv2-thumb-size: 40px;
+    --gr-uv2-product-name-size: 14px;
+    --gr-uv2-headline-size: 24px;
+    --gr-uv2-headline-margin-top: 14px;
+    --gr-uv2-card-padding: 14px;
+    --gr-uv2-card-margin-top: 14px;
+    --gr-uv2-card-gap: 12px;
+    --gr-uv2-circle-size: 26px;
+    --gr-uv2-circle-font-size: 12px;
+    --gr-uv2-step-title-size: 14px;
+    --gr-uv2-step-body-size: 13px;
+    --gr-uv2-step-body-line-height: 1.4;
+    --gr-uv2-button-height: 56px;
+    --gr-uv2-button-margin-top: 16px;
+    --gr-uv2-button-font-size: 16px;
+    --gr-uv2-trust-margin-top: 12px;
+  }
+
+  /* Only step 3's description hides in compact mode (handoff brief update,
+     point 3 — overrides the original brief's "hide steps 2 and 3"): step
+     2's "It takes about 15 seconds" must always stay visible. */
+  .getroomly-uv2-step3-desc {
+    display: none;
+  }
+}
+
 /* Terms dialog content box — clamp to backdrop height.
    The backdrop is contained within the plugin dialog (transform containing
    block), so max-height: 100% ensures the content box never overflows the

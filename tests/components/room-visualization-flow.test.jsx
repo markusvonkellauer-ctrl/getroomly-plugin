@@ -155,7 +155,9 @@ describe('RoomVisualizationFlow', () => {
 
   test('renders the upload step on mount', () => {
     render(<RoomVisualizationFlow {...defaultProps} />);
-    expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+    ).toBeInTheDocument();
     expect(screen.queryByText('Step 2: Place Marker')).not.toBeInTheDocument();
   });
 
@@ -176,169 +178,124 @@ describe('RoomVisualizationFlow', () => {
     expect(uploadStepRoot.style.fontFamily).toBe('');
   });
 
-  test('the upload step root does not clip its own content (overflow must stay visible, not hidden)', () => {
-    // Found in review (Copilot, PR #114): at narrow widths (320-375px) the
-    // strict aspectRatio:5/5 square plus the dropzone's minHeight floor
-    // leaves too little room for the tips card's real content -- with
-    // overflow:'hidden' that excess was silently clipped off the bottom of
-    // the box instead of just letting it grow taller than a perfect
-    // square. Verified via real-browser screenshots at 320/375/480/600px:
-    // 'visible' fixes the narrow-width clipping with no regression at any
-    // other width (flex:1 already caps the box back to its square height
-    // wherever there's enough room).
+  test('the upload step content wrapper scrolls instead of clipping when content does not fit (D2 redesign)', () => {
+    // D2 redesign: short panels can't always fit the full upload view even
+    // in compact mode (brief: "If content still overflows, the panel
+    // scrolls internally") -- the content wrapper (not the upload step's
+    // own root, which has no height restriction of its own) is what needs
+    // overflow:'auto' rather than the 'hidden' processing/result rely on
+    // for their own fixed aspect-ratio visuals.
     const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
     const uploadStepRoot = container.querySelector('.getroomly-upload-step');
     expect(uploadStepRoot).not.toBeNull();
-    expect(uploadStepRoot.style.overflow).toBe('visible');
+    expect(uploadStepRoot.parentElement.style.overflow).toBe('auto');
   });
 
-  describe('upload dropzone polish (design change)', () => {
-    const getDropzone = container => container.querySelector('[style*="cursor: pointer"]');
-
-    test('shows a transparent (invisible) border by default, and a visible dashed one only while a file is being dragged over', () => {
-      const borderSpy = captureStyleSetterCalls('border');
-      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
-      const dropzone = getDropzone(container);
-
-      fireEvent.dragEnter(dropzone, { dataTransfer: { types: ['Files'] } });
-      borderSpy.restore();
-
-      expect(borderSpy.valuesFor(dropzone)).toEqual([
-        '2px dashed transparent',
-        '2px dashed var(--getroomly-primary)',
-      ]);
-    });
-
-    test('does NOT show the dashed dragover border for a non-file drag (e.g. dragging selected text or a link)', () => {
-      // Found in review: without checking dataTransfer.types, dragging
-      // ANYTHING over the zone showed the "drop here" feedback, even
-      // though only an actual file drop does anything -- misleading the
-      // user into thinking a text/link drag would work.
-      const borderSpy = captureStyleSetterCalls('border');
-      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
-      const dropzone = getDropzone(container);
-
-      fireEvent.dragEnter(dropzone, { dataTransfer: { types: ['text/plain'] } });
-      borderSpy.restore();
-
-      expect(borderSpy.valuesFor(dropzone)).toEqual(['2px dashed transparent']);
-    });
-
-    test('clears the dragover border when the file is actually dropped', () => {
-      const borderSpy = captureStyleSetterCalls('border');
-      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
-      const dropzone = getDropzone(container);
-
-      fireEvent.dragEnter(dropzone, { dataTransfer: { types: ['Files'] } });
-      fireEvent.drop(dropzone, { dataTransfer: { files: [] } });
-      borderSpy.restore();
-
-      expect(borderSpy.valuesFor(dropzone)).toEqual([
-        '2px dashed transparent',
-        '2px dashed var(--getroomly-primary)',
-        '2px dashed transparent',
-      ]);
-    });
-
-    test('clears the dragover border when the drag leaves the zone entirely', () => {
-      const borderSpy = captureStyleSetterCalls('border');
-      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
-      const dropzone = getDropzone(container);
-
-      fireEvent.dragEnter(dropzone, { dataTransfer: { types: ['Files'] } });
-      // relatedTarget outside the zone (document.body) -- a real "left the
-      // zone" leave, not a dragleave fired while crossing between the
-      // zone's own children (icon/button/text), which must NOT clear it.
-      fireDragLeave(dropzone, document.body);
-      borderSpy.restore();
-
-      expect(borderSpy.valuesFor(dropzone)).toEqual([
-        '2px dashed transparent',
-        '2px dashed var(--getroomly-primary)',
-        '2px dashed transparent',
-      ]);
-    });
-
-    test("does NOT clear the dragover border when dragleave fires for a move between the zone's own children", () => {
-      // Found in review of the design change itself: a naive dragenter/
-      // dragleave pair flickers on/off as the pointer crosses internal
-      // element boundaries (icon -> button -> text) while still over the
-      // zone -- relatedTarget still being a descendant of the zone is what
-      // distinguishes that from actually leaving.
-      const borderSpy = captureStyleSetterCalls('border');
-      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
-      const dropzone = getDropzone(container);
-      const iconCircle = dropzone.firstElementChild;
-
-      fireEvent.dragEnter(dropzone, { dataTransfer: { types: ['Files'] } });
-      fireDragLeave(dropzone, iconCircle);
-      borderSpy.restore();
-
-      // No 3rd, "cleared" call -- the child-to-child leave must not touch
-      // the border at all, so it stays on the one dragEnter set.
-      expect(borderSpy.valuesFor(dropzone)).toEqual([
-        '2px dashed transparent',
-        '2px dashed var(--getroomly-primary)',
-      ]);
-    });
-
-    test('still uploads the dropped file (existing drop-to-upload behaviour is unchanged)', async () => {
+  describe('upload view (D2 redesign)', () => {
+    test('still uploads the dropped file (existing drop-to-upload behaviour is unchanged, just with no visible dragover UI)', async () => {
+      // Brief: "do not add new visible UI" for drag-and-drop -- dropping
+      // anywhere on the view still works, there's just no dedicated
+      // dropzone visual/border to feed drag events through anymore.
       generateRoomVisualization.mockReturnValueOnce(new Promise(() => {}));
       const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
-      const dropzone = getDropzone(container);
+      const uploadStepRoot = container.querySelector('.getroomly-upload-step');
       const file = makeFile();
 
-      fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
+      fireEvent.drop(uploadStepRoot, { dataTransfer: { files: [file] } });
 
       await waitFor(() => {
         expect(screen.getByText('Transforming your space...')).toBeInTheDocument();
       });
     });
 
-    test('the upload button swaps to the hover/press colour token while the zone is hovered, and back on mouse-leave', () => {
-      const bgSpy = captureStyleSetterCalls('backgroundColor');
+    test('the upload button is a real <button>, not a styled div, with a visible cursor:pointer', () => {
       const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
-      const dropzone = getDropzone(container);
-      const uploadButton = screen.getByRole('button', { name: 'Upload Photo' });
-
-      fireEvent.mouseEnter(dropzone);
-      fireEvent.mouseLeave(dropzone);
-      bgSpy.restore();
-
-      expect(bgSpy.valuesFor(uploadButton)).toEqual([
-        'var(--getroomly-primary-deep)',
-        'var(--getroomly-primary-press)',
-        'var(--getroomly-primary-deep)',
-      ]);
-    });
-
-    test('the existing scale(1.05) hover effect on the whole cluster is unchanged', () => {
-      // Confirms the design change only ADDED the hover colour/dragover
-      // behaviour above, without touching this pre-existing effect.
-      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
-      const dropzone = getDropzone(container);
-
-      fireEvent.mouseEnter(dropzone);
-      expect(dropzone.style.transform).toBe('scale(1.05)');
-
-      fireEvent.mouseLeave(dropzone);
-      expect(dropzone.style.transform).toBe('scale(1)');
-    });
-
-    test('the upload button is a pill (radius token) and uses the brand-tokenised shadow, not a hardcoded green one', () => {
-      render(<RoomVisualizationFlow {...defaultProps} />);
       const button = screen.getByRole('button', { name: 'Upload Photo' });
 
-      expect(button.style.borderRadius).toBe('var(--getroomly-radius-pill)');
-      expect(button.style.boxShadow).toBe('var(--getroomly-upload-button-shadow)');
+      expect(button.tagName).toBe('BUTTON');
+      expect(container.querySelector('[style*="cursor: pointer"]')).toBe(button);
     });
 
-    test('the file info hint text has no uppercase/letter-spacing styling', () => {
+    test('renders the product row with thumbnail and name when product data is present', () => {
       render(<RoomVisualizationFlow {...defaultProps} />);
-      const hint = screen.getByText(translations.en.uploadHint);
 
-      expect(hint.style.textTransform).toBe('');
-      expect(hint.style.letterSpacing).toBe('');
+      const thumb = screen.getByAltText(defaultProps.productName);
+      expect(thumb).toHaveAttribute('src', defaultProps.productImages[0]);
+      expect(screen.getByText(defaultProps.productName)).toBeInTheDocument();
+    });
+
+    test('shows just the name, no thumbnail, when there is no product image URL -- never a broken image', () => {
+      render(<RoomVisualizationFlow {...defaultProps} productImages={[]} />);
+
+      expect(screen.queryByAltText(defaultProps.productName)).not.toBeInTheDocument();
+      expect(screen.getByText(defaultProps.productName)).toBeInTheDocument();
+    });
+
+    test('hides the product row entirely when there is no product name either -- never an empty row', () => {
+      render(<RoomVisualizationFlow {...defaultProps} productImages={[]} productName="" />);
+
+      expect(screen.queryByText(defaultProps.productName)).not.toBeInTheDocument();
+      // No img at all, with or without an accessible name -- an empty name
+      // AND no image means nothing to show.
+      expect(document.querySelector('.getroomly-upload-v2 img')).not.toBeInTheDocument();
+    });
+
+    test('hides just the thumbnail (keeps the product name) when the image URL fails to load', () => {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+
+      const thumb = screen.getByAltText(defaultProps.productName);
+      fireEvent.error(thumb);
+
+      expect(screen.queryByAltText(defaultProps.productName)).not.toBeInTheDocument();
+      expect(screen.getByText(defaultProps.productName)).toBeInTheDocument();
+    });
+
+    test('uses the carpets-specific headline/step copy when category is "carpets"', () => {
+      render(<RoomVisualizationFlow {...defaultProps} category="carpets" />);
+
+      expect(screen.getByText(translations.en.uploadV2HeadlineCarpets)).toBeInTheDocument();
+      expect(screen.getByText(translations.en.uploadV2Step2TitleCarpets)).toBeInTheDocument();
+      expect(screen.getByText(translations.en.uploadV2Step3BodyCarpets)).toBeInTheDocument();
+    });
+
+    test('matches category names containing "carpet" too, not just the exact "carpets" string', () => {
+      render(<RoomVisualizationFlow {...defaultProps} category="outdoor-carpet-runners" />);
+
+      expect(screen.getByText(translations.en.uploadV2HeadlineCarpets)).toBeInTheDocument();
+    });
+
+    test('falls back to the generic default copy for a non-carpet category', () => {
+      render(<RoomVisualizationFlow {...defaultProps} category="sofas" />);
+
+      expect(screen.getByText(translations.en.uploadV2HeadlineDefault)).toBeInTheDocument();
+      expect(screen.getByText(translations.en.uploadV2Step2TitleDefault)).toBeInTheDocument();
+      expect(screen.getByText(translations.en.uploadV2Step3BodyDefault)).toBeInTheDocument();
+    });
+
+    test('shows the de-emphasised size-limit hint as the last line, wired to the button via aria-describedby', () => {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+
+      const hint = screen.getByText(translations.en.uploadV2Hint);
+      expect(hint.id).toBe('getroomly-uv2-hint');
+      expect(hint.style.fontSize).toBe('11px');
+      expect(hint.style.fontWeight).toBe('400');
+      expect(hint.style.color).toBe('rgb(107, 107, 107)');
+
+      const button = screen.getByRole('button', { name: 'Upload Photo' });
+      expect(button).toHaveAttribute('aria-describedby', 'getroomly-uv2-hint');
+      const input = document.querySelector('input[type="file"]');
+      expect(input).toHaveAttribute('aria-describedby', 'getroomly-uv2-hint');
+    });
+
+    test('step 3 gets a dedicated class so compact-mode CSS can hide only its description, per the handoff brief update', () => {
+      // defaultProps.category is 'Carpet', which isCarpetCategory matches
+      // -- so this renders the carpets-specific body text.
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+
+      expect(container.querySelector('.getroomly-uv2-step3-desc')).not.toBeNull();
+      expect(container.querySelector('.getroomly-uv2-step3-desc').textContent).toBe(
+        translations.en.uploadV2Step3BodyCarpets
+      );
     });
   });
 
@@ -569,7 +526,9 @@ describe('RoomVisualizationFlow', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+      ).toBeInTheDocument();
     });
   });
 
@@ -583,32 +542,8 @@ describe('RoomVisualizationFlow', () => {
       uploadFile(input, makeFile());
     });
 
-    await waitFor(() => screen.getByRole('heading', { name: 'Upload Photo' }));
+    await waitFor(() => screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle }));
     expect(input.value).toBe('');
-  });
-
-  test('clears a stale hover colour on the upload button when generation fails and returns to upload', async () => {
-    // Found in review: hovering the dropzone right before clicking it (the
-    // normal click-to-upload flow) sets the hover colour, but nothing
-    // before this fix cleared it when generation failed and returned to
-    // the upload step -- the button would render its press colour with no
-    // mouse anywhere near it.
-    generateRoomVisualization.mockRejectedValueOnce(new Error('upstream busy'));
-    const bgSpy = captureStyleSetterCalls('backgroundColor');
-
-    const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
-    const dropzone = container.querySelector('[style*="cursor: pointer"]');
-    fireEvent.mouseEnter(dropzone);
-
-    await act(async () => {
-      uploadFile(document.querySelector('input[type="file"]'), makeFile());
-    });
-
-    await waitFor(() => screen.getByRole('heading', { name: 'Upload Photo' }));
-    bgSpy.restore();
-
-    const uploadButton = screen.getByRole('button', { name: 'Upload Photo' });
-    expect(bgSpy.valuesFor(uploadButton).at(-1)).toBe('var(--getroomly-primary-deep)');
   });
 
   test('calls onError with the error message on failure', async () => {
@@ -719,7 +654,9 @@ describe('RoomVisualizationFlow', () => {
     });
 
     expect(generateRoomVisualization).not.toHaveBeenCalled();
-    expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+    ).toBeInTheDocument();
   });
 
   // ─── HEIC detection/conversion ─────────────────────────────────────────────
@@ -886,7 +823,9 @@ describe('RoomVisualizationFlow', () => {
       await waitFor(() => {
         expect(onError).toHaveBeenCalledWith(translations.en.errorUnsupportedImageFormat);
       });
-      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+      ).toBeInTheDocument();
       expect(generateRoomVisualization).not.toHaveBeenCalled();
       // Retrying (a converted file, or a different photo) must fire onChange
       // again — an unchanged input value would silently swallow the retry.
@@ -994,7 +933,9 @@ describe('RoomVisualizationFlow', () => {
       await waitFor(() => {
         expect(onError).toHaveBeenCalledWith('Failed to read image file');
       });
-      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+      ).toBeInTheDocument();
       expect(generateRoomVisualization).not.toHaveBeenCalled();
       expect(input.value).toBe('');
     } finally {
@@ -1054,7 +995,9 @@ describe('RoomVisualizationFlow', () => {
       await waitFor(() => {
         expect(onError).toHaveBeenCalledWith('Failed to read image file');
       });
-      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+      ).toBeInTheDocument();
       expect(generateRoomVisualization).not.toHaveBeenCalled();
       // Retrying the same file must fire onChange again — an unchanged input
       // value would silently swallow the retry.
@@ -1090,7 +1033,9 @@ describe('RoomVisualizationFlow', () => {
       await waitFor(() => {
         expect(onError).toHaveBeenCalledWith('Failed to read image file');
       });
-      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+      ).toBeInTheDocument();
       expect(generateRoomVisualization).not.toHaveBeenCalled();
       expect(input.value).toBe('');
     } finally {
@@ -1212,33 +1157,10 @@ describe('RoomVisualizationFlow', () => {
       fireEvent.click(screen.getByText('New Photo'));
     });
 
-    expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+    ).toBeInTheDocument();
     expect(input.value).toBe('');
-  });
-
-  test('New Photo also clears a stale hover colour left over from the previous upload', async () => {
-    // Same reasoning as the generation-failure case above -- the mouse that
-    // hovered the FIRST photo's dropzone is very likely nowhere near the
-    // second upload step this button returns to.
-    generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
-    const bgSpy = captureStyleSetterCalls('backgroundColor');
-
-    const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
-    const dropzone = container.querySelector('[style*="cursor: pointer"]');
-    fireEvent.mouseEnter(dropzone);
-
-    await act(async () => {
-      uploadFile(document.querySelector('input[type="file"]'), makeFile());
-    });
-    await waitFor(() => screen.getByText('Review Your New Room'));
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('New Photo'));
-    });
-    bgSpy.restore();
-
-    const uploadButton = screen.getByRole('button', { name: 'Upload Photo' });
-    expect(bgSpy.valuesFor(uploadButton).at(-1)).toBe('var(--getroomly-primary-deep)');
   });
 
   // ─── Before/After toggle pill ───────────────────────────────────────────
@@ -3377,7 +3299,9 @@ describe('RoomVisualizationFlow', () => {
       fireEvent.keyDown(document.activeElement, { key: 'Escape' });
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'Upload Photo' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+      ).toBeInTheDocument();
     });
 
     test('shows the generic (no-partner-name) intro paragraph immediately above section 1, before any section heading', () => {
@@ -3529,16 +3453,16 @@ describe('RoomVisualizationFlow', () => {
       // The credit line and the upload/processing footers all share ONE
       // wrapper div (see the main return) -- without scoping the padding
       // change to step==='result', it would have silently grown those two
-      // unrelated footers' bottom padding too.
-      const paddingSpy = captureStyleSetterCalls('padding');
-      render(<RoomVisualizationFlow {...defaultProps} />);
-      paddingSpy.restore();
-
-      const termsLinkButton = screen.getByText(translations.en.termsLink);
-      const uploadFooter = termsLinkButton.closest('div[style*="flex-shrink: 0"]');
+      // unrelated footers' bottom padding too. D2 redesign: the upload
+      // step's own trust/hint lines now live inside renderUploadStep
+      // itself, so this shared footer renders nothing and gets padding:0
+      // there -- still a value the result-step-only 19px change must never
+      // leak into.
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+      const uploadStepRoot = container.querySelector('.getroomly-upload-step');
+      const uploadFooter = uploadStepRoot.parentElement.nextElementSibling;
       expect(uploadFooter).not.toBeNull();
-      const values = paddingSpy.valuesFor(uploadFooter);
-      expect(values.at(-1)).toBe('8px var(--getroomly-space-sm) var(--getroomly-space-sm)');
+      expect(uploadFooter.style.padding).toBe('0px');
     });
 
     test("widens the result step's own footer padding to exactly 19px on the bottom", async () => {

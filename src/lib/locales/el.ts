@@ -18,6 +18,22 @@ export const el: TranslationStrings = {
   tip3Label: 'Ελεύθερο δάπεδο:',
   tip3Body: 'Αφαιρέστε αντικείμενα από την περιοχή όπου θα τοποθετηθεί το χαλί.',
   termsLink: 'Όροι χρήσης & Απόρρητο',
+  uploadV2HeaderTitle: 'Δείτε το στο σπίτι σας',
+  uploadV2HeadlineDefault: 'Δείτε το προϊόν στον δικό σας χώρο',
+  uploadV2HeadlineCarpets: 'Δείτε το χαλί στον δικό σας χώρο',
+  uploadV2Step1Title: 'Φωτογραφίστε το δωμάτιο',
+  uploadV2Step1Body: 'Μια φωτεινή φωτογραφία όπου φαίνεται το δάπεδο δίνει το καλύτερο αποτέλεσμα.',
+  uploadV2Step2TitleDefault: 'Το προϊόν προστίθεται στη φωτογραφία σας',
+  uploadV2Step2TitleCarpets: 'Το χαλί προστίθεται στη φωτογραφία σας',
+  uploadV2Step2Body: 'Διαρκεί περίπου 15 δευτερόλεπτα.',
+  uploadV2Step3Title: 'Δείτε το αποτέλεσμα',
+  uploadV2Step3BodyDefault: 'Το προϊόν εμφανίζεται στον δικό σας χώρο.',
+  uploadV2Step3BodyCarpets: 'Το χαλί εμφανίζεται στον δικό σας χώρο.',
+  uploadV2Hint: 'Έως 10 MB, JPEG ή PNG',
+  uploadV2TrustLinePrefixDefault:
+    'Η φωτογραφία σας χρησιμοποιείται για τη δημιουργία της εικόνας. Μάθετε περισσότερα στο',
+  uploadV2TrustLinePrefixCarpets:
+    'Η φωτογραφία σας χρησιμοποιείται για να εμφανιστεί το χαλί στον χώρο σας. Μάθετε περισσότερα στο',
   loadingMessages: [
     'Ανάλυση γεωμετρίας δωματίου...',
     'Ανίχνευση φωτισμού περιβάλλοντος...',
