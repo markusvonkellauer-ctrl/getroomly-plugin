@@ -7,7 +7,7 @@ import {
   validateImageFile,
 } from '@/services/ai-generation';
 import type { EmbedConfig } from '@/types/embed-config';
-import { getTranslations } from '@/lib/i18n';
+import { detectLanguage, getTranslations, isSupportedLanguage } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
 import { dataUrlToBlob, extensionForMimeType, mimeTypeFromDataUrl } from '@/lib/data-url';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
@@ -45,6 +45,13 @@ export function RoomVisualizationFlow({
   config,
 }: RoomVisualizationFlowProps) {
   const t = getTranslations(config?.language);
+  // getroomly.ai/privacy only has Swedish/English (matching the main site),
+  // unlike this widget's 16 locales — everything that isn't Swedish falls
+  // back to the English tab rather than a language the policy doesn't have.
+  const resolvedLanguage = isSupportedLanguage(config?.language)
+    ? config.language
+    : detectLanguage();
+  const privacyPolicyUrl = `https://getroomly.ai/privacy?lang=${resolvedLanguage === 'sv' ? 'sv' : 'en'}`;
   const [step, setStep] = useState<'upload' | 'processing' | 'result'>('upload');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [resultImage, setResultImage] = useState<string | null>(null);
@@ -3128,6 +3135,19 @@ export function RoomVisualizationFlow({
               textAlign: 'center',
             }}
           >
+            <a
+              href={privacyPolicyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'block',
+                fontSize: '13px',
+                color: 'var(--getroomly-primary-deep)',
+                marginBottom: '10px',
+              }}
+            >
+              {t.termsFullPolicyLink}
+            </a>
             <button
               onClick={() => setShowTermsDialog(false)}
               style={{
