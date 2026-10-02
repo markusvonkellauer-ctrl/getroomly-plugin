@@ -539,7 +539,19 @@ export function RoomVisualizationFlow({
         trackWidgetEvent(config?.apiKey, 'upload_cancelled', sessionId, productId);
       };
       node.addEventListener('cancel', handleNativeCancel);
-      return () => node.removeEventListener('cancel', handleNativeCancel);
+      return () => {
+        node.removeEventListener('cancel', handleNativeCancel);
+        // React 19 does NOT also call this callback with null when a
+        // cleanup function is returned (found in review, Copilot PR #138)
+        // -- without this, fileInputRef.current would keep pointing at
+        // this now-detached node (and its stale FileList) until the NEXT
+        // mount overwrites it, instead of correctly reading null while the
+        // input isn't rendered. Guarded on identity so a stale cleanup
+        // can't erase a NEWER node that's already replaced this one.
+        if (fileInputRef.current === node) {
+          fileInputRef.current = null;
+        }
+      };
     },
     [config?.apiKey, sessionId, productId]
   );

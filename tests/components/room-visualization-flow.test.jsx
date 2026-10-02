@@ -3793,6 +3793,43 @@ describe('RoomVisualizationFlow', () => {
         );
       });
 
+      test('fires upload_cancelled via the native cancel event on the REPLACEMENT input after New Photo remounts it', async () => {
+        // Regression for Copilot review on PR #138: the callback ref exists
+        // specifically because the file input unmounts/remounts across
+        // "New Photo" -- this proves the listener actually gets attached to
+        // the NEW node, not left dangling on the original (now-detached)
+        // one dispatching 'cancel' there would prove nothing).
+        generateRoomVisualization.mockResolvedValueOnce({ imageUrl: 'blob:result' });
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        const originalInput = document.querySelector('input[type="file"]');
+
+        await act(async () => {
+          uploadFile(originalInput, makeFile());
+        });
+        await waitFor(() => screen.getByText('Review Your New Room'));
+
+        await act(async () => {
+          fireEvent.click(screen.getByText('New Photo'));
+        });
+
+        const replacementInput = document.querySelector('input[type="file"]');
+        expect(replacementInput).not.toBe(originalInput);
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear(); // drop upload_clicked
+
+        fireEvent(replacementInput, new Event('cancel', { bubbles: true }));
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'upload_cancelled',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
       test('does not double-report when the native cancel event is followed by a focus event for the same dismissal', () => {
         const { container } = render(
           <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
