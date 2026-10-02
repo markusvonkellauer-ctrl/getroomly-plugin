@@ -789,6 +789,17 @@ export function RoomVisualizationFlow({
     if (!file) {
       return;
     }
+    // Synchronous, immediate -- not just on the failure paths that already
+    // did this (found in review, Copilot PR #138): the native file input's
+    // `value` only triggers another `change` event if it actually changes,
+    // so re-selecting the SAME file (e.g. retrying after an unrelated
+    // backend error) leaves the value unchanged and fires `cancel` instead
+    // -- wrongly recorded as upload_cancelled even though a real photo was
+    // chosen. Clearing it right away, independent of this read's outcome
+    // (does not affect the already-captured `file` reference below), means
+    // any later selection -- including the identical file again -- is a
+    // genuine value change from empty, so it reliably fires `change`.
+    event.target.value = '';
 
     // Bumped before any async work (HEIC sniff/conversion, then FileReader)
     // so a superseded selection — a newer file chosen, or the component

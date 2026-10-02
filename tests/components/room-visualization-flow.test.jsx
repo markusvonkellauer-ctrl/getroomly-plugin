@@ -3713,6 +3713,30 @@ describe('RoomVisualizationFlow', () => {
       );
     });
 
+    test('clears the file input value synchronously on every selection, so re-picking the identical file fires change rather than a false native cancel', async () => {
+      // Found in review (Copilot, PR #138): a file input only fires
+      // 'change' again if its value actually differs -- re-selecting the
+      // SAME file (e.g. retrying after an unrelated backend error) leaves
+      // it unchanged, so the browser fires 'cancel' instead, which would
+      // otherwise be wrongly recorded as upload_cancelled despite a real
+      // photo being chosen. This can't be verified by the browser's own
+      // cancel-vs-change decision in jsdom (it doesn't implement that
+      // heuristic), so this instead confirms OUR half of the fix is in
+      // place: the value is cleared synchronously, independent of whether
+      // the read that follows succeeds or fails.
+      render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+      // Captured once, checked on this same reference below -- a successful
+      // selection advances step away from 'upload', unmounting this input,
+      // so re-querying the document afterward would find nothing.
+      const input = document.querySelector('input[type="file"]');
+
+      await act(async () => {
+        uploadFile(input, makeFile());
+      });
+
+      expect(input.value).toBe('');
+    });
+
     test('fires upload_completed after a successful file read, before generation starts', async () => {
       render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
       trackWidgetEvent.mockClear();
