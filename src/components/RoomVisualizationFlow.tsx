@@ -521,20 +521,33 @@ export function RoomVisualizationFlow({
   }, []);
 
   // Standing listener for the entire widget lifetime, rather than one
-  // attached/detached per click -- a window 'focus' event is cheap to
-  // no-op on, and this sidesteps having to track/clean up a fresh listener
-  // from inside the dropzone's click handler. No-ops instantly unless the
-  // dropzone's onClick above just set filePickerPendingRef, i.e. a file
-  // picker is believed to be open. See the ref's own comment for why
-  // "focus returned without a change event" means the shopper cancelled.
+  // attached/detached per click -- both events are cheap to no-op on, and
+  // this sidesteps having to track/clean up a fresh listener from inside
+  // the dropzone's click handler. No-ops instantly unless the dropzone's
+  // onClick above just set filePickerPendingRef, i.e. a file picker is
+  // believed to be open. See the ref's own comment for why "the app became
+  // visible/focused again without a change event" means the shopper
+  // cancelled.
+  //
+  // Listens for BOTH signals, not just 'focus': found in review (Copilot,
+  // PR #135) -- mobile browsers, especially iOS Safari, don't reliably fire
+  // 'focus' when the native photo picker/camera sheet closes, since the
+  // page was arguably never considered unfocused the way a desktop window
+  // is. 'visibilitychange' (checking visibilityState, not just the event
+  // firing -- it fires on both hide and show) tends to be the more
+  // reliable signal there. Neither is 100% guaranteed on every platform --
+  // there's no DOM event for "native dialog cancelled" -- so this is a
+  // best-effort pair, not a provably complete fix. Whichever fires first
+  // clears filePickerPendingRef, so a real cancel can never double-report
+  // even if both happen to fire for the same picker close.
   useEffect(() => {
-    const handleWindowFocus = () => {
+    const maybeReportCancelled = () => {
       if (!filePickerPendingRef.current) {
         return;
       }
       // handleFileSelect's onChange wrapper clears the pending flag the
       // moment a real selection comes in, which in every major browser
-      // happens before this focus handler runs; the short delay is just a
+      // happens before either of these fire; the short delay is just a
       // safety margin for the rare case it lands a tick later.
       setTimeout(() => {
         if (isMountedRef.current && filePickerPendingRef.current) {
@@ -543,8 +556,17 @@ export function RoomVisualizationFlow({
         }
       }, 300);
     };
-    window.addEventListener('focus', handleWindowFocus);
-    return () => window.removeEventListener('focus', handleWindowFocus);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        maybeReportCancelled();
+      }
+    };
+    window.addEventListener('focus', maybeReportCancelled);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', maybeReportCancelled);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [config?.apiKey, sessionId, productId]);
 
   // Sophisticated loading progress effect (matches original frontend exactly)

@@ -3748,14 +3748,26 @@ describe('RoomVisualizationFlow', () => {
 
     describe('upload_cancelled (file picker opened but no photo chosen)', () => {
       // There's no DOM event for "native file dialog cancelled" -- the
-      // component infers it from the window regaining focus (the dialog
-      // closing) with no `change` event having landed first. Simulated here
-      // by clicking the dropzone (opens the picker) then firing a window
-      // 'focus' event without ever firing 'change' on the input -- exactly
-      // what a real cancel looks like from the DOM's perspective.
+      // component infers it from the window regaining focus OR the document
+      // becoming visible again (the dialog closing) with no `change` event
+      // having landed first. Simulated here by clicking the dropzone (opens
+      // the picker) then firing 'focus'/'visibilitychange' without ever
+      // firing 'change' on the input -- exactly what a real cancel looks
+      // like from the DOM's perspective.
       afterEach(() => {
         jest.useRealTimers();
+        // Removes the own-property override set by setVisibilityState below,
+        // so jsdom's own (prototype) getter -- reporting 'visible' -- shows
+        // through again for every other test in this file.
+        delete document.visibilityState;
       });
+
+      const setVisibilityState = value => {
+        Object.defineProperty(document, 'visibilityState', {
+          value,
+          configurable: true,
+        });
+      };
 
       test('fires upload_cancelled once the picker-closed grace period elapses with no file chosen', () => {
         const { container } = render(
@@ -3829,6 +3841,77 @@ describe('RoomVisualizationFlow', () => {
           expect.anything(),
           expect.anything()
         );
+      });
+
+      test('fires upload_cancelled via visibilitychange too, not just focus -- the more reliable signal on mobile browsers', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        setVisibilityState('visible');
+        jest.useFakeTimers();
+        act(() => {
+          document.dispatchEvent(new Event('visibilitychange'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'upload_cancelled',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
+      test('does not fire on visibilitychange while the document is becoming hidden, only when it becomes visible again', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        setVisibilityState('hidden');
+        jest.useFakeTimers();
+        act(() => {
+          document.dispatchEvent(new Event('visibilitychange'));
+          jest.advanceTimersByTime(300);
+        });
+
+        expect(trackWidgetEvent).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'upload_cancelled',
+          expect.anything(),
+          expect.anything()
+        );
+      });
+
+      test('reports upload_cancelled only once even if both focus and visibilitychange fire for the same cancel', () => {
+        const { container } = render(
+          <RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />
+        );
+        trackWidgetEvent.mockClear();
+
+        fireEvent.click(container.querySelector('[style*="cursor: pointer"]'));
+        trackWidgetEvent.mockClear();
+
+        setVisibilityState('visible');
+        jest.useFakeTimers();
+        act(() => {
+          document.dispatchEvent(new Event('visibilitychange'));
+          window.dispatchEvent(new Event('focus'));
+          jest.advanceTimersByTime(300);
+        });
+
+        const cancelCalls = trackWidgetEvent.mock.calls.filter(
+          call => call[1] === 'upload_cancelled'
+        );
+        expect(cancelCalls).toHaveLength(1);
       });
 
       test('does not fire after unmount, even if focus returns while a picker was left open', () => {
