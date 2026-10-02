@@ -482,6 +482,24 @@ export function RoomVisualizationFlow({
   // land and call setState / handleGenerate for the wrong file.
   const fileReadTokenRef = useRef(0);
 
+  // Set right before the native file picker opens, cleared the moment the
+  // file input's own onChange fires (a real selection). If the window
+  // regains focus (the dialog closed) while this is still true, no `change`
+  // event ever fired — the shopper opened the picker and backed out without
+  // choosing a photo, as opposed to never opening it at all (upload_clicked
+  // already covers that) or picking a file that then failed validation
+  // (handled separately in handleFileSelect's own failure paths).
+  const filePickerPendingRef = useRef(false);
+  // Bumped every time the dropzone opens a new picker attempt. Lets a grace
+  // timeout scheduled for an OLDER attempt recognize it's stale (found in
+  // review, Copilot PR #135): without this, cancelling attempt 1 schedules a
+  // 300ms timeout, and if the shopper reopens the picker (attempt 2) before
+  // that timeout fires, it would see filePickerPendingRef freshly set to
+  // true by attempt 2 and wrongly report+clear it for attempt 1 -- silently
+  // swallowing attempt 2's own later cancellation. Same pattern as
+  // fileReadTokenRef above, just for picker attempts instead of file reads.
+  const filePickerAttemptTokenRef = useRef(0);
+
   // Plain write in the cleanup (no read of a prior ref value), so a pending
   // read's onload/onerror can tell the component is gone and no-op instead
   // of calling setState after unmount.
@@ -510,6 +528,63 @@ export function RoomVisualizationFlow({
       }
     };
   }, []);
+
+  // Standing listener for the entire widget lifetime, rather than one
+  // attached/detached per click -- both events are cheap to no-op on, and
+  // this sidesteps having to track/clean up a fresh listener from inside
+  // the dropzone's click handler. No-ops instantly unless the dropzone's
+  // onClick above just set filePickerPendingRef, i.e. a file picker is
+  // believed to be open. See the ref's own comment for why "the app became
+  // visible/focused again without a change event" means the shopper
+  // cancelled.
+  //
+  // Listens for BOTH signals, not just 'focus': found in review (Copilot,
+  // PR #135) -- mobile browsers, especially iOS Safari, don't reliably fire
+  // 'focus' when the native photo picker/camera sheet closes, since the
+  // page was arguably never considered unfocused the way a desktop window
+  // is. 'visibilitychange' (checking visibilityState, not just the event
+  // firing -- it fires on both hide and show) tends to be the more
+  // reliable signal there. Neither is 100% guaranteed on every platform --
+  // there's no DOM event for "native dialog cancelled" -- so this is a
+  // best-effort pair, not a provably complete fix. Whichever fires first
+  // clears filePickerPendingRef, so a real cancel can never double-report
+  // even if both happen to fire for the same picker close.
+  useEffect(() => {
+    const maybeReportCancelled = () => {
+      if (!filePickerPendingRef.current) {
+        return;
+      }
+      // Captured now, not read fresh inside the timeout below -- this is
+      // what lets a stale timeout (an older attempt's) recognize a newer
+      // attempt has since started and bail out instead of mis-reporting it.
+      const attemptToken = filePickerAttemptTokenRef.current;
+      // handleFileSelect's onChange wrapper clears the pending flag the
+      // moment a real selection comes in, which in every major browser
+      // happens before either of these fire; the short delay is just a
+      // safety margin for the rare case it lands a tick later.
+      setTimeout(() => {
+        if (
+          isMountedRef.current &&
+          filePickerPendingRef.current &&
+          filePickerAttemptTokenRef.current === attemptToken
+        ) {
+          filePickerPendingRef.current = false;
+          trackWidgetEvent(config?.apiKey, 'upload_cancelled', sessionId, productId);
+        }
+      }, 300);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        maybeReportCancelled();
+      }
+    };
+    window.addEventListener('focus', maybeReportCancelled);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', maybeReportCancelled);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [config?.apiKey, sessionId, productId]);
 
   // Sophisticated loading progress effect (matches original frontend exactly)
   useEffect(() => {
@@ -1158,6 +1233,12 @@ export function RoomVisualizationFlow({
         }}
         onClick={() => {
           trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId);
+          // Flips on the standing window-focus listener below, which
+          // reports upload_cancelled if the shopper backs out of the native
+          // picker without choosing a photo. The bumped token lets that
+          // listener tell this attempt apart from a still-pending older one.
+          filePickerPendingRef.current = true;
+          filePickerAttemptTokenRef.current += 1;
           fileInputRef.current?.click();
         }}
         onMouseEnter={e => {
@@ -1435,7 +1516,12 @@ export function RoomVisualizationFlow({
         // the OS file picker filters non-matching files out of the dialog
         // before a selection can even happen.
         accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
-        onChange={handleFileSelect}
+        onChange={e => {
+          // A real selection happened -- the pending-cancel check set up in
+          // the dropzone's onClick above must not fire for this one.
+          filePickerPendingRef.current = false;
+          handleFileSelect(e);
+        }}
         style={{ display: 'none' }}
       />
     </div>
