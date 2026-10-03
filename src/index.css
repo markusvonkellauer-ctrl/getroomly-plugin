@@ -319,97 +319,137 @@ code {
   }
 }
 
-/* Upload view (D2 redesign, Oct 2026 handoff) — sizing tokens scoped to
-   this one view, base values matching the "regular" layout (ref/png/
-   D2-Mobil.png, 390x844). Elements consume these via var(--gr-uv2-x, Npx),
-   the fallback itself also matching these base values, so the view still
-   renders sensibly even if this class fails to apply for some reason. */
+/* Upload view (D3 update, Oct 2026) — sizing tokens scoped to this one
+   view, base values matching the "regular" mobile layout (ref/markup/
+   D3-Panel.dc.html, 390x657 with a 523pt panel). Elements consume these via
+   var(--gr-uv2-x, Npx), the fallback itself also matching these base
+   values, so the view still renders sensibly even if this class fails to
+   apply for some reason.
+   D3 removed the headline (brief section 1) -- the headline-* tokens from
+   the D2 version are gone with it, not just unused. */
 .getroomly-upload-v2 {
-  --gr-uv2-padding: 20px;
-  --gr-uv2-thumb-size: 48px;
-  --gr-uv2-product-name-size: 15px;
-  --gr-uv2-headline-size: 26px;
-  --gr-uv2-headline-line-height: 1.2;
-  --gr-uv2-headline-margin-top: 20px;
-  --gr-uv2-card-padding: 18px;
-  --gr-uv2-card-margin-top: 20px;
-  --gr-uv2-card-gap: 18px;
-  --gr-uv2-circle-size: 28px;
-  --gr-uv2-circle-font-size: 13px;
-  --gr-uv2-step-title-size: 15px;
-  --gr-uv2-step-body-size: 14px;
-  --gr-uv2-step-body-line-height: 1.45;
-  --gr-uv2-button-height: 60px;
+  --gr-uv2-padding: 16px 20px;
+  --gr-uv2-thumb-size: 44px;
+  --gr-uv2-product-name-size: 14px;
+  --gr-uv2-card-padding: 16px;
+  --gr-uv2-card-margin-top: 16px;
+  --gr-uv2-card-gap: 14px;
+  --gr-uv2-circle-size: 26px;
+  --gr-uv2-circle-font-size: 12px;
+  --gr-uv2-step-title-size: 14px;
+  --gr-uv2-step-body-size: 13px;
+  --gr-uv2-step-body-line-height: 1.4;
+  --gr-uv2-button-height: 56px;
   --gr-uv2-button-margin-top: 20px;
-  --gr-uv2-button-font-size: 17px;
-  --gr-uv2-trust-margin-top: 14px;
+  --gr-uv2-button-font-size: 16px;
+  --gr-uv2-trust-margin-top: 24px;
+  --gr-uv2-hint-margin-top: 10px;
 }
 
-/* Desktop (ref/png/D2-Desktop.png, 560px modal) — only the values that
-   actually differ from the regular/mobile base above; everything else
-   (step sizing, button height, trust-line spacing) is identical between
-   mobile-full and desktop per the handoff markup. Same min-width:1024px
-   breakpoint already used for the modal's own wider-panel width
-   (.lg\:w-\[520px\] below). */
+/* Desktop (ref/markup/D3-Desktop.dc.html, 560px modal) — only the values
+   that actually differ from the regular/mobile base above. Same
+   min-width:1024px breakpoint already used for the modal's own wider-panel
+   width (.lg\:w-\[520px\] below). gr-uv2-card-margin-top here (22px) comes
+   from the reference markup itself, not the brief's prose (which only
+   states the button/trust-line margins for desktop). */
 @media (min-width: 1024px) {
   .getroomly-upload-v2 {
     --gr-uv2-padding: 32px 40px;
-    --gr-uv2-headline-size: 32px;
-    --gr-uv2-headline-line-height: 1.15;
+    --gr-uv2-thumb-size: 48px;
+    --gr-uv2-product-name-size: 15px;
     --gr-uv2-card-padding: 20px;
     --gr-uv2-card-margin-top: 22px;
-    --gr-uv2-button-margin-top: 24px;
+    --gr-uv2-card-gap: 18px;
+    --gr-uv2-circle-size: 28px;
+    --gr-uv2-circle-font-size: 13px;
+    --gr-uv2-step-title-size: 15px;
+    --gr-uv2-step-body-size: 14px;
+    --gr-uv2-step-body-line-height: 1.45;
+    --gr-uv2-button-height: 60px;
+    --gr-uv2-button-margin-top: 26px;
+    --gr-uv2-button-font-size: 17px;
+    --gr-uv2-trust-margin-top: 26px;
   }
 }
 
-/* Compact mode — short panels (ref/png/D2-Panel.png and D2-Kort.png).
-   Height-based, consistent with the existing max-height:700px/600px
-   pattern above (marker-image-container), not a container query: the
-   panel's own height is currently a fixed fraction of the viewport
-   (.getroomly-modal-container's 80dvh cap above), not content-driven, so a
-   container query here would have no real height to measure against
-   (and risks a circular dependency if content-driven panel height is
-   enabled later — see the open decision noted in RoomVisualizationFlow.tsx).
-   820px threshold: the regular layout needs roughly 590pt of content height
-   (handoff brief) plus the ~64px header the panel always keeps, so panel
-   height must be at least ~654px; since the panel itself is 80dvh of the
-   viewport, that requires viewport height >= ~654/0.8 ≈ 817px. Verified
-   against the brief's own reference viewports: 390x844 (panel ≈675px,
-   regular) and 390x657 / 375x667 / 360x640 (panel ≤533px, compact) all land
-   on the correct side of this threshold. Deliberately NOT narrowed to
-   exclude wide/desktop viewports -- brief section 1: layout differences by
-   available space only, never by device/width-based branching here; a
-   short desktop window (e.g. 1280x720) correctly also gets compact sizing
-   rather than overflowing.
+/* Compact mode — short panels (ref/png/D3-Liten.png, ref/markup/
+   D3-Liten.dc.html). Height-based, consistent with the existing
+   max-height:700px/600px pattern above (marker-image-container), not a
+   container query -- the panel's own height is still a fixed fraction of
+   the viewport (.getroomly-modal-container's 80dvh cap above), not
+   content-driven, so there is no real height to measure against yet (see
+   the open decision noted in RoomVisualizationFlow.tsx).
+   550px threshold (was 820px under D2): removing the headline (brief
+   section 1) cut the content's own height by roughly a headline's worth.
+   NOT set from the arithmetic estimate alone -- an earlier draft of this
+   comment computed ~600px from summing element heights by hand and used an
+   80px safety margin on top (680px), but actually rendering the real
+   component in Chrome (Puppeteer, measuring the live DOM, not a static
+   estimate) at the brief's own 390x657 reference viewport (D3-Panel: real
+   panel 523pt, explicitly called out as fitting WITHOUT compact mode) showed
+   680px was wrong: it classified that exact viewport as compact, contrary
+   to the brief. 550px was chosen by re-measuring the real render and moving
+   the threshold below 657 with margin, while staying safely above the
+   landscape/small-phone case (D3-Liten: 375x413 panel implies a viewport
+   around 516px, still well under 550). Verified against every acceptance
+   -criteria viewport (section 7) via Puppeteer: the upload button stays
+   fully visible with no horizontal overflow at 390x657, 375x667, 360x640,
+   667x375 (landscape), 1440x900 and 1280x720. If the real content height
+   ever changes again, re-measure rather than re-deriving this by hand --
+   that's what caught the 680px mistake.
+   Deliberately NOT narrowed to exclude wide/desktop viewports -- brief
+   section 1: layout differences by available space only, never by
+   device/width-based branching here. This is a pure height query: a wide
+   window only gets compact sizing if it's also short enough (<=550px
+   tall), regardless of its width. 1280x720 itself stays just above that
+   (720 > 550), so it renders at regular/desktop sizing, not compact -- and
+   still fits without overflow at that size, per the same Puppeteer check
+   above. A short-but-wide window (e.g. 1280x500) falls into compact sizing
+   under this same query.
    Declared AFTER the min-width:1024px block above: on a viewport that
-   matches both (wide AND short), the two sets of custom-property overrides
-   combine where they don't conflict, and compact's smaller values win
-   for anything both set — fitting the available height takes priority over
-   the desktop-only padding/headline preferences. */
-@media (max-height: 820px) {
+   matches both (wide AND short), CSS custom properties cascade per
+   property, not per block, so this block explicitly restates every
+   property the desktop block above also sets (found in review, Copilot PR
+   #140 -- the 8 properties below the layout ones), not just the ones that
+   differ from the base/mobile values -- otherwise any property compact
+   left unset would silently keep desktop's larger value instead of
+   shrinking down, even though this comment used to claim it "correctly"
+   didn't. */
+@media (max-height: 550px) {
   .getroomly-upload-v2 {
-    --gr-uv2-padding: 16px 20px;
+    --gr-uv2-padding: 8px 16px;
     --gr-uv2-thumb-size: 40px;
+    --gr-uv2-card-padding: 12px;
+    --gr-uv2-card-margin-top: 12px;
+    --gr-uv2-card-gap: 10px;
+    --gr-uv2-button-margin-top: 14px;
+    --gr-uv2-trust-margin-top: 10px;
+    --gr-uv2-hint-margin-top: 6px;
+    /* Found in review (Copilot, PR #140): CSS custom properties cascade
+       per PROPERTY, not per media-query block -- when a viewport matches
+       both the min-width:1024px desktop query above AND this height query
+       (wide-but-short, e.g. 1280x500), any property this block doesn't
+       explicitly restate keeps the desktop block's value, since nothing
+       here ever overrides it. These 8 were only set by the base block and
+       the desktop block, never by compact, so the wide+short combo stayed
+       partially desktop-sized despite the file's own comment above
+       claiming compact "correctly" wins. Restated here at their base
+       (non-desktop) values -- compact doesn't shrink these further below
+       the regular/mobile size, it just needs to floor back down to it
+       when desktop's override would otherwise leak through. */
     --gr-uv2-product-name-size: 14px;
-    --gr-uv2-headline-size: 24px;
-    --gr-uv2-headline-margin-top: 14px;
-    --gr-uv2-card-padding: 14px;
-    --gr-uv2-card-margin-top: 14px;
-    --gr-uv2-card-gap: 12px;
     --gr-uv2-circle-size: 26px;
     --gr-uv2-circle-font-size: 12px;
     --gr-uv2-step-title-size: 14px;
     --gr-uv2-step-body-size: 13px;
     --gr-uv2-step-body-line-height: 1.4;
     --gr-uv2-button-height: 56px;
-    --gr-uv2-button-margin-top: 16px;
     --gr-uv2-button-font-size: 16px;
-    --gr-uv2-trust-margin-top: 12px;
   }
 
-  /* Only step 3's description hides in compact mode (handoff brief update,
-     point 3 — overrides the original brief's "hide steps 2 and 3"): step
-     2's "It takes about 15 seconds" must always stay visible. */
+  /* Only step 3's description hides in compact mode (brief section 5,
+     carried over from the D2 handoff update): step 2's "about 15 seconds"
+     must always stay visible. */
   .getroomly-uv2-step3-desc {
     display: none;
   }

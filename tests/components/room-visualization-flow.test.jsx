@@ -4,6 +4,8 @@
  * Covers the new coordinate-free upload → processing → result flow.
  */
 
+import fs from 'fs';
+import path from 'path';
 import { render, screen, within, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlow';
@@ -229,6 +231,42 @@ describe('RoomVisualizationFlow', () => {
       expect(container.querySelector('[style*="cursor: pointer"]')).toBe(button);
     });
 
+    // Found in review (Copilot, PR #140): this central theming regression
+    // (D2 hardcoded Nordic Nest's own black/square look as a literal
+    // #000000/2px instead of the brand tokens every other primary button in
+    // this widget uses) had no automated assertion catching it -- only that
+    // the button existed.
+    test('the upload button reads its border-radius from a brand token, not a hardcoded value', () => {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const button = screen.getByRole('button', { name: 'Upload Photo' });
+
+      expect(button.style.borderRadius).toBe('var(--getroomly-radius-pill)');
+    });
+
+    // Verified via source text, not the rendered DOM: jsdom's CSSOM (cssstyle)
+    // silently rejects `background-color`/`margin-top`/`height`/`font-size`
+    // values that contain var(...) -- the property setter just no-ops,
+    // leaving button.style.backgroundColor === '' -- while border-radius
+    // happens to be one of the few properties cssstyle's grammar accepts
+    // one verbatim through (confirmed by direct probing of jsdom's own
+    // CSSStyleDeclaration, not an assumption). A real browser renders this
+    // correctly (confirmed via Puppeteer screenshots against the dev
+    // server during this PR), so this isn't a real app bug -- just a jsdom
+    // limitation that makes the DOM the wrong place to assert this one
+    // property. Reading the component's own source is what's left.
+    test('the upload button sources its background colour from the same brand token as border-radius', () => {
+      const source = fs.readFileSync(
+        path.join(__dirname, '../../src/components/RoomVisualizationFlow.tsx'),
+        'utf8'
+      );
+      const buttonBlockStart = source.indexOf('className="getroomly-uv2-button"');
+      expect(buttonBlockStart).toBeGreaterThan(-1);
+      const buttonBlock = source.slice(buttonBlockStart, buttonBlockStart + 1200);
+
+      expect(buttonBlock).toMatch(/backgroundColor:\s*'var\(--getroomly-primary-deep\)'/);
+      expect(buttonBlock).not.toMatch(/#000/i);
+    });
+
     // The thumbnail is decorative (alt="", found in review -- Copilot PR
     // #139: its adjacent visible product name already supplies the same
     // text, so a real alt made screen readers announce it twice), so these
@@ -297,10 +335,41 @@ describe('RoomVisualizationFlow', () => {
       expect(getProductThumb()).toHaveAttribute('src', 'https://example.com/working.jpg');
     });
 
-    test('uses the carpets-specific headline/step copy when category is "carpets"', () => {
+    // D3 brief section 1b: show the whole product image, never crop --
+    // object-fit:cover (D2) cropped non-square rugs into a fragment of the
+    // pattern. The white 4px-padded box also covers transparent PNGs.
+    test('the thumbnail shows the whole image (object-fit: contain) inside a white padded box', () => {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+
+      const thumb = getProductThumb();
+      expect(thumb.style.objectFit).toBe('contain');
+
+      const box = thumb.parentElement;
+      expect(box.style.background).toBe('rgb(255, 255, 255)');
+      expect(box.style.padding).toBe('4px');
+      expect(box.style.overflow).toBe('hidden');
+    });
+
+    // D3 brief section 1: the headline is gone entirely (not just split by
+    // category) -- it repeated the header and cost ~45pt of height.
+    test('no longer renders a headline (removed in the D3 update)', () => {
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+
+      expect(container.querySelector('h1')).not.toBeInTheDocument();
+      expect(container.querySelector('h3')).not.toBeInTheDocument();
+    });
+
+    // Found in review (Copilot, PR #140): `category` is a free-form public
+    // config field that genuinely supports sofas/chairs/tables/etc (see
+    // embed-config.ts, README.md) -- a single un-split step 2 title said
+    // "the rug" for every category. Step 2's title and the trust line's
+    // statement are both category-aware now, same mechanism as step 3's
+    // body (brief: "Steps 1 and 3 ... stay as they are today" -- step 2 and
+    // the trust line don't, by necessity, since their new copy names the
+    // product directly).
+    test('uses the carpets-specific step 2 title and step 3 body when category is "carpets"', () => {
       render(<RoomVisualizationFlow {...defaultProps} category="carpets" />);
 
-      expect(screen.getByText(translations.en.uploadV2HeadlineCarpets)).toBeInTheDocument();
       expect(screen.getByText(translations.en.uploadV2Step2TitleCarpets)).toBeInTheDocument();
       expect(screen.getByText(translations.en.uploadV2Step3BodyCarpets)).toBeInTheDocument();
     });
@@ -308,13 +377,13 @@ describe('RoomVisualizationFlow', () => {
     test('matches category names containing "carpet" too, not just the exact "carpets" string', () => {
       render(<RoomVisualizationFlow {...defaultProps} category="outdoor-carpet-runners" />);
 
-      expect(screen.getByText(translations.en.uploadV2HeadlineCarpets)).toBeInTheDocument();
+      expect(screen.getByText(translations.en.uploadV2Step2TitleCarpets)).toBeInTheDocument();
+      expect(screen.getByText(translations.en.uploadV2Step3BodyCarpets)).toBeInTheDocument();
     });
 
     test('falls back to the generic default copy for a non-carpet category', () => {
       render(<RoomVisualizationFlow {...defaultProps} category="sofas" />);
 
-      expect(screen.getByText(translations.en.uploadV2HeadlineDefault)).toBeInTheDocument();
       expect(screen.getByText(translations.en.uploadV2Step2TitleDefault)).toBeInTheDocument();
       expect(screen.getByText(translations.en.uploadV2Step3BodyDefault)).toBeInTheDocument();
     });
@@ -332,6 +401,32 @@ describe('RoomVisualizationFlow', () => {
       expect(button).toHaveAttribute('aria-describedby', 'getroomly-uv2-hint');
       const input = document.querySelector('input[type="file"]');
       expect(input).toHaveAttribute('aria-describedby', 'getroomly-uv2-hint');
+    });
+
+    // D3 brief section 2+4: trust line is always exactly 2 lines -- the
+    // statement, then the link-prefix+link as its own block (a <div>, not a
+    // <br>), centered, so it reads the same in every language/width.
+    test('the trust line renders as two lines: the statement, then the link prefix + link as its own block', () => {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+
+      // defaultProps.category is 'Carpet', which isCarpetCategory matches.
+      const statement = screen.getByText(translations.en.uploadV2TrustLineStatementCarpets, {
+        exact: false,
+      });
+      const trustBlock = statement.closest('div');
+      expect(trustBlock.style.textAlign).toBe('center');
+
+      const link = screen.getByText(translations.en.termsLink);
+      expect(link.tagName).toBe('BUTTON');
+      const linkLine = link.parentElement;
+      expect(linkLine.tagName).toBe('DIV');
+      expect(linkLine.textContent).toBe(
+        `${translations.en.uploadV2TrustLineLinkPrefix} ${translations.en.termsLink}`
+      );
+      // The link line is its own block, a sibling of the statement text
+      // inside the same trust-line container -- not appended after the
+      // statement on the same line.
+      expect(linkLine.parentElement).toBe(trustBlock);
     });
 
     test('step 3 gets a dedicated class so compact-mode CSS can hide only its description, per the handoff brief update', () => {

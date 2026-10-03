@@ -20,21 +20,20 @@ export const de: TranslationStrings = {
   tip3Body: 'Entfernen Sie Gegenstände von der Fläche, auf der der Teppich platziert werden soll.',
   termsLink: 'Nutzungsbedingungen & Datenschutz',
   uploadV2HeaderTitle: 'So sieht es bei Ihnen aus',
-  uploadV2HeadlineDefault: 'Sehen Sie das Produkt in Ihrem eigenen Raum',
-  uploadV2HeadlineCarpets: 'Sehen Sie den Teppich in Ihrem eigenen Raum',
   uploadV2Step1Title: 'Fotografieren Sie den Raum',
   uploadV2Step1Body: 'Ein helles Foto, auf dem der Boden sichtbar ist, liefert das beste Ergebnis.',
-  uploadV2Step2TitleDefault: 'Das Produkt wird in Ihr Foto eingefügt',
-  uploadV2Step2TitleCarpets: 'Der Teppich wird in Ihr Foto eingefügt',
+  uploadV2Step2TitleDefault: 'Das Produkt wird in Ihrem Raum platziert',
+  uploadV2Step2TitleCarpets: 'Der Teppich wird in Ihrem Raum platziert',
   uploadV2Step2Body: 'Das dauert etwa 15 Sekunden.',
   uploadV2Step3Title: 'Ergebnis ansehen',
   uploadV2Step3BodyDefault: 'Das Produkt wird in Ihrem eigenen Raum angezeigt.',
   uploadV2Step3BodyCarpets: 'Der Teppich wird in Ihrem eigenen Raum angezeigt.',
   uploadV2Hint: 'Max. 10 MB, JPEG oder PNG',
-  uploadV2TrustLinePrefixDefault:
-    'Ihr Foto wird verwendet, um das Bild zu erstellen. Mehr dazu in den',
-  uploadV2TrustLinePrefixCarpets:
-    'Ihr Foto wird verwendet, um den Teppich in Ihrem Raum zu zeigen. Mehr dazu in den',
+  uploadV2TrustLineStatementDefault:
+    'Ihr Foto wird verwendet, um das Produkt in Ihrem Raum zu zeigen.',
+  uploadV2TrustLineStatementCarpets:
+    'Ihr Foto wird verwendet, um den Teppich in Ihrem Raum zu zeigen.',
+  uploadV2TrustLineLinkPrefix: 'Mehr dazu in den',
   loadingMessages: [
     'Raumgeometrie wird analysiert...',
     'Umgebungslicht wird erkannt...',
