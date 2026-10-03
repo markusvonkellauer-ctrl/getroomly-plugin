@@ -404,13 +404,17 @@ code {
    tall), regardless of its width. 1280x720 itself stays just above that
    (720 > 550), so it renders at regular/desktop sizing, not compact -- and
    still fits without overflow at that size, per the same Puppeteer check
-   above. A hypothetical short-but-wide window (e.g. 1280x500) would
-   correctly fall into compact sizing under this same query.
+   above. A short-but-wide window (e.g. 1280x500) falls into compact sizing
+   under this same query.
    Declared AFTER the min-width:1024px block above: on a viewport that
-   matches both (wide AND short), the two sets of custom-property overrides
-   combine where they don't conflict, and compact's smaller values win
-   for anything both set — fitting the available height takes priority over
-   the desktop-only padding preferences. */
+   matches both (wide AND short), CSS custom properties cascade per
+   property, not per block, so this block explicitly restates every
+   property the desktop block above also sets (found in review, Copilot PR
+   #140 -- the 8 properties below the layout ones), not just the ones that
+   differ from the base/mobile values -- otherwise any property compact
+   left unset would silently keep desktop's larger value instead of
+   shrinking down, even though this comment used to claim it "correctly"
+   didn't. */
 @media (max-height: 550px) {
   .getroomly-upload-v2 {
     --gr-uv2-padding: 8px 16px;
@@ -421,6 +425,26 @@ code {
     --gr-uv2-button-margin-top: 14px;
     --gr-uv2-trust-margin-top: 10px;
     --gr-uv2-hint-margin-top: 6px;
+    /* Found in review (Copilot, PR #140): CSS custom properties cascade
+       per PROPERTY, not per media-query block -- when a viewport matches
+       both the min-width:1024px desktop query above AND this height query
+       (wide-but-short, e.g. 1280x500), any property this block doesn't
+       explicitly restate keeps the desktop block's value, since nothing
+       here ever overrides it. These 8 were only set by the base block and
+       the desktop block, never by compact, so the wide+short combo stayed
+       partially desktop-sized despite the file's own comment above
+       claiming compact "correctly" wins. Restated here at their base
+       (non-desktop) values -- compact doesn't shrink these further below
+       the regular/mobile size, it just needs to floor back down to it
+       when desktop's override would otherwise leak through. */
+    --gr-uv2-product-name-size: 14px;
+    --gr-uv2-circle-size: 26px;
+    --gr-uv2-circle-font-size: 12px;
+    --gr-uv2-step-title-size: 14px;
+    --gr-uv2-step-body-size: 13px;
+    --gr-uv2-step-body-line-height: 1.4;
+    --gr-uv2-button-height: 56px;
+    --gr-uv2-button-font-size: 16px;
   }
 
   /* Only step 3's description hides in compact mode (brief section 5,

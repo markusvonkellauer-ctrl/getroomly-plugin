@@ -72,6 +72,31 @@ const FONT_STACK = "system-ui, 'Segoe UI', Roboto, sans-serif";
 const CONTENT_WIDTHS = [320, 328, 350, 440];
 const ALL_LANGUAGES = Object.keys(translations);
 
+// Found in review (Copilot, PR #140): the step title/body text doesn't get
+// the full content width -- it sits in a flex row next to the numbered
+// circle, inside the steps card's own padding (RoomVisualizationFlow.tsx's
+// renderUploadStep, the step rows). Giving it the full CONTENT_WIDTHS value
+// overestimated the real column by ~70-90px, so a compound word long enough
+// to overflow the real row could still pass this check. Geometry per bucket
+// (src/index.css's .getroomly-upload-v2 tokens) -- card padding and circle
+// size both change between regular/compact/desktop, so each CONTENT_WIDTHS
+// entry needs its own values, not one shared pair.
+const STEP_ROW_GEOMETRY = {
+  320: { cardPadding: 16, circleSize: 26 }, // regular-narrow (360px panel, no compact)
+  328: { cardPadding: 12, circleSize: 26 }, // compact
+  350: { cardPadding: 16, circleSize: 26 }, // regular
+  440: { cardPadding: 20, circleSize: 28 }, // desktop
+};
+const STEP_ROW_GAP = 14; // RoomVisualizationFlow.tsx's step row: gap: '14px'
+
+function stepColumnWidth(contentWidth) {
+  const geometry = STEP_ROW_GEOMETRY[contentWidth];
+  if (!geometry) {
+    throw new Error(`No step-row geometry defined for content width ${contentWidth}px`);
+  }
+  return contentWidth - geometry.cardPadding * 2 - geometry.circleSize - STEP_ROW_GAP;
+}
+
 /**
  * Each entry reproduces one real element's inline style (RoomVisualizationFlow.tsx,
  * line cited per entry). `wrap: true` elements are allowed to wrap to
@@ -84,6 +109,7 @@ const ELEMENT_SPECS = [
     name: 'Step 2 title, default-category phrasing (RoomVisualizationFlow.tsx -- found in review, Copilot PR #140: category-split again, same as step 3)',
     getText: t => t.uploadV2Step2TitleDefault,
     wrap: true,
+    toColumnWidth: stepColumnWidth,
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">
         <div id="target" style="font-size:15px; font-weight:600; font-family:${FONT_STACK};">${text}</div>
@@ -93,6 +119,7 @@ const ELEMENT_SPECS = [
     name: 'Step 2 title, carpets phrasing (RoomVisualizationFlow.tsx)',
     getText: t => t.uploadV2Step2TitleCarpets,
     wrap: true,
+    toColumnWidth: stepColumnWidth,
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">
         <div id="target" style="font-size:15px; font-weight:600; font-family:${FONT_STACK};">${text}</div>
@@ -102,6 +129,7 @@ const ELEMENT_SPECS = [
     name: 'Step body text (RoomVisualizationFlow.tsx, step 1 body -- longest of the step descriptions)',
     getText: t => t.uploadV2Step1Body,
     wrap: true,
+    toColumnWidth: stepColumnWidth,
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">
         <div id="target" style="font-size:14px; line-height:1.45; font-family:${FONT_STACK};">${text}</div>
@@ -183,7 +211,13 @@ describe('D3 upload view: cross-language overflow', () => {
       for (const width of CONTENT_WIDTHS) {
         const text = spec.getText(translations[lang]);
 
-        it(`${spec.name} -- "${lang}" at ${width}px: no unbreakable-word overflow${spec.wrap ? '' : ', stays single-line'}`, async () => {
+        // Some specs (the step title/body) don't actually get the full
+        // content width -- toColumnWidth reproduces their real, narrower
+        // column (see STEP_ROW_GEOMETRY above). Specs without one (button,
+        // hint, trust line) render at the full content width, as before.
+        const renderWidth = spec.toColumnWidth ? spec.toColumnWidth(width) : width;
+
+        it(`${spec.name} -- "${lang}" at ${width}px (${renderWidth}px column): no unbreakable-word overflow${spec.wrap ? '' : ', stays single-line'}`, async () => {
           expect(typeof text).toBe('string');
           expect(text.length).toBeGreaterThan(0);
 
@@ -191,7 +225,7 @@ describe('D3 upload view: cross-language overflow', () => {
           try {
             await page.setViewport({ width: width + 40, height: 300 });
             await page.setContent(
-              `<!DOCTYPE html><html><body style="margin:0; padding:20px; background:#FAFAFA;">${spec.render(escapeHtml(text), width)}</body></html>`
+              `<!DOCTYPE html><html><body style="margin:0; padding:20px; background:#FAFAFA;">${spec.render(escapeHtml(text), renderWidth)}</body></html>`
             );
 
             const box = await page.evaluate(() => {
