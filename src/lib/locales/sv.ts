@@ -69,7 +69,7 @@ export const sv: TranslationStrings = {
     'Vi samlar inte in namn eller e-postadresser. Vi samlar in din IP-adress, men enbart för att upprätthålla en veckogräns på 50 visualiseringar och förhindra missbruk. Den raderas automatiskt efter 7 dagar och kopplas aldrig till ditt namn eller din e-postadress.',
   termsQualityRetentionTitle: 'Lagring för kvalitetssäkring',
   termsQualityRetentionBody:
-    'Ditt foto och den genererade visualiseringen lagras på säkra servrar inom EU/EES i upp till 14 dagar för intern kvalitetsgranskning och raderas därefter automatiskt. De används aldrig för att träna AI-modeller eller delas med tredje part, och kopplas endast till en tillfällig sessionsreferens — aldrig till ditt namn, e-post eller IP-adress. Om ett genereringsförsök avvisas lagras samma foto och de tekniska detaljerna för det försöket enligt samma villkor, så att vi kan utreda och förbättra tillförlitligheten.',
+    'Ditt foto och den genererade visualiseringen lagras på säkra servrar inom EU/EES i upp till 7 dagar för intern kvalitetsgranskning och raderas därefter automatiskt. De används aldrig för att träna AI-modeller eller delas med tredje part, och kopplas endast till en tillfällig sessionsreferens — aldrig till ditt namn, e-post eller IP-adress. Om ett genereringsförsök avvisas lagras samma foto och de tekniska detaljerna för det försöket enligt samma villkor, så att vi kan utreda och förbättra tillförlitligheten.',
   termsSection3Title: '3. Datasäkerhet',
   termsSection3Intro:
     'Din data skyddas enligt GDPR och motsvarande internationella dataskyddsstandarder. Vi arbetar kontinuerligt för att säkerställa att vår hantering av persondata uppfyller tillämplig dataskyddslag i varje region vi är aktiva i.',
