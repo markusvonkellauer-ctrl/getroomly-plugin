@@ -20,6 +20,21 @@ export const pt: TranslationStrings = {
   tip3Label: 'Piso livre:',
   tip3Body: 'Retire objetos da área onde o tapete será colocado.',
   termsLink: 'Termos de utilização e privacidade',
+  uploadV2HeaderTitle: 'Veja em sua casa',
+  uploadV2Step1Title: 'Fotografe a divisão',
+  uploadV2Step1Body: 'Uma fotografia clara em que o chão apareça dá o melhor resultado.',
+  uploadV2Step2TitleDefault: 'O produto é colocado na sua divisão',
+  uploadV2Step2TitleCarpets: 'O tapete é colocado na sua divisão',
+  uploadV2Step2Body: 'Demora cerca de 15 segundos.',
+  uploadV2Step3Title: 'Ver o resultado',
+  uploadV2Step3BodyDefault: 'O produto é mostrado na sua própria divisão.',
+  uploadV2Step3BodyCarpets: 'O tapete é mostrado na sua própria divisão.',
+  uploadV2Hint: 'Máx. 10 MB, JPEG ou PNG',
+  uploadV2TrustLineStatementDefault:
+    'A sua fotografia é usada para mostrar o produto na sua divisão.',
+  uploadV2TrustLineStatementCarpets:
+    'A sua fotografia é usada para mostrar o tapete na sua divisão.',
+  uploadV2TrustLineLinkPrefix: 'Saiba mais em',
   loadingMessages: [
     'A analisar a geometria da divisão...',
     'A detetar a luz ambiente...',
