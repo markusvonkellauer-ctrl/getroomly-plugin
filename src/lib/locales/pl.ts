@@ -28,8 +28,8 @@ export const pl: TranslationStrings = {
   uploadV2Step2TitleCarpets: 'Dywan zostanie dodany do Twojego zdjęcia',
   uploadV2Step2Body: 'Zajmuje to około 15 sekund.',
   uploadV2Step3Title: 'Zobacz wynik',
-  uploadV2Step3BodyDefault: 'Produkt jest pokazany we własnym pokoju.',
-  uploadV2Step3BodyCarpets: 'Dywan jest pokazany we własnym pokoju.',
+  uploadV2Step3BodyDefault: 'Produkt jest pokazany w Twoim pokoju.',
+  uploadV2Step3BodyCarpets: 'Dywan jest pokazany w Twoim pokoju.',
   uploadV2Hint: 'Maks. 10 MB, JPEG lub PNG',
   uploadV2TrustLinePrefixDefault:
     'Twoje zdjęcie jest używane do stworzenia obrazu. Dowiedz się więcej w',

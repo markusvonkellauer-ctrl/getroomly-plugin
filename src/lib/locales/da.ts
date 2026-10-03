@@ -18,7 +18,7 @@ export const da: TranslationStrings = {
   tip3Label: 'Ryddet gulv:',
   tip3Body: 'Fjern ting fra det område, hvor tæppet skal placeres.',
   termsLink: 'Vilkår for brug & privatliv',
-  uploadV2HeaderTitle: 'Se den i dit hjem',
+  uploadV2HeaderTitle: 'Se det i dit hjem',
   uploadV2HeadlineDefault: 'Se produktet i dit eget rum',
   uploadV2HeadlineCarpets: 'Se tæppet i dit eget rum',
   uploadV2Step1Title: 'Fotografer rummet',

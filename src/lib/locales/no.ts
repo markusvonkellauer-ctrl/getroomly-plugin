@@ -18,7 +18,7 @@ export const no: TranslationStrings = {
   tip3Label: 'Ryddig gulv:',
   tip3Body: 'Fjern ting fra området der teppet skal plasseres.',
   termsLink: 'Bruksvilkår & personvern',
-  uploadV2HeaderTitle: 'Se den i ditt hjem',
+  uploadV2HeaderTitle: 'Se det i ditt hjem',
   uploadV2HeadlineDefault: 'Se produktet i ditt eget rom',
   uploadV2HeadlineCarpets: 'Se teppet i ditt eget rom',
   uploadV2Step1Title: 'Fotografer rommet',
