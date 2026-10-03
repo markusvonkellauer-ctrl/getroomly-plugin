@@ -29,11 +29,6 @@ export const es: TranslationStrings = {
   uploadV2Step3BodyDefault: 'El producto se muestra en tu propia habitación.',
   uploadV2Step3BodyCarpets: 'La alfombra se muestra en tu propia habitación.',
   uploadV2Hint: 'Máx. 10 MB, JPEG o PNG',
-  uploadV2TrustLineStatementDefault:
-    'Tu foto se utiliza para mostrar el producto en tu habitación.',
-  uploadV2TrustLineStatementCarpets:
-    'Tu foto se utiliza para mostrar la alfombra en tu habitación.',
-  uploadV2TrustLineLinkPrefix: 'Más información en',
   loadingMessages: [
     'Analizando la geometría de la habitación...',
     'Detectando la luz ambiental...',

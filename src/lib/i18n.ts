@@ -65,12 +65,6 @@ export interface TranslationStrings {
   uploadV2Step3BodyDefault: string;
   uploadV2Step3BodyCarpets: string;
   uploadV2Hint: string;
-  /** Trust line, line 1, default-category phrasing (found in review, Copilot PR #140: same category-split reasoning as uploadV2Step2TitleDefault above) -- the statement itself, e.g. "Your photo is used to show the product in your room." Own key (not folded into the link line) because legal review may change this independently of uploadV2TrustLineLinkPrefix below. */
-  uploadV2TrustLineStatementDefault: string;
-  /** Trust line, line 1, carpets phrasing -- see uploadV2TrustLineStatementDefault. */
-  uploadV2TrustLineStatementCarpets: string;
-  /** Trust line, line 2 (D3): the plain-text lead-in before the termsLink anchor, e.g. "Read more in" -- rendered as "{this} {termsLink}" on its own line/block. Own key since legal review may drop this prefix entirely while keeping the link itself (see UPDATE_BRIEF.md section 3). */
-  uploadV2TrustLineLinkPrefix: string;
   loadingMessages: string[];
   labelOriginal: string;
   labelNew: string;
