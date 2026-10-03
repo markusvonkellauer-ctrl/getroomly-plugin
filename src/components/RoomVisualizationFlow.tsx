@@ -1243,9 +1243,6 @@ export function RoomVisualizationFlow({
     const carpet = isCarpetCategory(category);
     const step2Title = carpet ? t.uploadV2Step2TitleCarpets : t.uploadV2Step2TitleDefault;
     const step3Body = carpet ? t.uploadV2Step3BodyCarpets : t.uploadV2Step3BodyDefault;
-    const trustLineStatement = carpet
-      ? t.uploadV2TrustLineStatementCarpets
-      : t.uploadV2TrustLineStatementDefault;
     const productThumbUrl = productImages && productImages.length > 0 ? productImages[0] : '';
     // Row shows whenever there's at least a name -- the thumbnail itself is
     // independently gated (showThumb below) so a failed/missing image
@@ -1550,20 +1547,16 @@ export function RoomVisualizationFlow({
           {t.uploadButton}
         </button>
 
-        {/* Trust line (D3 brief sections 2+4): always exactly 2 lines,
-            centered. Line 1 is the statement with the lock icon inline at
-            its start; line 2 is its own block ("Läs mer i " + the link),
-            never joined onto line 1 by a <br> -- a block keeps that
-            behaviour in every language/width, including desktop.
-            handleOpenTerms still opens the existing in-app terms dialog
-            (confirmed with Markus): there is no external terms URL in this
-            codebase to navigate to, so this stays a <button> styled as a
-            link (underlined, same colour as the surrounding text) rather
-            than a real target="_blank" <a> -- a real anchor that doesn't
-            navigate would be a worse a11y/UX trap than a clearly-interactive
-            button that happens to look like a link. terms_clicked (already
-            tracked in handleOpenTerms) covers the analytics ask in section 4;
-            not duplicated here as a separate terms_link_click. */}
+        {/* Trust line (simplified, found in review with Markus: the
+            statement sentence and "Läs mer i" prefix were dropped entirely
+            -- just the lock icon and the underlined link remain, a single
+            centered line). handleOpenTerms still opens the existing in-app
+            terms dialog: there is no external terms URL in this codebase to
+            navigate to, so this stays a <button> styled as a link
+            (underlined, same colour as the surrounding text) rather than a
+            real target="_blank" <a> -- a real anchor that doesn't navigate
+            would be a worse a11y/UX trap than a clearly-interactive button
+            that happens to look like a link. */}
         <div
           style={{
             marginTop: 'var(--gr-uv2-trust-margin-top, 24px)',
@@ -1587,25 +1580,21 @@ export function RoomVisualizationFlow({
             <rect x="5" y="11" width="14" height="9" rx="2" />
             <path d="M8 11V8a4 4 0 018 0v3" />
           </svg>
-          {trustLineStatement}
-          <div>
-            {t.uploadV2TrustLineLinkPrefix}{' '}
-            <button
-              onClick={handleOpenTerms}
-              style={{
-                font: 'inherit',
-                color: 'inherit',
-                textDecoration: 'underline',
-                textUnderlineOffset: '2px',
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-              }}
-            >
-              {t.termsLink}
-            </button>
-          </div>
+          <button
+            onClick={handleOpenTerms}
+            style={{
+              font: 'inherit',
+              color: 'inherit',
+              textDecoration: 'underline',
+              textUnderlineOffset: '2px',
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+            }}
+          >
+            {t.termsLink}
+          </button>
         </div>
 
         {/* Stays in the DOM (not removed) and wired to both the button and

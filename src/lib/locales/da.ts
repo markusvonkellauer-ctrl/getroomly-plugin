@@ -28,9 +28,6 @@ export const da: TranslationStrings = {
   uploadV2Step3BodyDefault: 'Produktet vises i dit eget rum.',
   uploadV2Step3BodyCarpets: 'Tæppet vises i dit eget rum.',
   uploadV2Hint: 'Maks. 10 MB, JPEG eller PNG',
-  uploadV2TrustLineStatementDefault: 'Dit foto bruges til at vise produktet i dit rum.',
-  uploadV2TrustLineStatementCarpets: 'Dit foto bruges til at vise tæppet i dit rum.',
-  uploadV2TrustLineLinkPrefix: 'Læs mere i',
   loadingMessages: [
     'Analyserer rummets geometri...',
     'Registrerer omgivende lys...',

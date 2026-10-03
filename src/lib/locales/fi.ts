@@ -28,9 +28,6 @@ export const fi: TranslationStrings = {
   uploadV2Step3BodyDefault: 'Tuote näkyy omassa huoneessasi.',
   uploadV2Step3BodyCarpets: 'Matto näkyy omassa huoneessasi.',
   uploadV2Hint: 'Enintään 10 Mt, JPEG tai PNG',
-  uploadV2TrustLineStatementDefault: 'Kuvaasi käytetään tuotteen näyttämiseen huoneessasi.',
-  uploadV2TrustLineStatementCarpets: 'Kuvaasi käytetään maton näyttämiseen huoneessasi.',
-  uploadV2TrustLineLinkPrefix: 'Lue lisää',
   loadingMessages: [
     'Analysoidaan huoneen geometriaa...',
     'Tunnistetaan ympäristön valaistusta...',

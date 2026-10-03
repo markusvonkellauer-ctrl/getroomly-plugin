@@ -29,11 +29,6 @@ export const de: TranslationStrings = {
   uploadV2Step3BodyDefault: 'Das Produkt wird in Ihrem eigenen Raum angezeigt.',
   uploadV2Step3BodyCarpets: 'Der Teppich wird in Ihrem eigenen Raum angezeigt.',
   uploadV2Hint: 'Max. 10 MB, JPEG oder PNG',
-  uploadV2TrustLineStatementDefault:
-    'Ihr Foto wird verwendet, um das Produkt in Ihrem Raum zu zeigen.',
-  uploadV2TrustLineStatementCarpets:
-    'Ihr Foto wird verwendet, um den Teppich in Ihrem Raum zu zeigen.',
-  uploadV2TrustLineLinkPrefix: 'Mehr dazu in den',
   loadingMessages: [
     'Raumgeometrie wird analysiert...',
     'Umgebungslicht wird erkannt...',

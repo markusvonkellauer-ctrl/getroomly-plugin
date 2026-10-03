@@ -28,9 +28,6 @@ export const ko: TranslationStrings = {
   uploadV2Step3BodyDefault: '제품이 내 방에 표시됩니다.',
   uploadV2Step3BodyCarpets: '러그가 내 방에 표시됩니다.',
   uploadV2Hint: '최대 10MB, JPEG 또는 PNG',
-  uploadV2TrustLineStatementDefault: '회원님의 사진은 방에 제품을 보여주는 데 사용됩니다.',
-  uploadV2TrustLineStatementCarpets: '회원님의 사진은 방에 러그를 보여주는 데 사용됩니다.',
-  uploadV2TrustLineLinkPrefix: '자세한 내용은',
   loadingMessages: [
     '방의 구조를 분석하는 중...',
     '주변 조명을 감지하는 중...',

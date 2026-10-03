@@ -28,10 +28,6 @@ export const nl: TranslationStrings = {
   uploadV2Step3BodyDefault: 'Het product wordt getoond in uw eigen kamer.',
   uploadV2Step3BodyCarpets: 'Het vloerkleed wordt getoond in uw eigen kamer.',
   uploadV2Hint: 'Max. 10 MB, JPEG of PNG',
-  uploadV2TrustLineStatementDefault: 'Uw foto wordt gebruikt om het product in uw kamer te tonen.',
-  uploadV2TrustLineStatementCarpets:
-    'Uw foto wordt gebruikt om het vloerkleed in uw kamer te tonen.',
-  uploadV2TrustLineLinkPrefix: 'Lees meer in',
   loadingMessages: [
     'Kamergeometrie wordt geanalyseerd...',
     'Omgevingslicht wordt gedetecteerd...',

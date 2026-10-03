@@ -30,11 +30,6 @@ export const it: TranslationStrings = {
   uploadV2Step3BodyDefault: 'Il prodotto viene mostrato nella tua stanza.',
   uploadV2Step3BodyCarpets: 'Il tappeto viene mostrato nella tua stanza.',
   uploadV2Hint: 'Max 10 MB, JPEG o PNG',
-  uploadV2TrustLineStatementDefault:
-    'La tua foto viene utilizzata per mostrare il prodotto nella tua stanza.',
-  uploadV2TrustLineStatementCarpets:
-    'La tua foto viene utilizzata per mostrare il tappeto nella tua stanza.',
-  uploadV2TrustLineLinkPrefix: 'Scopri di più in',
   loadingMessages: [
     'Analisi della geometria della stanza...',
     'Rilevamento della luce ambientale...',
