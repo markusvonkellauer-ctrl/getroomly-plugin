@@ -18,9 +18,14 @@
  * static HTML fixtures, same approach as overflow.test.js.
  *
  * Content widths (panel width minus the view's own horizontal padding):
- *  - 328px: compact mode (max-height:550px -- D3's narrower threshold, see
- *    index.css), smallest realistic phone (360px panel - 2*16px compact
+ *  - 320px: regular/narrow phone, no compact (found in review, Copilot PR
+ *    #140: compact mode is a HEIGHT media query, max-height:550px -- a
+ *    360px-WIDE phone that is still tall enough, e.g. 360x640, renders in
+ *    regular padding, not compact padding; 360px panel - 2*20px regular
  *    padding).
+ *  - 328px: compact mode (max-height:550px, see index.css), the same
+ *    360px panel but short enough to trigger compact's narrower 16px
+ *    padding (360px panel - 2*16px compact padding).
  *  - 350px: regular/mobile, no compact (390px panel - 2*20px padding).
  *  - 440px: desktop (found in review, Copilot PR #139: the modal's real
  *    cap is 520px -- App.tsx's maxWidth, matching the .lg\:w-\[520px\]
@@ -57,11 +62,14 @@ function escapeHtml(str) {
 const SCREENSHOT_DIR = path.join(__dirname, '__upload_view_overflow_failures__');
 const FONT_STACK = "system-ui, 'Segoe UI', Roboto, sans-serif";
 // Panel width minus this view's own horizontal padding, per content size
-// (src/index.css's .getroomly-upload-v2 tokens): compact 360-2*16=328,
-// regular 390-2*20=350, desktop 520-2*40=440 (found in review, Copilot PR
-// #139: the modal's real cap is 520px -- App.tsx's maxWidth -- not the
-// 560px the reference mockup shows).
-const CONTENT_WIDTHS = [328, 350, 440];
+// (src/index.css's .getroomly-upload-v2 tokens): regular-narrow 360-2*20=320,
+// compact 360-2*16=328, regular 390-2*20=350, desktop 520-2*40=440 (found in
+// review, Copilot PR #139: the modal's real cap is 520px -- App.tsx's
+// maxWidth -- not the 560px the reference mockup shows). 320 and 328 are
+// deliberately both kept (found in review, Copilot PR #140): compact mode
+// is a height query, not a width one, so a 360px-wide phone can land in
+// either bucket depending on how tall it is.
+const CONTENT_WIDTHS = [320, 328, 350, 440];
 const ALL_LANGUAGES = Object.keys(translations);
 
 /**

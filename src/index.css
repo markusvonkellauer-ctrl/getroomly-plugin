@@ -399,8 +399,13 @@ code {
    that's what caught the 680px mistake.
    Deliberately NOT narrowed to exclude wide/desktop viewports -- brief
    section 1: layout differences by available space only, never by
-   device/width-based branching here; a short desktop window (e.g. 1280x720)
-   correctly also gets compact sizing rather than overflowing.
+   device/width-based branching here. This is a pure height query: a wide
+   window only gets compact sizing if it's also short enough (<=550px
+   tall), regardless of its width. 1280x720 itself stays just above that
+   (720 > 550), so it renders at regular/desktop sizing, not compact -- and
+   still fits without overflow at that size, per the same Puppeteer check
+   above. A hypothetical short-but-wide window (e.g. 1280x500) would
+   correctly fall into compact sizing under this same query.
    Declared AFTER the min-width:1024px block above: on a viewport that
    matches both (wide AND short), the two sets of custom-property overrides
    combine where they don't conflict, and compact's smaller values win
