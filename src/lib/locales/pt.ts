@@ -30,11 +30,6 @@ export const pt: TranslationStrings = {
   uploadV2Step3BodyDefault: 'O produto é mostrado na sua própria divisão.',
   uploadV2Step3BodyCarpets: 'O tapete é mostrado na sua própria divisão.',
   uploadV2Hint: 'Máx. 10 MB, JPEG ou PNG',
-  uploadV2TrustLineStatementDefault:
-    'A sua fotografia é usada para mostrar o produto na sua divisão.',
-  uploadV2TrustLineStatementCarpets:
-    'A sua fotografia é usada para mostrar o tapete na sua divisão.',
-  uploadV2TrustLineLinkPrefix: 'Saiba mais em',
   loadingMessages: [
     'A analisar a geometria da divisão...',
     'A detetar a luz ambiente...',

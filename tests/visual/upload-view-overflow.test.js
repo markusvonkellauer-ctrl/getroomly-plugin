@@ -161,26 +161,8 @@ const ELEMENT_SPECS = [
       </div>`,
   },
   {
-    name: 'Trust line, line 1, default-category phrasing (RoomVisualizationFlow.tsx -- found in review, Copilot PR #140: category-split again, same as step 3)',
-    getText: t => t.uploadV2TrustLineStatementDefault,
-    wrap: true,
-    render: (text, width) => `
-      <div style="width:${width}px; box-sizing:border-box;">
-        <div id="target" style="font-size:12px; line-height:1.5; text-align:center; font-family:${FONT_STACK};">${text}</div>
-      </div>`,
-  },
-  {
-    name: 'Trust line, line 1, carpets phrasing (RoomVisualizationFlow.tsx)',
-    getText: t => t.uploadV2TrustLineStatementCarpets,
-    wrap: true,
-    render: (text, width) => `
-      <div style="width:${width}px; box-sizing:border-box;">
-        <div id="target" style="font-size:12px; line-height:1.5; text-align:center; font-family:${FONT_STACK};">${text}</div>
-      </div>`,
-  },
-  {
-    name: 'Trust line, line 2 (RoomVisualizationFlow.tsx -- link prefix + termsLink, its own block since D3)',
-    getText: t => t.uploadV2TrustLineLinkPrefix + ' ' + t.termsLink,
+    name: 'Trust line (RoomVisualizationFlow.tsx -- simplified, found in review with Markus: just the lock icon + the underlined termsLink now, no statement/prefix text)',
+    getText: t => t.termsLink,
     wrap: true,
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">

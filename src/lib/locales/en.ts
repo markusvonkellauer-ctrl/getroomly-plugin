@@ -28,9 +28,6 @@ export const en: TranslationStrings = {
   uploadV2Step3BodyDefault: 'The product is shown in your own room.',
   uploadV2Step3BodyCarpets: 'The rug is shown in your own room.',
   uploadV2Hint: 'Max 10 MB, JPEG or PNG',
-  uploadV2TrustLineStatementDefault: 'Your photo is used to show the product in your room.',
-  uploadV2TrustLineStatementCarpets: 'Your photo is used to show the rug in your room.',
-  uploadV2TrustLineLinkPrefix: 'Read more in',
   loadingMessages: [
     'Analysing room geometry...',
     'Detecting ambient light...',

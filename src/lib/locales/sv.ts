@@ -28,9 +28,6 @@ export const sv: TranslationStrings = {
   uploadV2Step3BodyDefault: 'Produkten visas i ditt eget rum.',
   uploadV2Step3BodyCarpets: 'Mattan visas i ditt eget rum.',
   uploadV2Hint: 'Max 10 MB, JPEG eller PNG',
-  uploadV2TrustLineStatementDefault: 'Ditt foto används för att visa produkten i ditt rum.',
-  uploadV2TrustLineStatementCarpets: 'Ditt foto används för att visa mattan i ditt rum.',
-  uploadV2TrustLineLinkPrefix: 'Läs mer i',
   loadingMessages: [
     'Analyserar rumsgeometri...',
     'Identifierar ljussättning...',

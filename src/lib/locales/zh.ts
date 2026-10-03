@@ -29,9 +29,6 @@ export const zh: TranslationStrings = {
   uploadV2Step3BodyDefault: '产品将在您自己的房间中显示。',
   uploadV2Step3BodyCarpets: '地毯将在您自己的房间中显示。',
   uploadV2Hint: '最大10 MB，JPEG或PNG',
-  uploadV2TrustLineStatementDefault: '您的照片用于在您的房间中展示产品。',
-  uploadV2TrustLineStatementCarpets: '您的照片用于在您的房间中展示地毯。',
-  uploadV2TrustLineLinkPrefix: '了解更多，请查看',
   loadingMessages: [
     '正在分析房间几何结构...',
     '正在检测环境光线...',

@@ -29,11 +29,6 @@ export const fr: TranslationStrings = {
   uploadV2Step3BodyDefault: 'Le produit est affiché dans votre propre pièce.',
   uploadV2Step3BodyCarpets: 'Le tapis est affiché dans votre propre pièce.',
   uploadV2Hint: 'Max. 10 Mo, JPEG ou PNG',
-  uploadV2TrustLineStatementDefault:
-    'Votre photo est utilisée pour montrer le produit dans votre pièce.',
-  uploadV2TrustLineStatementCarpets:
-    'Votre photo est utilisée pour montrer le tapis dans votre pièce.',
-  uploadV2TrustLineLinkPrefix: 'En savoir plus dans',
   loadingMessages: [
     'Analyse de la géométrie de la pièce...',
     'Détection de la lumière ambiante...',
