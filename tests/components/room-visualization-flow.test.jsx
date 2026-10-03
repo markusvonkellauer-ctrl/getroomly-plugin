@@ -4,6 +4,8 @@
  * Covers the new coordinate-free upload → processing → result flow.
  */
 
+import fs from 'fs';
+import path from 'path';
 import { render, screen, within, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RoomVisualizationFlow } from '../../src/components/RoomVisualizationFlow';
@@ -229,6 +231,42 @@ describe('RoomVisualizationFlow', () => {
       expect(container.querySelector('[style*="cursor: pointer"]')).toBe(button);
     });
 
+    // Found in review (Copilot, PR #140): this central theming regression
+    // (D2 hardcoded Nordic Nest's own black/square look as a literal
+    // #000000/2px instead of the brand tokens every other primary button in
+    // this widget uses) had no automated assertion catching it -- only that
+    // the button existed.
+    test('the upload button reads its border-radius from a brand token, not a hardcoded value', () => {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const button = screen.getByRole('button', { name: 'Upload Photo' });
+
+      expect(button.style.borderRadius).toBe('var(--getroomly-radius-pill)');
+    });
+
+    // Verified via source text, not the rendered DOM: jsdom's CSSOM (cssstyle)
+    // silently rejects `background-color`/`margin-top`/`height`/`font-size`
+    // values that contain var(...) -- the property setter just no-ops,
+    // leaving button.style.backgroundColor === '' -- while border-radius
+    // happens to be one of the few properties cssstyle's grammar accepts
+    // one verbatim through (confirmed by direct probing of jsdom's own
+    // CSSStyleDeclaration, not an assumption). A real browser renders this
+    // correctly (confirmed via Puppeteer screenshots against the dev
+    // server during this PR), so this isn't a real app bug -- just a jsdom
+    // limitation that makes the DOM the wrong place to assert this one
+    // property. Reading the component's own source is what's left.
+    test('the upload button sources its background colour from the same brand token as border-radius', () => {
+      const source = fs.readFileSync(
+        path.join(__dirname, '../../src/components/RoomVisualizationFlow.tsx'),
+        'utf8'
+      );
+      const buttonBlockStart = source.indexOf('className="getroomly-uv2-button"');
+      expect(buttonBlockStart).toBeGreaterThan(-1);
+      const buttonBlock = source.slice(buttonBlockStart, buttonBlockStart + 1200);
+
+      expect(buttonBlock).toMatch(/backgroundColor:\s*'var\(--getroomly-primary-deep\)'/);
+      expect(buttonBlock).not.toMatch(/#000/i);
+    });
+
     // The thumbnail is decorative (alt="", found in review -- Copilot PR
     // #139: its adjacent visible product name already supplies the same
     // text, so a real alt made screen readers announce it twice), so these
@@ -321,32 +359,32 @@ describe('RoomVisualizationFlow', () => {
       expect(container.querySelector('h3')).not.toBeInTheDocument();
     });
 
-    // D3 brief section 3: step 2's title is now a single i18n key, the same
-    // text regardless of category -- unlike step 3's body, which stays
-    // carpet-aware (brief: "Steps 1 and 3 ... stay as they are today").
-    test('step 2 title is the same for every category, carpet or not', () => {
-      const { rerender } = render(<RoomVisualizationFlow {...defaultProps} category="carpets" />);
-      expect(screen.getByText(translations.en.uploadV2Step2Title)).toBeInTheDocument();
-
-      rerender(<RoomVisualizationFlow {...defaultProps} category="sofas" />);
-      expect(screen.getByText(translations.en.uploadV2Step2Title)).toBeInTheDocument();
-    });
-
-    test('uses the carpets-specific step 3 body when category is "carpets"', () => {
+    // Found in review (Copilot, PR #140): `category` is a free-form public
+    // config field that genuinely supports sofas/chairs/tables/etc (see
+    // embed-config.ts, README.md) -- a single un-split step 2 title said
+    // "the rug" for every category. Step 2's title and the trust line's
+    // statement are both category-aware now, same mechanism as step 3's
+    // body (brief: "Steps 1 and 3 ... stay as they are today" -- step 2 and
+    // the trust line don't, by necessity, since their new copy names the
+    // product directly).
+    test('uses the carpets-specific step 2 title and step 3 body when category is "carpets"', () => {
       render(<RoomVisualizationFlow {...defaultProps} category="carpets" />);
 
+      expect(screen.getByText(translations.en.uploadV2Step2TitleCarpets)).toBeInTheDocument();
       expect(screen.getByText(translations.en.uploadV2Step3BodyCarpets)).toBeInTheDocument();
     });
 
     test('matches category names containing "carpet" too, not just the exact "carpets" string', () => {
       render(<RoomVisualizationFlow {...defaultProps} category="outdoor-carpet-runners" />);
 
+      expect(screen.getByText(translations.en.uploadV2Step2TitleCarpets)).toBeInTheDocument();
       expect(screen.getByText(translations.en.uploadV2Step3BodyCarpets)).toBeInTheDocument();
     });
 
-    test('falls back to the generic default step 3 body for a non-carpet category', () => {
+    test('falls back to the generic default copy for a non-carpet category', () => {
       render(<RoomVisualizationFlow {...defaultProps} category="sofas" />);
 
+      expect(screen.getByText(translations.en.uploadV2Step2TitleDefault)).toBeInTheDocument();
       expect(screen.getByText(translations.en.uploadV2Step3BodyDefault)).toBeInTheDocument();
     });
 
@@ -371,7 +409,8 @@ describe('RoomVisualizationFlow', () => {
     test('the trust line renders as two lines: the statement, then the link prefix + link as its own block', () => {
       render(<RoomVisualizationFlow {...defaultProps} />);
 
-      const statement = screen.getByText(translations.en.uploadV2TrustLineStatement, {
+      // defaultProps.category is 'Carpet', which isCarpetCategory matches.
+      const statement = screen.getByText(translations.en.uploadV2TrustLineStatementCarpets, {
         exact: false,
       });
       const trustBlock = statement.closest('div');

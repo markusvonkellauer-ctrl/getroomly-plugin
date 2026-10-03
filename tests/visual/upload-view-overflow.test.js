@@ -18,7 +18,7 @@
  * static HTML fixtures, same approach as overflow.test.js.
  *
  * Content widths (panel width minus the view's own horizontal padding):
- *  - 328px: compact mode (max-height:680px -- D3's narrower threshold, see
+ *  - 328px: compact mode (max-height:550px -- D3's narrower threshold, see
  *    index.css), smallest realistic phone (360px panel - 2*16px compact
  *    padding).
  *  - 350px: regular/mobile, no compact (390px panel - 2*20px padding).
@@ -73,8 +73,17 @@ const ALL_LANGUAGES = Object.keys(translations);
  */
 const ELEMENT_SPECS = [
   {
-    name: 'Step 2 title (RoomVisualizationFlow.tsx, single key since D3 -- same text regardless of category)',
-    getText: t => t.uploadV2Step2Title,
+    name: 'Step 2 title, default-category phrasing (RoomVisualizationFlow.tsx -- found in review, Copilot PR #140: category-split again, same as step 3)',
+    getText: t => t.uploadV2Step2TitleDefault,
+    wrap: true,
+    render: (text, width) => `
+      <div style="width:${width}px; box-sizing:border-box;">
+        <div id="target" style="font-size:15px; font-weight:600; font-family:${FONT_STACK};">${text}</div>
+      </div>`,
+  },
+  {
+    name: 'Step 2 title, carpets phrasing (RoomVisualizationFlow.tsx)',
+    getText: t => t.uploadV2Step2TitleCarpets,
     wrap: true,
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">
@@ -116,8 +125,17 @@ const ELEMENT_SPECS = [
       </div>`,
   },
   {
-    name: 'Trust line, line 1 (RoomVisualizationFlow.tsx -- the statement)',
-    getText: t => t.uploadV2TrustLineStatement,
+    name: 'Trust line, line 1, default-category phrasing (RoomVisualizationFlow.tsx -- found in review, Copilot PR #140: category-split again, same as step 3)',
+    getText: t => t.uploadV2TrustLineStatementDefault,
+    wrap: true,
+    render: (text, width) => `
+      <div style="width:${width}px; box-sizing:border-box;">
+        <div id="target" style="font-size:12px; line-height:1.5; text-align:center; font-family:${FONT_STACK};">${text}</div>
+      </div>`,
+  },
+  {
+    name: 'Trust line, line 1, carpets phrasing (RoomVisualizationFlow.tsx)',
+    getText: t => t.uploadV2TrustLineStatementCarpets,
     wrap: true,
     render: (text, width) => `
       <div style="width:${width}px; box-sizing:border-box;">

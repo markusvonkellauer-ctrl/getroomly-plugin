@@ -21,13 +21,16 @@ export const el: TranslationStrings = {
   uploadV2HeaderTitle: 'Δείτε το στο σπίτι σας',
   uploadV2Step1Title: 'Φωτογραφίστε το δωμάτιο',
   uploadV2Step1Body: 'Μια φωτεινή φωτογραφία όπου φαίνεται το δάπεδο δίνει το καλύτερο αποτέλεσμα.',
-  uploadV2Step2Title: 'Το χαλί τοποθετείται στον δικό σας χώρο',
+  uploadV2Step2TitleDefault: 'Το προϊόν τοποθετείται στον δικό σας χώρο',
+  uploadV2Step2TitleCarpets: 'Το χαλί τοποθετείται στον δικό σας χώρο',
   uploadV2Step2Body: 'Διαρκεί περίπου 15 δευτερόλεπτα.',
   uploadV2Step3Title: 'Δείτε το αποτέλεσμα',
   uploadV2Step3BodyDefault: 'Το προϊόν εμφανίζεται στον δικό σας χώρο.',
   uploadV2Step3BodyCarpets: 'Το χαλί εμφανίζεται στον δικό σας χώρο.',
   uploadV2Hint: 'Έως 10 MB, JPEG ή PNG',
-  uploadV2TrustLineStatement:
+  uploadV2TrustLineStatementDefault:
+    'Η φωτογραφία σας χρησιμοποιείται για να εμφανιστεί το προϊόν στον χώρο σας.',
+  uploadV2TrustLineStatementCarpets:
     'Η φωτογραφία σας χρησιμοποιείται για να εμφανιστεί το χαλί στον χώρο σας.',
   uploadV2TrustLineLinkPrefix: 'Μάθετε περισσότερα:',
   loadingMessages: [

@@ -56,15 +56,19 @@ export interface TranslationStrings {
   uploadV2HeaderTitle: string;
   uploadV2Step1Title: string;
   uploadV2Step1Body: string;
-  /** Step 2 title (D3: collapsed from the earlier Default/Carpets split into one key -- names the product category ("Mattan"/"The rug") directly since the only live launch today is carpets; a future non-carpet category is a one-line change to this single key, not a new ternary branch. Deliberately never says "AI": the header badge and the retailer's own launch button already do. */
-  uploadV2Step2Title: string;
+  /** Step 2 title, default-category phrasing (found in review, Copilot PR #140: `category` is a free-form public config field that genuinely supports sofas/chairs/tables/etc, not just carpets -- a single un-split key said "the rug" for every category). See uploadV2Step3BodyDefault for the identical category-split reasoning. */
+  uploadV2Step2TitleDefault: string;
+  /** Step 2 title, carpets phrasing -- see uploadV2Step3BodyCarpets. */
+  uploadV2Step2TitleCarpets: string;
   uploadV2Step2Body: string;
   uploadV2Step3Title: string;
   uploadV2Step3BodyDefault: string;
   uploadV2Step3BodyCarpets: string;
   uploadV2Hint: string;
-  /** Trust line, line 1 (D3): the statement itself, e.g. "Your photo is used to show the rug in your room." -- own key (not folded into the link line) because legal review may change this independently of uploadV2TrustLineLinkPrefix below. Collapsed from the earlier Default/Carpets split, same reasoning as uploadV2Step2Title. */
-  uploadV2TrustLineStatement: string;
+  /** Trust line, line 1, default-category phrasing (found in review, Copilot PR #140: same category-split reasoning as uploadV2Step2TitleDefault above) -- the statement itself, e.g. "Your photo is used to show the product in your room." Own key (not folded into the link line) because legal review may change this independently of uploadV2TrustLineLinkPrefix below. */
+  uploadV2TrustLineStatementDefault: string;
+  /** Trust line, line 1, carpets phrasing -- see uploadV2TrustLineStatementDefault. */
+  uploadV2TrustLineStatementCarpets: string;
   /** Trust line, line 2 (D3): the plain-text lead-in before the termsLink anchor, e.g. "Read more in" -- rendered as "{this} {termsLink}" on its own line/block. Own key since legal review may drop this prefix entirely while keeping the link itself (see UPDATE_BRIEF.md section 3). */
   uploadV2TrustLineLinkPrefix: string;
   loadingMessages: string[];

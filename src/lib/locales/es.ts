@@ -22,13 +22,17 @@ export const es: TranslationStrings = {
   uploadV2HeaderTitle: 'Míralo en tu casa',
   uploadV2Step1Title: 'Fotografía la habitación',
   uploadV2Step1Body: 'Una foto luminosa en la que se vea el suelo da el mejor resultado.',
-  uploadV2Step2Title: 'La alfombra se coloca en tu habitación',
+  uploadV2Step2TitleDefault: 'El producto se coloca en tu habitación',
+  uploadV2Step2TitleCarpets: 'La alfombra se coloca en tu habitación',
   uploadV2Step2Body: 'Tarda unos 15 segundos.',
   uploadV2Step3Title: 'Ver el resultado',
   uploadV2Step3BodyDefault: 'El producto se muestra en tu propia habitación.',
   uploadV2Step3BodyCarpets: 'La alfombra se muestra en tu propia habitación.',
   uploadV2Hint: 'Máx. 10 MB, JPEG o PNG',
-  uploadV2TrustLineStatement: 'Tu foto se utiliza para mostrar la alfombra en tu habitación.',
+  uploadV2TrustLineStatementDefault:
+    'Tu foto se utiliza para mostrar el producto en tu habitación.',
+  uploadV2TrustLineStatementCarpets:
+    'Tu foto se utiliza para mostrar la alfombra en tu habitación.',
   uploadV2TrustLineLinkPrefix: 'Más información en',
   loadingMessages: [
     'Analizando la geometría de la habitación...',

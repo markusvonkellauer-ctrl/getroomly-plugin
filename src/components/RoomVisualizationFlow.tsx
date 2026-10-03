@@ -1241,7 +1241,11 @@ export function RoomVisualizationFlow({
   // same hidden file input, same handleFileSelect.
   const renderUploadStep = () => {
     const carpet = isCarpetCategory(category);
+    const step2Title = carpet ? t.uploadV2Step2TitleCarpets : t.uploadV2Step2TitleDefault;
     const step3Body = carpet ? t.uploadV2Step3BodyCarpets : t.uploadV2Step3BodyDefault;
+    const trustLineStatement = carpet
+      ? t.uploadV2TrustLineStatementCarpets
+      : t.uploadV2TrustLineStatementDefault;
     const productThumbUrl = productImages && productImages.length > 0 ? productImages[0] : '';
     // Row shows whenever there's at least a name -- the thumbnail itself is
     // independently gated (showThumb below) so a failed/missing image
@@ -1435,7 +1439,7 @@ export function RoomVisualizationFlow({
               style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}
             >
               <div style={{ fontSize: 'var(--gr-uv2-step-title-size, 14px)', fontWeight: 600 }}>
-                {t.uploadV2Step2Title}
+                {step2Title}
               </div>
               {/* Always visible, even in compact mode -- "It takes about 15
                   seconds" must always show (brief update, point 3). */}
@@ -1509,7 +1513,7 @@ export function RoomVisualizationFlow({
             // via NORDIC_NEST_THEME/SVENSSON_THEME in brand.ts, not a
             // hardcoded literal here).
             borderRadius: 'var(--getroomly-radius-pill)',
-            background: 'var(--getroomly-primary-deep)',
+            backgroundColor: 'var(--getroomly-primary-deep)',
             color: '#FFFFFF',
             fontSize: 'var(--gr-uv2-button-font-size, 16px)',
             fontWeight: 600,
@@ -1583,7 +1587,7 @@ export function RoomVisualizationFlow({
             <rect x="5" y="11" width="14" height="9" rx="2" />
             <path d="M8 11V8a4 4 0 018 0v3" />
           </svg>
-          {t.uploadV2TrustLineStatement}
+          {trustLineStatement}
           <div>
             {t.uploadV2TrustLineLinkPrefix}{' '}
             <button

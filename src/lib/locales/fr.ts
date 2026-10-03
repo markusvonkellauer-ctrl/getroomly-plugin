@@ -22,13 +22,17 @@ export const fr: TranslationStrings = {
   uploadV2HeaderTitle: 'Voyez-le chez vous',
   uploadV2Step1Title: 'Photographiez la pièce',
   uploadV2Step1Body: 'Une photo lumineuse montrant le sol donne le meilleur résultat.',
-  uploadV2Step2Title: 'Le tapis est placé dans votre pièce',
+  uploadV2Step2TitleDefault: 'Le produit est placé dans votre pièce',
+  uploadV2Step2TitleCarpets: 'Le tapis est placé dans votre pièce',
   uploadV2Step2Body: 'Cela prend environ 15 secondes.',
   uploadV2Step3Title: 'Voir le résultat',
   uploadV2Step3BodyDefault: 'Le produit est affiché dans votre propre pièce.',
   uploadV2Step3BodyCarpets: 'Le tapis est affiché dans votre propre pièce.',
   uploadV2Hint: 'Max. 10 Mo, JPEG ou PNG',
-  uploadV2TrustLineStatement: 'Votre photo est utilisée pour montrer le tapis dans votre pièce.',
+  uploadV2TrustLineStatementDefault:
+    'Votre photo est utilisée pour montrer le produit dans votre pièce.',
+  uploadV2TrustLineStatementCarpets:
+    'Votre photo est utilisée pour montrer le tapis dans votre pièce.',
   uploadV2TrustLineLinkPrefix: 'En savoir plus dans',
   loadingMessages: [
     'Analyse de la géométrie de la pièce...',

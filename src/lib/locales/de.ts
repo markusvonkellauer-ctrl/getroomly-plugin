@@ -22,13 +22,17 @@ export const de: TranslationStrings = {
   uploadV2HeaderTitle: 'So sieht es bei Ihnen aus',
   uploadV2Step1Title: 'Fotografieren Sie den Raum',
   uploadV2Step1Body: 'Ein helles Foto, auf dem der Boden sichtbar ist, liefert das beste Ergebnis.',
-  uploadV2Step2Title: 'Der Teppich wird in Ihrem Raum platziert',
+  uploadV2Step2TitleDefault: 'Das Produkt wird in Ihrem Raum platziert',
+  uploadV2Step2TitleCarpets: 'Der Teppich wird in Ihrem Raum platziert',
   uploadV2Step2Body: 'Das dauert etwa 15 Sekunden.',
   uploadV2Step3Title: 'Ergebnis ansehen',
   uploadV2Step3BodyDefault: 'Das Produkt wird in Ihrem eigenen Raum angezeigt.',
   uploadV2Step3BodyCarpets: 'Der Teppich wird in Ihrem eigenen Raum angezeigt.',
   uploadV2Hint: 'Max. 10 MB, JPEG oder PNG',
-  uploadV2TrustLineStatement: 'Ihr Foto wird verwendet, um den Teppich in Ihrem Raum zu zeigen.',
+  uploadV2TrustLineStatementDefault:
+    'Ihr Foto wird verwendet, um das Produkt in Ihrem Raum zu zeigen.',
+  uploadV2TrustLineStatementCarpets:
+    'Ihr Foto wird verwendet, um den Teppich in Ihrem Raum zu zeigen.',
   uploadV2TrustLineLinkPrefix: 'Mehr dazu in den',
   loadingMessages: [
     'Raumgeometrie wird analysiert...',

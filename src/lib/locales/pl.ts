@@ -22,13 +22,17 @@ export const pl: TranslationStrings = {
   uploadV2HeaderTitle: 'Zobacz to u siebie w domu',
   uploadV2Step1Title: 'Sfotografuj pokój',
   uploadV2Step1Body: 'Jasne zdjęcie, na którym widać podłogę, daje najlepszy efekt.',
-  uploadV2Step2Title: 'Dywan zostanie umieszczony w Twoim pokoju',
+  uploadV2Step2TitleDefault: 'Produkt zostanie umieszczony w Twoim pokoju',
+  uploadV2Step2TitleCarpets: 'Dywan zostanie umieszczony w Twoim pokoju',
   uploadV2Step2Body: 'Zajmuje to około 15 sekund.',
   uploadV2Step3Title: 'Zobacz wynik',
   uploadV2Step3BodyDefault: 'Produkt jest pokazany w Twoim pokoju.',
   uploadV2Step3BodyCarpets: 'Dywan jest pokazany w Twoim pokoju.',
   uploadV2Hint: 'Maks. 10 MB, JPEG lub PNG',
-  uploadV2TrustLineStatement: 'Twoje zdjęcie jest używane do pokazania dywanu w Twoim pokoju.',
+  uploadV2TrustLineStatementDefault:
+    'Twoje zdjęcie jest używane do pokazania produktu w Twoim pokoju.',
+  uploadV2TrustLineStatementCarpets:
+    'Twoje zdjęcie jest używane do pokazania dywanu w Twoim pokoju.',
   uploadV2TrustLineLinkPrefix: 'Przeczytaj',
   loadingMessages: [
     'Analizowanie geometrii pomieszczenia...',

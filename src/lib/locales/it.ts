@@ -23,13 +23,16 @@ export const it: TranslationStrings = {
   uploadV2Step1Title: 'Fotografa la stanza',
   uploadV2Step1Body:
     'Una foto luminosa in cui si veda il pavimento garantisce il miglior risultato.',
-  uploadV2Step2Title: 'Il tappeto viene posizionato nella tua stanza',
+  uploadV2Step2TitleDefault: 'Il prodotto viene posizionato nella tua stanza',
+  uploadV2Step2TitleCarpets: 'Il tappeto viene posizionato nella tua stanza',
   uploadV2Step2Body: 'Richiede circa 15 secondi.',
   uploadV2Step3Title: 'Vedi il risultato',
   uploadV2Step3BodyDefault: 'Il prodotto viene mostrato nella tua stanza.',
   uploadV2Step3BodyCarpets: 'Il tappeto viene mostrato nella tua stanza.',
   uploadV2Hint: 'Max 10 MB, JPEG o PNG',
-  uploadV2TrustLineStatement:
+  uploadV2TrustLineStatementDefault:
+    'La tua foto viene utilizzata per mostrare il prodotto nella tua stanza.',
+  uploadV2TrustLineStatementCarpets:
     'La tua foto viene utilizzata per mostrare il tappeto nella tua stanza.',
   uploadV2TrustLineLinkPrefix: 'Scopri di più in',
   loadingMessages: [
