@@ -31,10 +31,9 @@ export const pl: TranslationStrings = {
   uploadV2Step3BodyDefault: 'Produkt jest pokazany w Twoim pokoju.',
   uploadV2Step3BodyCarpets: 'Dywan jest pokazany w Twoim pokoju.',
   uploadV2Hint: 'Maks. 10 MB, JPEG lub PNG',
-  uploadV2TrustLinePrefixDefault:
-    'Twoje zdjęcie jest używane do stworzenia obrazu. Dowiedz się więcej w',
+  uploadV2TrustLinePrefixDefault: 'Twoje zdjęcie jest używane do stworzenia obrazu. Przeczytaj',
   uploadV2TrustLinePrefixCarpets:
-    'Twoje zdjęcie jest używane do pokazania dywanu w Twoim pokoju. Dowiedz się więcej w',
+    'Twoje zdjęcie jest używane do pokazania dywanu w Twoim pokoju. Przeczytaj',
   loadingMessages: [
     'Analizowanie geometrii pomieszczenia...',
     'Wykrywanie oświetlenia otoczenia...',
