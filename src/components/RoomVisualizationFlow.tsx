@@ -1241,12 +1241,7 @@ export function RoomVisualizationFlow({
   // same hidden file input, same handleFileSelect.
   const renderUploadStep = () => {
     const carpet = isCarpetCategory(category);
-    const headline = carpet ? t.uploadV2HeadlineCarpets : t.uploadV2HeadlineDefault;
-    const step2Title = carpet ? t.uploadV2Step2TitleCarpets : t.uploadV2Step2TitleDefault;
     const step3Body = carpet ? t.uploadV2Step3BodyCarpets : t.uploadV2Step3BodyDefault;
-    const trustLinePrefix = carpet
-      ? t.uploadV2TrustLinePrefixCarpets
-      : t.uploadV2TrustLinePrefixDefault;
     const productThumbUrl = productImages && productImages.length > 0 ? productImages[0] : '';
     // Row shows whenever there's at least a name -- the thumbnail itself is
     // independently gated (showThumb below) so a failed/missing image
@@ -1314,28 +1309,42 @@ export function RoomVisualizationFlow({
             }}
           >
             {showThumb && (
-              <img
-                src={productThumbUrl}
-                // Decorative (found in review, Copilot PR #139): the
-                // product name right next to this image already supplies
-                // the same text visibly, so a real alt here made screen
-                // readers announce the product twice in a row.
-                alt=""
-                onError={() => setFailedProductThumbUrl(productThumbUrl)}
+              <div
                 style={{
-                  width: 'var(--gr-uv2-thumb-size, 48px)',
-                  height: 'var(--gr-uv2-thumb-size, 48px)',
-                  borderRadius: '4px',
+                  width: 'var(--gr-uv2-thumb-size, 44px)',
+                  height: 'var(--gr-uv2-thumb-size, 44px)',
+                  boxSizing: 'border-box',
+                  padding: '4px',
+                  background: '#FFFFFF',
                   border: '1px solid #E6E6E6',
-                  objectFit: 'cover',
+                  borderRadius: '4px',
+                  overflow: 'hidden',
                   flexShrink: 0,
-                  display: 'block',
                 }}
-              />
+              >
+                <img
+                  src={productThumbUrl}
+                  // Decorative (found in review, Copilot PR #139): the
+                  // product name right next to this image already supplies
+                  // the same text visibly, so a real alt here made screen
+                  // readers announce the product twice in a row. D3 brief
+                  // section 1b asks for alt=productName, but that review
+                  // finding still applies unchanged -- the name is still
+                  // the adjacent, visible text today.
+                  alt=""
+                  onError={() => setFailedProductThumbUrl(productThumbUrl)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                  }}
+                />
+              </div>
             )}
             <div
               style={{
-                fontSize: 'var(--gr-uv2-product-name-size, 15px)',
+                fontSize: 'var(--gr-uv2-product-name-size, 14px)',
                 fontWeight: 600,
                 textAlign: 'left',
                 // Truncates to 2 lines with an ellipsis for long names
@@ -1354,48 +1363,33 @@ export function RoomVisualizationFlow({
           </div>
         )}
 
-        {/* h3, not h1 (found in review, Copilot PR #139): the dialog's own
-            modal title is already an h2 (getroomly-modal-title below) --
-            nesting an h1 under it reverses the heading hierarchy and, since
-            this widget embeds via Shadow DOM into an arbitrary host page,
-            would add a page-level heading inside that page's own document
-            outline. */}
-        <h3
-          style={{
-            margin: 'var(--gr-uv2-headline-margin-top, 20px) 0 0',
-            fontSize: 'var(--gr-uv2-headline-size, 26px)',
-            lineHeight: 'var(--gr-uv2-headline-line-height, 1.2)',
-            fontWeight: 700,
-            letterSpacing: '-0.02em',
-            textWrap: 'balance',
-          }}
-        >
-          {headline}
-        </h3>
-
+        {/* Headline removed (D3 brief section 1): it repeated the header
+            ("AI Se den i ditt hem") and cost ~45pt of height. The dialog's
+            own modal title is still an h2 (getroomly-modal-title below) --
+            no heading element replaces it here. */}
         <div
           style={{
-            marginTop: 'var(--gr-uv2-card-margin-top, 20px)',
+            marginTop: 'var(--gr-uv2-card-margin-top, 16px)',
             background: '#FFFFFF',
             border: '1px solid #EDEDED',
             borderRadius: '4px',
-            padding: 'var(--gr-uv2-card-padding, 18px)',
+            padding: 'var(--gr-uv2-card-padding, 16px)',
             display: 'flex',
             flexDirection: 'column',
-            gap: 'var(--gr-uv2-card-gap, 18px)',
+            gap: 'var(--gr-uv2-card-gap, 14px)',
           }}
         >
           <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
             <span
               style={{
-                width: 'var(--gr-uv2-circle-size, 28px)',
-                height: 'var(--gr-uv2-circle-size, 28px)',
+                width: 'var(--gr-uv2-circle-size, 26px)',
+                height: 'var(--gr-uv2-circle-size, 26px)',
                 borderRadius: '50%',
                 background: '#F0F0F0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 'var(--gr-uv2-circle-font-size, 13px)',
+                fontSize: 'var(--gr-uv2-circle-font-size, 12px)',
                 fontWeight: 700,
                 flexShrink: 0,
               }}
@@ -1405,13 +1399,13 @@ export function RoomVisualizationFlow({
             <div
               style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}
             >
-              <div style={{ fontSize: 'var(--gr-uv2-step-title-size, 15px)', fontWeight: 600 }}>
+              <div style={{ fontSize: 'var(--gr-uv2-step-title-size, 14px)', fontWeight: 600 }}>
                 {t.uploadV2Step1Title}
               </div>
               <div
                 style={{
-                  fontSize: 'var(--gr-uv2-step-body-size, 14px)',
-                  lineHeight: 'var(--gr-uv2-step-body-line-height, 1.45)',
+                  fontSize: 'var(--gr-uv2-step-body-size, 13px)',
+                  lineHeight: 'var(--gr-uv2-step-body-line-height, 1.4)',
                   color: '#5A5A5A',
                 }}
               >
@@ -1423,14 +1417,14 @@ export function RoomVisualizationFlow({
           <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
             <span
               style={{
-                width: 'var(--gr-uv2-circle-size, 28px)',
-                height: 'var(--gr-uv2-circle-size, 28px)',
+                width: 'var(--gr-uv2-circle-size, 26px)',
+                height: 'var(--gr-uv2-circle-size, 26px)',
                 borderRadius: '50%',
                 background: '#F0F0F0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 'var(--gr-uv2-circle-font-size, 13px)',
+                fontSize: 'var(--gr-uv2-circle-font-size, 12px)',
                 fontWeight: 700,
                 flexShrink: 0,
               }}
@@ -1440,15 +1434,15 @@ export function RoomVisualizationFlow({
             <div
               style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}
             >
-              <div style={{ fontSize: 'var(--gr-uv2-step-title-size, 15px)', fontWeight: 600 }}>
-                {step2Title}
+              <div style={{ fontSize: 'var(--gr-uv2-step-title-size, 14px)', fontWeight: 600 }}>
+                {t.uploadV2Step2Title}
               </div>
               {/* Always visible, even in compact mode -- "It takes about 15
                   seconds" must always show (brief update, point 3). */}
               <div
                 style={{
-                  fontSize: 'var(--gr-uv2-step-body-size, 14px)',
-                  lineHeight: 'var(--gr-uv2-step-body-line-height, 1.45)',
+                  fontSize: 'var(--gr-uv2-step-body-size, 13px)',
+                  lineHeight: 'var(--gr-uv2-step-body-line-height, 1.4)',
                   color: '#5A5A5A',
                 }}
               >
@@ -1460,14 +1454,14 @@ export function RoomVisualizationFlow({
           <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
             <span
               style={{
-                width: 'var(--gr-uv2-circle-size, 28px)',
-                height: 'var(--gr-uv2-circle-size, 28px)',
+                width: 'var(--gr-uv2-circle-size, 26px)',
+                height: 'var(--gr-uv2-circle-size, 26px)',
                 borderRadius: '50%',
                 background: '#F0F0F0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 'var(--gr-uv2-circle-font-size, 13px)',
+                fontSize: 'var(--gr-uv2-circle-font-size, 12px)',
                 fontWeight: 700,
                 flexShrink: 0,
               }}
@@ -1477,7 +1471,7 @@ export function RoomVisualizationFlow({
             <div
               style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}
             >
-              <div style={{ fontSize: 'var(--gr-uv2-step-title-size, 15px)', fontWeight: 600 }}>
+              <div style={{ fontSize: 'var(--gr-uv2-step-title-size, 14px)', fontWeight: 600 }}>
                 {t.uploadV2Step3Title}
               </div>
               {/* Only this description hides in compact mode (brief update,
@@ -1486,8 +1480,8 @@ export function RoomVisualizationFlow({
               <div
                 className="getroomly-uv2-step3-desc"
                 style={{
-                  fontSize: 'var(--gr-uv2-step-body-size, 14px)',
-                  lineHeight: 'var(--gr-uv2-step-body-line-height, 1.45)',
+                  fontSize: 'var(--gr-uv2-step-body-size, 13px)',
+                  lineHeight: 'var(--gr-uv2-step-body-line-height, 1.4)',
                   color: '#5A5A5A',
                 }}
               >
@@ -1502,13 +1496,22 @@ export function RoomVisualizationFlow({
           aria-describedby="getroomly-uv2-hint"
           style={{
             marginTop: 'var(--gr-uv2-button-margin-top, 20px)',
-            height: 'var(--gr-uv2-button-height, 60px)',
+            height: 'var(--gr-uv2-button-height, 56px)',
             width: '100%',
             border: 'none',
-            borderRadius: '2px',
-            background: '#000000',
+            // Brand-token driven (found in review, Markus: D2 hardcoded
+            // Nordic Nest's own black/square look here directly, bypassing
+            // brand.ts entirely -- every OTHER primary button/pill in this
+            // widget (add-to-basket, favorite, before/after toggle, result
+            // CTA) already uses exactly these two tokens. Dev/unmatched
+            // hostnames now get GetRoomly's own teal/pill default again;
+            // Nordic Nest and Svensson still get their black/square look,
+            // via NORDIC_NEST_THEME/SVENSSON_THEME in brand.ts, not a
+            // hardcoded literal here).
+            borderRadius: 'var(--getroomly-radius-pill)',
+            background: 'var(--getroomly-primary-deep)',
             color: '#FFFFFF',
-            fontSize: 'var(--gr-uv2-button-font-size, 17px)',
+            fontSize: 'var(--gr-uv2-button-font-size, 16px)',
             fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
@@ -1543,46 +1546,53 @@ export function RoomVisualizationFlow({
           {t.uploadButton}
         </button>
 
-        {/* Trust line stays directly under the button; the size-limit hint
-            below is deliberately the LAST and least prominent line (found
-            in review, Markus: the upload pipeline validates the ORIGINAL
-            file's size before any client-side compression runs, so a
-            same-page compress-then-validate reorder would be a real upload-
-            logic change outside this redesign's scope -- the line stays,
-            just de-emphasised and moved down). */}
+        {/* Trust line (D3 brief sections 2+4): always exactly 2 lines,
+            centered. Line 1 is the statement with the lock icon inline at
+            its start; line 2 is its own block ("Läs mer i " + the link),
+            never joined onto line 1 by a <br> -- a block keeps that
+            behaviour in every language/width, including desktop.
+            handleOpenTerms still opens the existing in-app terms dialog
+            (confirmed with Markus): there is no external terms URL in this
+            codebase to navigate to, so this stays a <button> styled as a
+            link (underlined, same colour as the surrounding text) rather
+            than a real target="_blank" <a> -- a real anchor that doesn't
+            navigate would be a worse a11y/UX trap than a clearly-interactive
+            button that happens to look like a link. terms_clicked (already
+            tracked in handleOpenTerms) covers the analytics ask in section 4;
+            not duplicated here as a separate terms_link_click. */}
         <div
           style={{
-            marginTop: 'var(--gr-uv2-trust-margin-top, 14px)',
-            display: 'flex',
-            gap: '10px',
-            alignItems: 'flex-start',
+            marginTop: 'var(--gr-uv2-trust-margin-top, 24px)',
+            textAlign: 'center',
             fontSize: '12px',
             lineHeight: '1.5',
             color: '#6B6B6B',
           }}
         >
           <svg
-            width="16"
-            height="16"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="none"
             stroke="#6B6B6B"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            style={{ flexShrink: 0, marginTop: '2px' }}
+            style={{ verticalAlign: '-2px', marginRight: '6px' }}
           >
             <rect x="5" y="11" width="14" height="9" rx="2" />
             <path d="M8 11V8a4 4 0 018 0v3" />
           </svg>
-          <div style={{ textAlign: 'left' }}>
-            {trustLinePrefix}{' '}
+          {t.uploadV2TrustLineStatement}
+          <div>
+            {t.uploadV2TrustLineLinkPrefix}{' '}
             <button
               onClick={handleOpenTerms}
               style={{
                 font: 'inherit',
                 color: 'inherit',
                 textDecoration: 'underline',
+                textUnderlineOffset: '2px',
                 background: 'none',
                 border: 'none',
                 padding: 0,
@@ -1603,7 +1613,7 @@ export function RoomVisualizationFlow({
         <div
           id="getroomly-uv2-hint"
           style={{
-            marginTop: '8px',
+            marginTop: 'var(--gr-uv2-hint-margin-top, 10px)',
             textAlign: 'center',
             fontSize: '11px',
             fontWeight: 400,

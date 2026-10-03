@@ -297,25 +297,56 @@ describe('RoomVisualizationFlow', () => {
       expect(getProductThumb()).toHaveAttribute('src', 'https://example.com/working.jpg');
     });
 
-    test('uses the carpets-specific headline/step copy when category is "carpets"', () => {
+    // D3 brief section 1b: show the whole product image, never crop --
+    // object-fit:cover (D2) cropped non-square rugs into a fragment of the
+    // pattern. The white 4px-padded box also covers transparent PNGs.
+    test('the thumbnail shows the whole image (object-fit: contain) inside a white padded box', () => {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+
+      const thumb = getProductThumb();
+      expect(thumb.style.objectFit).toBe('contain');
+
+      const box = thumb.parentElement;
+      expect(box.style.background).toBe('rgb(255, 255, 255)');
+      expect(box.style.padding).toBe('4px');
+      expect(box.style.overflow).toBe('hidden');
+    });
+
+    // D3 brief section 1: the headline is gone entirely (not just split by
+    // category) -- it repeated the header and cost ~45pt of height.
+    test('no longer renders a headline (removed in the D3 update)', () => {
+      const { container } = render(<RoomVisualizationFlow {...defaultProps} />);
+
+      expect(container.querySelector('h1')).not.toBeInTheDocument();
+      expect(container.querySelector('h3')).not.toBeInTheDocument();
+    });
+
+    // D3 brief section 3: step 2's title is now a single i18n key, the same
+    // text regardless of category -- unlike step 3's body, which stays
+    // carpet-aware (brief: "Steps 1 and 3 ... stay as they are today").
+    test('step 2 title is the same for every category, carpet or not', () => {
+      const { rerender } = render(<RoomVisualizationFlow {...defaultProps} category="carpets" />);
+      expect(screen.getByText(translations.en.uploadV2Step2Title)).toBeInTheDocument();
+
+      rerender(<RoomVisualizationFlow {...defaultProps} category="sofas" />);
+      expect(screen.getByText(translations.en.uploadV2Step2Title)).toBeInTheDocument();
+    });
+
+    test('uses the carpets-specific step 3 body when category is "carpets"', () => {
       render(<RoomVisualizationFlow {...defaultProps} category="carpets" />);
 
-      expect(screen.getByText(translations.en.uploadV2HeadlineCarpets)).toBeInTheDocument();
-      expect(screen.getByText(translations.en.uploadV2Step2TitleCarpets)).toBeInTheDocument();
       expect(screen.getByText(translations.en.uploadV2Step3BodyCarpets)).toBeInTheDocument();
     });
 
     test('matches category names containing "carpet" too, not just the exact "carpets" string', () => {
       render(<RoomVisualizationFlow {...defaultProps} category="outdoor-carpet-runners" />);
 
-      expect(screen.getByText(translations.en.uploadV2HeadlineCarpets)).toBeInTheDocument();
+      expect(screen.getByText(translations.en.uploadV2Step3BodyCarpets)).toBeInTheDocument();
     });
 
-    test('falls back to the generic default copy for a non-carpet category', () => {
+    test('falls back to the generic default step 3 body for a non-carpet category', () => {
       render(<RoomVisualizationFlow {...defaultProps} category="sofas" />);
 
-      expect(screen.getByText(translations.en.uploadV2HeadlineDefault)).toBeInTheDocument();
-      expect(screen.getByText(translations.en.uploadV2Step2TitleDefault)).toBeInTheDocument();
       expect(screen.getByText(translations.en.uploadV2Step3BodyDefault)).toBeInTheDocument();
     });
 
@@ -332,6 +363,31 @@ describe('RoomVisualizationFlow', () => {
       expect(button).toHaveAttribute('aria-describedby', 'getroomly-uv2-hint');
       const input = document.querySelector('input[type="file"]');
       expect(input).toHaveAttribute('aria-describedby', 'getroomly-uv2-hint');
+    });
+
+    // D3 brief section 2+4: trust line is always exactly 2 lines -- the
+    // statement, then the link-prefix+link as its own block (a <div>, not a
+    // <br>), centered, so it reads the same in every language/width.
+    test('the trust line renders as two lines: the statement, then the link prefix + link as its own block', () => {
+      render(<RoomVisualizationFlow {...defaultProps} />);
+
+      const statement = screen.getByText(translations.en.uploadV2TrustLineStatement, {
+        exact: false,
+      });
+      const trustBlock = statement.closest('div');
+      expect(trustBlock.style.textAlign).toBe('center');
+
+      const link = screen.getByText(translations.en.termsLink);
+      expect(link.tagName).toBe('BUTTON');
+      const linkLine = link.parentElement;
+      expect(linkLine.tagName).toBe('DIV');
+      expect(linkLine.textContent).toBe(
+        `${translations.en.uploadV2TrustLineLinkPrefix} ${translations.en.termsLink}`
+      );
+      // The link line is its own block, a sibling of the statement text
+      // inside the same trust-line container -- not appended after the
+      // statement on the same line.
+      expect(linkLine.parentElement).toBe(trustBlock);
     });
 
     test('step 3 gets a dedicated class so compact-mode CSS can hide only its description, per the handoff brief update', () => {

@@ -20,22 +20,18 @@ export const it: TranslationStrings = {
   tip3Body: "Rimuovi gli oggetti dall'area in cui verrà posizionato il tappeto.",
   termsLink: 'Termini di utilizzo e privacy',
   uploadV2HeaderTitle: 'Guardalo a casa tua',
-  uploadV2HeadlineDefault: 'Guarda il prodotto nella tua stanza',
-  uploadV2HeadlineCarpets: 'Guarda il tappeto nella tua stanza',
   uploadV2Step1Title: 'Fotografa la stanza',
   uploadV2Step1Body:
     'Una foto luminosa in cui si veda il pavimento garantisce il miglior risultato.',
-  uploadV2Step2TitleDefault: 'Il prodotto viene inserito nella tua foto',
-  uploadV2Step2TitleCarpets: 'Il tappeto viene inserito nella tua foto',
+  uploadV2Step2Title: 'Il tappeto viene posizionato nella tua stanza',
   uploadV2Step2Body: 'Richiede circa 15 secondi.',
   uploadV2Step3Title: 'Vedi il risultato',
   uploadV2Step3BodyDefault: 'Il prodotto viene mostrato nella tua stanza.',
   uploadV2Step3BodyCarpets: 'Il tappeto viene mostrato nella tua stanza.',
   uploadV2Hint: 'Max 10 MB, JPEG o PNG',
-  uploadV2TrustLinePrefixDefault:
-    "La tua foto viene utilizzata per creare l'immagine. Scopri di più in",
-  uploadV2TrustLinePrefixCarpets:
-    'La tua foto viene utilizzata per mostrare il tappeto nella tua stanza. Scopri di più in',
+  uploadV2TrustLineStatement:
+    'La tua foto viene utilizzata per mostrare il tappeto nella tua stanza.',
+  uploadV2TrustLineLinkPrefix: 'Scopri di più in',
   loadingMessages: [
     'Analisi della geometria della stanza...',
     'Rilevamento della luce ambientale...',
