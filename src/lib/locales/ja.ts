@@ -28,9 +28,6 @@ export const ja: TranslationStrings = {
   uploadV2Step3BodyDefault: '商品がご自身のお部屋に表示されます。',
   uploadV2Step3BodyCarpets: 'ラグがご自身のお部屋に表示されます。',
   uploadV2Hint: '最大10MB、JPEGまたはPNG',
-  uploadV2TrustLineStatementDefault: 'お客様の写真はお部屋に商品を表示するために使用されます。',
-  uploadV2TrustLineStatementCarpets: 'お客様の写真はお部屋にラグを表示するために使用されます。',
-  uploadV2TrustLineLinkPrefix: '詳しくは',
   loadingMessages: [
     '部屋の形状を解析しています...',
     '周辺光を検出しています...',

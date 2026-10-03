@@ -28,11 +28,6 @@ export const el: TranslationStrings = {
   uploadV2Step3BodyDefault: 'Το προϊόν εμφανίζεται στον δικό σας χώρο.',
   uploadV2Step3BodyCarpets: 'Το χαλί εμφανίζεται στον δικό σας χώρο.',
   uploadV2Hint: 'Έως 10 MB, JPEG ή PNG',
-  uploadV2TrustLineStatementDefault:
-    'Η φωτογραφία σας χρησιμοποιείται για να εμφανιστεί το προϊόν στον χώρο σας.',
-  uploadV2TrustLineStatementCarpets:
-    'Η φωτογραφία σας χρησιμοποιείται για να εμφανιστεί το χαλί στον χώρο σας.',
-  uploadV2TrustLineLinkPrefix: 'Μάθετε περισσότερα:',
   loadingMessages: [
     'Ανάλυση γεωμετρίας δωματίου...',
     'Ανίχνευση φωτισμού περιβάλλοντος...',

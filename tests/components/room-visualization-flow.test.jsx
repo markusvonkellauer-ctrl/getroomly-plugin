@@ -403,30 +403,19 @@ describe('RoomVisualizationFlow', () => {
       expect(input).toHaveAttribute('aria-describedby', 'getroomly-uv2-hint');
     });
 
-    // D3 brief section 2+4: trust line is always exactly 2 lines -- the
-    // statement, then the link-prefix+link as its own block (a <div>, not a
-    // <br>), centered, so it reads the same in every language/width.
-    test('the trust line renders as two lines: the statement, then the link prefix + link as its own block', () => {
+    // Trust line (simplified, found in review with Markus: the statement
+    // sentence and "Läs mer i" prefix were dropped -- just the lock icon
+    // and the underlined link remain, one centered line).
+    test('the trust line is just the lock icon and the underlined terms link, centered, no statement text', () => {
       render(<RoomVisualizationFlow {...defaultProps} />);
-
-      // defaultProps.category is 'Carpet', which isCarpetCategory matches.
-      const statement = screen.getByText(translations.en.uploadV2TrustLineStatementCarpets, {
-        exact: false,
-      });
-      const trustBlock = statement.closest('div');
-      expect(trustBlock.style.textAlign).toBe('center');
 
       const link = screen.getByText(translations.en.termsLink);
       expect(link.tagName).toBe('BUTTON');
-      const linkLine = link.parentElement;
-      expect(linkLine.tagName).toBe('DIV');
-      expect(linkLine.textContent).toBe(
-        `${translations.en.uploadV2TrustLineLinkPrefix} ${translations.en.termsLink}`
-      );
-      // The link line is its own block, a sibling of the statement text
-      // inside the same trust-line container -- not appended after the
-      // statement on the same line.
-      expect(linkLine.parentElement).toBe(trustBlock);
+      expect(link.style.textDecoration).toBe('underline');
+
+      const trustBlock = link.parentElement;
+      expect(trustBlock.style.textAlign).toBe('center');
+      expect(trustBlock.textContent).toBe(translations.en.termsLink);
     });
 
     test('step 3 gets a dedicated class so compact-mode CSS can hide only its description, per the handoff brief update', () => {

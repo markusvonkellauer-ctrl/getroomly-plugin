@@ -28,9 +28,6 @@ export const no: TranslationStrings = {
   uploadV2Step3BodyDefault: 'Produktet vises i ditt eget rom.',
   uploadV2Step3BodyCarpets: 'Teppet vises i ditt eget rom.',
   uploadV2Hint: 'Maks. 10 MB, JPEG eller PNG',
-  uploadV2TrustLineStatementDefault: 'Bildet ditt brukes til å vise produktet i rommet ditt.',
-  uploadV2TrustLineStatementCarpets: 'Bildet ditt brukes til å vise teppet i rommet ditt.',
-  uploadV2TrustLineLinkPrefix: 'Les mer i',
   loadingMessages: [
     'Analyserer romgeometri...',
     'Registrerer omgivende lys...',
