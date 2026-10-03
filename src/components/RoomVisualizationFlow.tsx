@@ -13,6 +13,25 @@ import { dataUrlToBlob, extensionForMimeType, mimeTypeFromDataUrl } from '@/lib/
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { trackWidgetEvent } from '@/services/event-tracking';
 
+// Mirrors the backend's own category match (see KNOWN_CATEGORIES's doc
+// comment in getroomly-backend/src/types/embed-config equivalent) -- 'carpets'
+// or any category string containing "carpet" gets the rug-specific upload-view
+// copy (uploadV2HeadlineCarpets etc.); everything else falls back to the
+// generic uploadV2*Default strings.
+function isCarpetCategory(category: string): boolean {
+  // Guards the runtime type, not just the compile-time one (found in
+  // review, Copilot PR #139): category ultimately comes from the host
+  // page's own untyped window.GetRoomlyEmbedConfig, so a malformed
+  // integration (e.g. category: 1) can reach here as a non-string despite
+  // the prop's TypeScript type -- same reasoning as isSupportedLanguage's
+  // own runtime guard in lib/i18n.ts. Falls through to the generic default
+  // copy rather than crashing the whole upload view.
+  if (typeof category !== 'string') {
+    return false;
+  }
+  return category.toLowerCase().includes('carpet');
+}
+
 interface RoomVisualizationFlowProps {
   productImages: string[];
   productId: string;
@@ -164,19 +183,15 @@ export function RoomVisualizationFlow({
   // read/written synchronously inside the handler.
   const isSharingRef = useRef(false);
 
-  // Upload-step dropzone polish: hover state for the (pointer-events:none)
-  // upload button's own background colour -- see renderUploadStep's
-  // onMouseEnter/onMouseLeave, which already exist for the scale transform
-  // and now also drive this. State, not a CSS :hover rule, because the
-  // button itself never receives pointer events (the wrapping div does,
-  // see its own onClick) -- CSS :hover requires the pointer to actually be
-  // over the element being styled, which pointer-events:none prevents.
-  const [isUploadButtonHovered, setIsUploadButtonHovered] = useState(false);
-  // Drives the dropzone's dragover-only border -- found in review of a
-  // design change request: dropping a file onto the zone already worked,
-  // but gave zero visual feedback while the file was being dragged over
-  // it, so the (real, working) drop support was effectively undiscoverable.
-  const [isDraggingFileOver, setIsDraggingFileOver] = useState(false);
+  // Upload view (D2 redesign): hides just the product thumbnail on a broken
+  // image URL, per the handoff brief -- never show a broken-image icon, but
+  // the product name text still renders fine on its own. Stores the URL
+  // that failed, not just a bare boolean (found in review, Copilot PR
+  // #139): this component can stay mounted across a live product swap (the
+  // host page changes productImages/productName without remounting), so a
+  // plain boolean would keep hiding every LATER product's perfectly valid
+  // thumbnail forever once any one image had ever failed.
+  const [failedProductThumbUrl, setFailedProductThumbUrl] = useState<string | null>(null);
 
   // The result image's own maxHeight can't be a plain CSS percentage: its
   // flex ancestor (resultContentRef below) has overflow:hidden + minHeight:0,
@@ -761,14 +776,6 @@ export function RoomVisualizationFlow({
       setResultImage(null);
       setGenerationId(null);
       setStep('upload');
-      // Found in review: the dropzone's hover/dragover state is transient
-      // UI feedback tied to a mouse/drag interaction that's long over by
-      // the time an async generation fails -- without this, a hover right
-      // before upload (the normal click-to-upload flow) can leave the
-      // button rendering its press colour on the upload step this reset
-      // returns to, with no mouse anywhere near it.
-      setIsUploadButtonHovered(false);
-      setIsDraggingFileOver(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -818,11 +825,6 @@ export function RoomVisualizationFlow({
       uploadedImageRef.current = null;
       setUploadedImage(null);
       setStep('upload');
-      // See the same reset in the generation-error catch block above --
-      // stale hover/dragover feedback from the interaction that triggered
-      // this failed read shouldn't survive onto the upload step it returns to.
-      setIsUploadButtonHovered(false);
-      setIsDraggingFileOver(false);
       setIsGenerating(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -954,13 +956,6 @@ export function RoomVisualizationFlow({
     setResultImage(null);
     setGenerationId(null);
     setShowOriginalImage(false);
-    // Same reason as the other two resets to 'upload' -- the mouse that
-    // hovered the dropzone for the PREVIOUS photo is very likely nowhere
-    // near it now (this fires from a click on the result step's "New
-    // Photo" button), so the stale hover/dragover feedback shouldn't
-    // carry over.
-    setIsUploadButtonHovered(false);
-    setIsDraggingFileOver(false);
 
     // Reset every transient timer so a pending one from the previous
     // result can't fire after this reset and clear confirmation state
@@ -1238,367 +1233,436 @@ export function RoomVisualizationFlow({
     );
   };
 
-  const renderUploadStep = () => (
-    <div
-      className="getroomly-upload-step"
-      style={{
-        width: '100%',
-        aspectRatio: '5/5',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        // gap, not justifyContent:'space-between' -- found in review of a
-        // design change request: space-between let the gap between the
-        // dropzone and the tips card grow unpredictably with container
-        // height instead of staying a fixed, intentional distance. The
-        // dropzone itself now grows via flex:1 (below) to fill the
-        // remaining space, so there's still no dead gap either.
-        gap: '14px',
-        padding: '24px',
-        backgroundColor: 'rgba(0, 0, 0, 0.02)',
-        borderRadius: 'var(--getroomly-radius-card)',
-        position: 'relative',
-        // Not 'hidden' -- found in review: at narrow widths (320-375px,
-        // e.g. iPhone SE/mini) the strict aspectRatio:5/5 square plus the
-        // dropzone's own minHeight floor leaves too little room for the
-        // tips card's real content, which needs ~200px. With
-        // overflow:'hidden' that excess was silently clipped off the
-        // bottom of the box instead of visible; 'visible' lets the box
-        // grow taller than a perfect square on narrow screens so nothing
-        // is cut off (verified via real-browser screenshots at 320/375px
-        // -- no visual regression at any width, since flex:1 already caps
-        // the box back to its intended square height wherever there's
-        // enough room).
-        overflow: 'visible',
-        // No explicit fontFamily here -- found in review: it redundantly
-        // repeated the exact same stack index.css's own :root, :host rule
-        // already sets by default, but being an inline style, it also
-        // unconditionally beat brand.ts's font-family:inherit override
-        // (inline styles always win over injected <style> rules), so the
-        // entire upload step silently kept the system font stack on a
-        // branded page while every other step correctly inherited the
-        // host's own font.
-        textAlign: 'center',
-      }}
-    >
-      {showSteps && renderStepIndicator('upload')}
+  // D2 redesign (Oct 2026 handoff): single-column, product-aware upload
+  // view. Replaces the old circular-dropzone + "FÖR BÄSTA RESULTAT" tips
+  // card entirely (no v1/v2 flag -- a git revert + redeploy is the rollback
+  // path, see PR description). Upload logic/validation/analytics below are
+  // untouched from the old renderUploadStep: same onClick/onDrop handlers,
+  // same hidden file input, same handleFileSelect.
+  const renderUploadStep = () => {
+    const carpet = isCarpetCategory(category);
+    const headline = carpet ? t.uploadV2HeadlineCarpets : t.uploadV2HeadlineDefault;
+    const step2Title = carpet ? t.uploadV2Step2TitleCarpets : t.uploadV2Step2TitleDefault;
+    const step3Body = carpet ? t.uploadV2Step3BodyCarpets : t.uploadV2Step3BodyDefault;
+    const trustLinePrefix = carpet
+      ? t.uploadV2TrustLinePrefixCarpets
+      : t.uploadV2TrustLinePrefixDefault;
+    const productThumbUrl = productImages && productImages.length > 0 ? productImages[0] : '';
+    // Row shows whenever there's at least a name -- the thumbnail itself is
+    // independently gated (showThumb below) so a failed/missing image
+    // never hides the name too (brief: never show a broken image, but the
+    // name still renders fine on its own).
+    const showProductRow = Boolean(productName);
+    const showThumb = Boolean(productThumbUrl) && failedProductThumbUrl !== productThumbUrl;
 
+    return (
       <div
+        className="getroomly-upload-step getroomly-upload-v2"
         style={{
-          flex: '1',
-          minHeight: '150px',
           width: '100%',
+          // flex (not minHeight:100%) -- the parent content wrapper lays
+          // out its single child with justifyContent:'flex-start', so only
+          // a flex-grow child actually claims the full available height;
+          // without it, this div would just shrink to its own content size
+          // and justifyContent:'center' below would have no extra space to
+          // center within.
+          flex: '1 1 auto',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
+          // Vertically centers the content block between header and panel
+          // bottom (brief section 2).
           justifyContent: 'center',
+          padding: 'var(--gr-uv2-padding, 20px)',
           textAlign: 'center',
-          cursor: 'pointer',
-          borderRadius: 'var(--getroomly-radius-card)',
-          // Transparent, not 'none' -- keeps the box the same size whether
-          // the border is showing or not, so it appearing on dragover
-          // doesn't shift the icon/button/hint by the border's own width.
-          border: isDraggingFileOver
-            ? '2px dashed var(--getroomly-primary)'
-            : '2px dashed transparent',
-          transition: 'transform 0.2s ease, border-color 0.15s ease',
+          // Found in review, Copilot PR #139: the modal container itself is
+          // .bg-background (#ffffff, index.css), not the #FAFAFA this
+          // design assumes -- without this, the white steps card below
+          // rendered on an equally white panel instead of the intended
+          // off-white background, losing the contrast between them.
+          backgroundColor: '#FAFAFA',
+          // No explicit fontFamily -- inherits the host's own font via
+          // brand.ts, same reasoning as the old dropzone root (found in
+          // review, see git history).
         }}
-        onClick={() => {
-          trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId);
-          // Flips on the standing window-focus listener below, which
-          // reports upload_cancelled if the shopper backs out of the native
-          // picker without choosing a photo. The bumped token lets that
-          // listener tell this attempt apart from a still-pending older one.
-          filePickerPendingRef.current = true;
-          filePickerAttemptTokenRef.current += 1;
-          fileInputRef.current?.click();
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.transform = 'scale(1.05)';
-          setIsUploadButtonHovered(true);
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.transform = 'scale(1)';
-          setIsUploadButtonHovered(false);
-        }}
-        onDragEnter={e => {
-          e.preventDefault();
-          // Found in review: without this check, dragging ANYTHING over the
-          // zone (selected text, a link, an image from another tab) showed
-          // the "drop here" dashed border, even though only an actual file
-          // drop does anything -- dataTransfer.types includes 'Files' only
-          // for a real file drag, so this keeps the affirmative feedback
-          // honest about what will actually work.
-          if (e.dataTransfer?.types?.includes('Files')) {
-            setIsDraggingFileOver(true);
-          }
-        }}
-        onDragOver={e => {
-          e.preventDefault();
-        }}
-        onDragLeave={e => {
-          e.preventDefault();
-          // Only clear when actually leaving the zone, not when crossing
-          // from one of its own children to another -- relatedTarget is
-          // the element the pointer is moving into.
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-            setIsDraggingFileOver(false);
-          }
-        }}
+        onDragOver={e => e.preventDefault()}
         onDrop={e => {
           e.preventDefault();
-          setIsDraggingFileOver(false);
           const file = e.dataTransfer.files[0];
           if (file) {
-            // Drag-and-drop never goes through the dropzone's own onClick
-            // above, so it needs its own upload_clicked — the drop IS the
+            // Drag-and-drop never goes through the button's own onClick
+            // below, so it needs its own upload_clicked -- the drop IS the
             // click-equivalent "user initiated an upload" moment here.
+            // No visible drag-over affordance by design (brief: "do not add
+            // new visible UI for it") -- the single button is the only
+            // visible upload trigger.
             trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId);
             const event = { target: { files: [file] } } as any;
             handleFileSelect(event);
           }
         }}
       >
-        <div
-          style={{
-            backgroundColor: 'var(--getroomly-primary-tint)', // bg-primary/10 equivalent
-            padding: '16px',
-            borderRadius: '50%',
-            marginBottom: '12px',
-            boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.05)', // shadow-inner
-          }}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        {showSteps && renderStepIndicator('upload')}
+
+        {showProductRow && (
+          <div
             style={{
-              width: '28px', // h-7 w-7 equivalent
-              height: '28px',
-              color: 'var(--getroomly-primary)', // text-primary
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              justifyContent: 'center',
             }}
           >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="17 8 12 3 7 8"></polyline>
-            <line x1="12" x2="12" y1="3" y2="15"></line>
-          </svg>
-        </div>
-        <button
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            whiteSpace: 'nowrap',
-            fontSize: '13px',
-            backgroundColor: isUploadButtonHovered
-              ? 'var(--getroomly-primary-press)'
-              : 'var(--getroomly-primary-deep)', // bg-primary, white text needs the AA-safe deep tone
-            color: '#ffffff', // text-primary-foreground
-            border: 'none',
-            borderRadius: 'var(--getroomly-radius-pill)',
-            padding: '13px 26px',
-            fontWeight: 600,
-            letterSpacing: '0.025em',
-            width: '100%',
-            maxWidth: '200px',
-            boxShadow: 'var(--getroomly-upload-button-shadow)',
-            pointerEvents: 'none',
-            transition: 'all 0.2s ease',
-            cursor: 'pointer',
-          }}
-        >
-          {t.uploadButton}
-        </button>
-        <p
-          style={{
-            marginTop: '8px',
-            fontSize: '11px',
-            fontWeight: '400',
-            color: 'var(--getroomly-upload-hint)', // text-muted-foreground/50
-          }}
-        >
-          {t.uploadHint}
-        </p>
-      </div>
+            {showThumb && (
+              <img
+                src={productThumbUrl}
+                // Decorative (found in review, Copilot PR #139): the
+                // product name right next to this image already supplies
+                // the same text visibly, so a real alt here made screen
+                // readers announce the product twice in a row.
+                alt=""
+                onError={() => setFailedProductThumbUrl(productThumbUrl)}
+                style={{
+                  width: 'var(--gr-uv2-thumb-size, 48px)',
+                  height: 'var(--gr-uv2-thumb-size, 48px)',
+                  borderRadius: '4px',
+                  border: '1px solid #E6E6E6',
+                  objectFit: 'cover',
+                  flexShrink: 0,
+                  display: 'block',
+                }}
+              />
+            )}
+            <div
+              style={{
+                fontSize: 'var(--gr-uv2-product-name-size, 15px)',
+                fontWeight: 600,
+                textAlign: 'left',
+                // Truncates to 2 lines with an ellipsis for long names
+                // (brief section 4) -- -webkit-line-clamp is supported by
+                // every browser this project targets (Chrome/Edge/Firefox/
+                // Safari current+1), not just WebKit-based ones.
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+              }}
+            >
+              {productName}
+            </div>
+          </div>
+        )}
 
-      {/* Guidance Text - matching shadow plugin */}
-      <div
-        style={{
-          // alignSelf:stretch fills the flex cross-axis (horizontal) width
-          // reliably in iOS Safari. Using width:'100%' in a flex-column with
-          // alignItems:'center' can resolve to the parent's border-box (390px)
-          // instead of content-box (342px) in Safari, causing text to overflow.
-          alignSelf: 'stretch',
-          padding: '16px', // p-4
-          backgroundColor: 'hsla(30, 20%, 98%, 0.4)', // bg-background/40
-          backdropFilter: 'blur(2px)', // backdrop-blur-[2px]
-          borderRadius: 'var(--getroomly-radius-card)', // rounded-lg
-          border: '1px solid var(--getroomly-guidance-border)', // border border-primary/5
-          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)', // shadow-sm
-        }}
-      >
-        <p
+        {/* h3, not h1 (found in review, Copilot PR #139): the dialog's own
+            modal title is already an h2 (getroomly-modal-title below) --
+            nesting an h1 under it reverses the heading hierarchy and, since
+            this widget embeds via Shadow DOM into an arbitrary host page,
+            would add a page-level heading inside that page's own document
+            outline. */}
+        <h3
           style={{
-            fontSize: '10px', // text-[10px]
-            fontWeight: 'bold', // font-bold
-            color: 'var(--getroomly-tips-heading)', // text-primary/80
-            marginBottom: '12px', // mb-3
-            textTransform: 'uppercase', // uppercase
-            letterSpacing: '0.15em', // tracking-[0.15em]
-            textAlign: 'center', // text-center
-            borderBottom: '1px solid var(--getroomly-primary-tint)', // border-b border-primary/10
-            paddingBottom: '8px', // pb-2
+            margin: 'var(--gr-uv2-headline-margin-top, 20px) 0 0',
+            fontSize: 'var(--gr-uv2-headline-size, 26px)',
+            lineHeight: 'var(--gr-uv2-headline-line-height, 1.2)',
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            textWrap: 'balance',
           }}
         >
-          {t.tipsHeading}
-        </p>
+          {headline}
+        </h3>
 
         <div
           style={{
+            marginTop: 'var(--gr-uv2-card-margin-top, 20px)',
+            background: '#FFFFFF',
+            border: '1px solid #EDEDED',
+            borderRadius: '4px',
+            padding: 'var(--gr-uv2-card-padding, 18px)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px', // space-y-3
-            fontSize: '11px', // text-[11px]
-            color: 'var(--getroomly-muted)', // text-muted-foreground
-            lineHeight: '1.3', // leading-snug
+            gap: 'var(--gr-uv2-card-gap, 18px)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
             <span
               style={{
-                width: '16px', // w-4
-                height: '16px', // h-4
-                borderRadius: '50%', // rounded-full
-                backgroundColor: 'var(--getroomly-primary-tint)', // bg-primary/10
-                color: 'var(--getroomly-primary-deep)', // text-primary, small bold text needs the AA-safe deep tone
+                width: 'var(--gr-uv2-circle-size, 28px)',
+                height: 'var(--gr-uv2-circle-size, 28px)',
+                borderRadius: '50%',
+                background: '#F0F0F0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '9px', // text-[9px]
-                fontWeight: 'bold', // font-bold
-                flexShrink: 0, // shrink-0
+                fontSize: 'var(--gr-uv2-circle-font-size, 13px)',
+                fontWeight: 700,
+                flexShrink: 0,
               }}
             >
               1
             </span>
-            <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
-              <span style={{ fontWeight: '600', color: 'var(--getroomly-tip-label)' }}>
-                {t.tip1Label}
-              </span>
-              <span> {t.tip1Body}</span>
-            </p>
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}
+            >
+              <div style={{ fontSize: 'var(--gr-uv2-step-title-size, 15px)', fontWeight: 600 }}>
+                {t.uploadV2Step1Title}
+              </div>
+              <div
+                style={{
+                  fontSize: 'var(--gr-uv2-step-body-size, 14px)',
+                  lineHeight: 'var(--gr-uv2-step-body-line-height, 1.45)',
+                  color: '#5A5A5A',
+                }}
+              >
+                {t.uploadV2Step1Body}
+              </div>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
             <span
               style={{
-                width: '16px',
-                height: '16px',
+                width: 'var(--gr-uv2-circle-size, 28px)',
+                height: 'var(--gr-uv2-circle-size, 28px)',
                 borderRadius: '50%',
-                backgroundColor: 'var(--getroomly-primary-tint)',
-                color: 'var(--getroomly-primary-deep)',
+                background: '#F0F0F0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '9px',
-                fontWeight: 'bold',
+                fontSize: 'var(--gr-uv2-circle-font-size, 13px)',
+                fontWeight: 700,
                 flexShrink: 0,
               }}
             >
               2
             </span>
-            <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
-              <span style={{ fontWeight: '600', color: 'var(--getroomly-tip-label)' }}>
-                {t.tip2Label}
-              </span>
-              <span> {t.tip2Body}</span>
-            </p>
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}
+            >
+              <div style={{ fontSize: 'var(--gr-uv2-step-title-size, 15px)', fontWeight: 600 }}>
+                {step2Title}
+              </div>
+              {/* Always visible, even in compact mode -- "It takes about 15
+                  seconds" must always show (brief update, point 3). */}
+              <div
+                style={{
+                  fontSize: 'var(--gr-uv2-step-body-size, 14px)',
+                  lineHeight: 'var(--gr-uv2-step-body-line-height, 1.45)',
+                  color: '#5A5A5A',
+                }}
+              >
+                {t.uploadV2Step2Body}
+              </div>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
             <span
               style={{
-                width: '16px',
-                height: '16px',
+                width: 'var(--gr-uv2-circle-size, 28px)',
+                height: 'var(--gr-uv2-circle-size, 28px)',
                 borderRadius: '50%',
-                backgroundColor: 'var(--getroomly-primary-tint)',
-                color: 'var(--getroomly-primary-deep)',
+                background: '#F0F0F0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '9px',
-                fontWeight: 'bold',
+                fontSize: 'var(--gr-uv2-circle-font-size, 13px)',
+                fontWeight: 700,
                 flexShrink: 0,
               }}
             >
               3
             </span>
-            <p style={{ margin: 0, textAlign: 'left', flex: '1 1 0', minWidth: 0 }}>
-              <span style={{ fontWeight: '600', color: 'var(--getroomly-tip-label)' }}>
-                {t.tip3Label}
-              </span>
-              <span> {t.tip3Body}</span>
-            </p>
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}
+            >
+              <div style={{ fontSize: 'var(--gr-uv2-step-title-size, 15px)', fontWeight: 600 }}>
+                {t.uploadV2Step3Title}
+              </div>
+              {/* Only this description hides in compact mode (brief update,
+                  point 3 -- overrides the original brief's "hide steps 2
+                  AND 3"). Pure CSS (index.css), not a JS viewport check. */}
+              <div
+                className="getroomly-uv2-step3-desc"
+                style={{
+                  fontSize: 'var(--gr-uv2-step-body-size, 14px)',
+                  lineHeight: 'var(--gr-uv2-step-body-line-height, 1.45)',
+                  color: '#5A5A5A',
+                }}
+              >
+                {step3Body}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {uploadedImage && (
-        <div
+        <button
+          className="getroomly-uv2-button"
+          aria-describedby="getroomly-uv2-hint"
           style={{
+            marginTop: 'var(--gr-uv2-button-margin-top, 20px)',
+            height: 'var(--gr-uv2-button-height, 60px)',
             width: '100%',
-            height: '100%',
+            border: 'none',
+            borderRadius: '2px',
+            background: '#000000',
+            color: '#FFFFFF',
+            fontSize: 'var(--gr-uv2-button-font-size, 17px)',
+            fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: '#ffffff',
+            gap: '10px',
+            cursor: 'pointer',
+          }}
+          onClick={() => {
+            trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId);
+            // Flips on the standing window-focus listener below, which
+            // reports upload_cancelled if the shopper backs out of the
+            // native picker without choosing a photo. The bumped token lets
+            // that listener tell this attempt apart from a still-pending
+            // older one.
+            filePickerPendingRef.current = true;
+            filePickerAttemptTokenRef.current += 1;
+            fileInputRef.current?.click();
           }}
         >
-          <img
-            src={uploadedImage}
-            alt="Uploaded room"
-            className="object-cover"
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#FFFFFF"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 15V4m0 0L8 8m4-4l4 4M5 14v4a2 2 0 002 2h10a2 2 0 002-2v-4" />
+          </svg>
+          {t.uploadButton}
+        </button>
+
+        {/* Trust line stays directly under the button; the size-limit hint
+            below is deliberately the LAST and least prominent line (found
+            in review, Markus: the upload pipeline validates the ORIGINAL
+            file's size before any client-side compression runs, so a
+            same-page compress-then-validate reorder would be a real upload-
+            logic change outside this redesign's scope -- the line stays,
+            just de-emphasised and moved down). */}
+        <div
+          style={{
+            marginTop: 'var(--gr-uv2-trust-margin-top, 14px)',
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'flex-start',
+            fontSize: '12px',
+            lineHeight: '1.5',
+            color: '#6B6B6B',
+          }}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#6B6B6B"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ flexShrink: 0, marginTop: '2px' }}
+          >
+            <rect x="5" y="11" width="14" height="9" rx="2" />
+            <path d="M8 11V8a4 4 0 018 0v3" />
+          </svg>
+          <div style={{ textAlign: 'left' }}>
+            {trustLinePrefix}{' '}
+            <button
+              onClick={handleOpenTerms}
+              style={{
+                font: 'inherit',
+                color: 'inherit',
+                textDecoration: 'underline',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+              }}
+            >
+              {t.termsLink}
+            </button>
+          </div>
+        </div>
+
+        {/* Stays in the DOM (not removed) and wired to both the button and
+            the file input via aria-describedby, so screen-reader users
+            still hear the format/size limit even though it's visually
+            de-emphasised. 11px/400/#6B6B6B is a deliberate floor -- not
+            opacity-lightened further -- to keep >=4.5:1 contrast against
+            the #FAFAFA panel background. */}
+        <div
+          id="getroomly-uv2-hint"
+          style={{
+            marginTop: '8px',
+            textAlign: 'center',
+            fontSize: '11px',
+            fontWeight: 400,
+            color: '#6B6B6B',
+          }}
+        >
+          {t.uploadV2Hint}
+        </div>
+
+        {uploadedImage && (
+          <div
             style={{
               width: '100%',
               height: '100%',
-              display: 'block',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#ffffff',
             }}
-          />
-        </div>
-      )}
+          >
+            <img
+              src={uploadedImage}
+              alt="Uploaded room"
+              className="object-cover"
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'block',
+              }}
+            />
+          </div>
+        )}
 
-      <input
-        ref={attachFileInputCancelListener}
-        type="file"
-        // Includes HEIC/HEIF (both MIME types and extensions — browsers
-        // fall back to extension matching when a HEIC file's reported MIME
-        // type is empty or inconsistent, which happens often since these
-        // aren't standard web image formats) so a genuinely-named .heic
-        // file — the common case straight off an iPhone camera roll, not
-        // just a mislabeled .jpeg — is actually selectable via the file
-        // picker at all. Without this, handleFileSelect's HEIC handling
-        // (isHeicFile()/convertHeicToJpeg()) can never run for that case:
-        // the OS file picker filters non-matching files out of the dialog
-        // before a selection can even happen.
-        accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
-        onChange={e => {
-          // A real selection happened -- the pending-cancel check set up in
-          // the dropzone's onClick above must not fire for this one.
-          filePickerPendingRef.current = false;
-          handleFileSelect(e);
-        }}
-        style={{ display: 'none' }}
-      />
-    </div>
-  );
+        <input
+          ref={attachFileInputCancelListener}
+          type="file"
+          aria-describedby="getroomly-uv2-hint"
+          // Includes HEIC/HEIF (both MIME types and extensions — browsers
+          // fall back to extension matching when a HEIC file's reported MIME
+          // type is empty or inconsistent, which happens often since these
+          // aren't standard web image formats) so a genuinely-named .heic
+          // file — the common case straight off an iPhone camera roll, not
+          // just a mislabeled .jpeg — is actually selectable via the file
+          // picker at all. Without this, handleFileSelect's HEIC handling
+          // (isHeicFile()/convertHeicToJpeg()) can never run for that case:
+          // the OS file picker filters non-matching files out of the dialog
+          // before a selection can even happen.
+          accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+          onChange={e => {
+            // A real selection happened -- the pending-cancel check set up in
+            // the dropzone's onClick above must not fire for this one.
+            filePickerPendingRef.current = false;
+            handleFileSelect(e);
+          }}
+          style={{ display: 'none' }}
+        />
+      </div>
+    );
+  };
 
   const renderProcessingStep = () => (
     <div
@@ -3084,33 +3148,6 @@ export function RoomVisualizationFlow({
   );
 
   // Terms Footer Component (Step 1)
-  const renderTermsFooter = () => (
-    <div style={{ textAlign: 'center' }}>
-      <button
-        onClick={handleOpenTerms}
-        style={{
-          fontSize: '10px',
-          color: 'var(--getroomly-terms-link)',
-          textDecoration: 'underline',
-          fontStyle: 'italic',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: '4px 8px',
-          transition: 'color 0.2s ease',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.color = 'var(--getroomly-terms-link-hover)';
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.color = 'var(--getroomly-terms-link)';
-        }}
-      >
-        {t.termsLink}
-      </button>
-    </div>
-  );
-
   // Terms Dialog Component
   const renderTermsDialog = () => {
     if (!showTermsDialog) {
@@ -3363,7 +3400,46 @@ export function RoomVisualizationFlow({
             color: 'var(--getroomly-header-title)',
           }}
         >
-          {step === 'upload' && t.stepUpload}
+          {step === 'upload' && (
+            // D2 redesign: AI badge + title, centered together -- matches
+            // the retailer's own launch button (EmbedButton.tsx), whose
+            // badge markup/padding/radius/font-size this reuses verbatim.
+            // Only the two colour values differ: that badge sits on a dark
+            // button (semi-transparent white), this one sits on the white
+            // header, so it uses a dark outline/text instead -- the
+            // original rgba(255,255,255,...) pair would be nearly invisible
+            // here. See ref/ screenshot in the D2 handoff for the intended
+            // look (not in the original ref/png/ set).
+            //
+            // No aria-hidden on the badge (found in review, Copilot PR
+            // #139): "AI" here is a real disclosure that this is an
+            // AI-generated visualization, not decorative branding -- a
+            // screen-reader user should hear it exactly like a sighted user
+            // sees it, same as the retailer's own launch button never hides
+            // its own "AI" badge either.
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+              }}
+            >
+              <span
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 'var(--getroomly-radius-xs)',
+                  fontSize: '10px',
+                  fontWeight: '900',
+                  border: '1px solid var(--getroomly-header-title)',
+                  lineHeight: 1,
+                }}
+              >
+                AI
+              </span>
+              {t.uploadV2HeaderTitle}
+            </span>
+          )}
           {step === 'processing' && t.stepProcessing}
           {step === 'result' && t.stepResult}
         </h2>
@@ -3423,7 +3499,11 @@ export function RoomVisualizationFlow({
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'flex-start',
-          overflow: 'hidden',
+          // Upload step (D2 redesign) scrolls internally if its content
+          // doesn't fit the available height instead of being clipped --
+          // processing/result keep 'hidden' (their own fixed aspect-ratio
+          // visuals rely on it to clip cleanly).
+          overflow: step === 'upload' ? 'auto' : 'hidden',
           padding: '0',
           margin: '0 auto',
           position: 'relative',
@@ -3451,9 +3531,15 @@ export function RoomVisualizationFlow({
           // 4px net), applied symmetrically around the credit line's own
           // 11px height (4px + 11px + 4px = 19px), replacing the arbitrary
           // var(--getroomly-space-sm) bottom padding that existed before
-          // any credit line did. Upload/processing keep the original
-          // token value -- they never render the credit line at all.
-          padding: `8px var(--getroomly-space-sm) ${step === 'result' ? '19px' : 'var(--getroomly-space-sm)'}`,
+          // any credit line did. Processing keeps the original token
+          // value -- it never renders the credit line at all. Upload (D2
+          // redesign) gets none: its own trust/hint lines now live inside
+          // renderUploadStep itself, so this shared footer has nothing to
+          // show there and would otherwise just add blank white space.
+          padding:
+            step === 'upload'
+              ? '0'
+              : `8px var(--getroomly-space-sm) ${step === 'result' ? '19px' : 'var(--getroomly-space-sm)'}`,
           backgroundColor: '#ffffff',
           flexShrink: 0,
           // position:relative only so renderResultFooterCredit's absolute
@@ -3462,7 +3548,6 @@ export function RoomVisualizationFlow({
           position: 'relative',
         }}
       >
-        {step === 'upload' && renderTermsFooter()}
         {step === 'processing' && renderProcessingFooter()}
         {step === 'result' && renderResultFooter()}
         {step === 'result' && renderResultFooterCredit()}
