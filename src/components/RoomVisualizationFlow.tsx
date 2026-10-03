@@ -1336,10 +1336,6 @@ export function RoomVisualizationFlow({
             lineHeight: 'var(--gr-uv2-headline-line-height, 1.2)',
             fontWeight: 700,
             letterSpacing: '-0.02em',
-            // @ts-expect-error -- text-wrap is a valid CSS property (Chrome
-            // 114+/Firefox 121+/Safari 17.5+, within this project's
-            // evergreen-current+1 support matrix) but not yet in this
-            // TypeScript/React version's CSSProperties typings.
             textWrap: 'balance',
           }}
         >
