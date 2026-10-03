@@ -14,6 +14,7 @@ import { checkPartnerAvailability } from '../../src/services/partner-status';
 import { __resetAvailabilityStateForTests } from '../../src/lib/availability-state';
 import { FOCUSABLE_SELECTOR } from '../../src/hooks/use-focus-trap';
 import { AppConfig } from '@/config/app-config';
+import { translations } from '@/lib/i18n';
 
 const baseEmbedConfig = {
   apiKey: 'grm_pub_test',
@@ -608,7 +609,9 @@ describe('App — modal focus trap', () => {
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     const labelledBy = dialog.getAttribute('aria-labelledby');
     expect(labelledBy).toBeTruthy();
-    expect(document.getElementById(labelledBy)).toHaveTextContent('Upload Photo');
+    expect(document.getElementById(labelledBy)).toHaveTextContent(
+      translations.en.uploadV2HeaderTitle
+    );
   });
 
   it('wraps Tab from the last focusable element back to the first, instead of escaping into the host page', async () => {
