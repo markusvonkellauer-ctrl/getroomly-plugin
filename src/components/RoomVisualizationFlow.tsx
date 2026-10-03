@@ -19,6 +19,16 @@ import { trackWidgetEvent } from '@/services/event-tracking';
 // copy (uploadV2HeadlineCarpets etc.); everything else falls back to the
 // generic uploadV2*Default strings.
 function isCarpetCategory(category: string): boolean {
+  // Guards the runtime type, not just the compile-time one (found in
+  // review, Copilot PR #139): category ultimately comes from the host
+  // page's own untyped window.GetRoomlyEmbedConfig, so a malformed
+  // integration (e.g. category: 1) can reach here as a non-string despite
+  // the prop's TypeScript type -- same reasoning as isSupportedLanguage's
+  // own runtime guard in lib/i18n.ts. Falls through to the generic default
+  // copy rather than crashing the whole upload view.
+  if (typeof category !== 'string') {
+    return false;
+  }
   return category.toLowerCase().includes('carpet');
 }
 
