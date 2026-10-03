@@ -156,7 +156,7 @@ describe('RoomVisualizationFlow', () => {
   test('renders the upload step on mount', () => {
     render(<RoomVisualizationFlow {...defaultProps} />);
     expect(
-      screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+      screen.getByRole('heading', { name: new RegExp(translations.en.uploadV2HeaderTitle) })
     ).toBeInTheDocument();
     expect(screen.queryByText('Step 2: Place Marker')).not.toBeInTheDocument();
   });
@@ -192,6 +192,19 @@ describe('RoomVisualizationFlow', () => {
   });
 
   describe('upload view (D2 redesign)', () => {
+    test('the header "AI" badge is part of the accessible heading name, not hidden from screen readers', () => {
+      // Found in review (Copilot, PR #139): "AI" here is a real disclosure
+      // (this is an AI-generated visualization), not decorative branding --
+      // aria-hidden would give screen-reader users strictly less
+      // information than sighted users see.
+      render(<RoomVisualizationFlow {...defaultProps} />);
+
+      const heading = screen.getByRole('heading', {
+        name: new RegExp(translations.en.uploadV2HeaderTitle),
+      });
+      expect(heading).toHaveAccessibleName(`AI ${translations.en.uploadV2HeaderTitle}`);
+    });
+
     test('still uploads the dropped file (existing drop-to-upload behaviour is unchanged, just with no visible dragover UI)', async () => {
       // Brief: "do not add new visible UI" for drag-and-drop -- dropping
       // anywhere on the view still works, there's just no dedicated
@@ -248,6 +261,36 @@ describe('RoomVisualizationFlow', () => {
 
       expect(screen.queryByAltText(defaultProps.productName)).not.toBeInTheDocument();
       expect(screen.getByText(defaultProps.productName)).toBeInTheDocument();
+    });
+
+    test("a broken thumbnail for one product does not suppress a later, different product's valid thumbnail after a live swap", () => {
+      // Found in review (Copilot, PR #139): this component can stay mounted
+      // across a live product swap (the host page changes
+      // productImages/productName without remounting -- see the
+      // widget_opened/closed identity tests elsewhere in this file). A bare
+      // boolean failure flag would keep hiding every LATER product's
+      // perfectly valid image forever once any one image had ever failed.
+      const { rerender } = render(
+        <RoomVisualizationFlow
+          {...defaultProps}
+          productImages={['https://example.com/broken.jpg']}
+        />
+      );
+
+      fireEvent.error(screen.getByAltText(defaultProps.productName));
+      expect(screen.queryByAltText(defaultProps.productName)).not.toBeInTheDocument();
+
+      rerender(
+        <RoomVisualizationFlow
+          {...defaultProps}
+          productId="rug-002"
+          productName="A Different Rug"
+          productImages={['https://example.com/working.jpg']}
+        />
+      );
+
+      const newThumb = screen.getByAltText('A Different Rug');
+      expect(newThumb).toHaveAttribute('src', 'https://example.com/working.jpg');
     });
 
     test('uses the carpets-specific headline/step copy when category is "carpets"', () => {
@@ -527,7 +570,7 @@ describe('RoomVisualizationFlow', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+        screen.getByRole('heading', { name: new RegExp(translations.en.uploadV2HeaderTitle) })
       ).toBeInTheDocument();
     });
   });
@@ -542,7 +585,9 @@ describe('RoomVisualizationFlow', () => {
       uploadFile(input, makeFile());
     });
 
-    await waitFor(() => screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle }));
+    await waitFor(() =>
+      screen.getByRole('heading', { name: new RegExp(translations.en.uploadV2HeaderTitle) })
+    );
     expect(input.value).toBe('');
   });
 
@@ -655,7 +700,7 @@ describe('RoomVisualizationFlow', () => {
 
     expect(generateRoomVisualization).not.toHaveBeenCalled();
     expect(
-      screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+      screen.getByRole('heading', { name: new RegExp(translations.en.uploadV2HeaderTitle) })
     ).toBeInTheDocument();
   });
 
@@ -824,7 +869,7 @@ describe('RoomVisualizationFlow', () => {
         expect(onError).toHaveBeenCalledWith(translations.en.errorUnsupportedImageFormat);
       });
       expect(
-        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+        screen.getByRole('heading', { name: new RegExp(translations.en.uploadV2HeaderTitle) })
       ).toBeInTheDocument();
       expect(generateRoomVisualization).not.toHaveBeenCalled();
       // Retrying (a converted file, or a different photo) must fire onChange
@@ -934,7 +979,7 @@ describe('RoomVisualizationFlow', () => {
         expect(onError).toHaveBeenCalledWith('Failed to read image file');
       });
       expect(
-        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+        screen.getByRole('heading', { name: new RegExp(translations.en.uploadV2HeaderTitle) })
       ).toBeInTheDocument();
       expect(generateRoomVisualization).not.toHaveBeenCalled();
       expect(input.value).toBe('');
@@ -996,7 +1041,7 @@ describe('RoomVisualizationFlow', () => {
         expect(onError).toHaveBeenCalledWith('Failed to read image file');
       });
       expect(
-        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+        screen.getByRole('heading', { name: new RegExp(translations.en.uploadV2HeaderTitle) })
       ).toBeInTheDocument();
       expect(generateRoomVisualization).not.toHaveBeenCalled();
       // Retrying the same file must fire onChange again — an unchanged input
@@ -1034,7 +1079,7 @@ describe('RoomVisualizationFlow', () => {
         expect(onError).toHaveBeenCalledWith('Failed to read image file');
       });
       expect(
-        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+        screen.getByRole('heading', { name: new RegExp(translations.en.uploadV2HeaderTitle) })
       ).toBeInTheDocument();
       expect(generateRoomVisualization).not.toHaveBeenCalled();
       expect(input.value).toBe('');
@@ -1158,7 +1203,7 @@ describe('RoomVisualizationFlow', () => {
     });
 
     expect(
-      screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+      screen.getByRole('heading', { name: new RegExp(translations.en.uploadV2HeaderTitle) })
     ).toBeInTheDocument();
     expect(input.value).toBe('');
   });
@@ -3300,7 +3345,7 @@ describe('RoomVisualizationFlow', () => {
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(
-        screen.getByRole('heading', { name: translations.en.uploadV2HeaderTitle })
+        screen.getByRole('heading', { name: new RegExp(translations.en.uploadV2HeaderTitle) })
       ).toBeInTheDocument();
     });
 

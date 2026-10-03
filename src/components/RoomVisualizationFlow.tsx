@@ -175,8 +175,13 @@ export function RoomVisualizationFlow({
 
   // Upload view (D2 redesign): hides just the product thumbnail on a broken
   // image URL, per the handoff brief -- never show a broken-image icon, but
-  // the product name text still renders fine on its own.
-  const [productThumbFailed, setProductThumbFailed] = useState(false);
+  // the product name text still renders fine on its own. Stores the URL
+  // that failed, not just a bare boolean (found in review, Copilot PR
+  // #139): this component can stay mounted across a live product swap (the
+  // host page changes productImages/productName without remounting), so a
+  // plain boolean would keep hiding every LATER product's perfectly valid
+  // thumbnail forever once any one image had ever failed.
+  const [failedProductThumbUrl, setFailedProductThumbUrl] = useState<string | null>(null);
 
   // The result image's own maxHeight can't be a plain CSS percentage: its
   // flex ancestor (resultContentRef below) has overflow:hidden + minHeight:0,
@@ -1238,7 +1243,7 @@ export function RoomVisualizationFlow({
     // never hides the name too (brief: never show a broken image, but the
     // name still renders fine on its own).
     const showProductRow = Boolean(productName);
-    const showThumb = Boolean(productThumbUrl) && !productThumbFailed;
+    const showThumb = Boolean(productThumbUrl) && failedProductThumbUrl !== productThumbUrl;
 
     return (
       <div
@@ -1296,7 +1301,7 @@ export function RoomVisualizationFlow({
               <img
                 src={productThumbUrl}
                 alt={productName}
-                onError={() => setProductThumbFailed(true)}
+                onError={() => setFailedProductThumbUrl(productThumbUrl)}
                 style={{
                   width: 'var(--gr-uv2-thumb-size, 48px)',
                   height: 'var(--gr-uv2-thumb-size, 48px)',
@@ -1329,7 +1334,13 @@ export function RoomVisualizationFlow({
           </div>
         )}
 
-        <h1
+        {/* h3, not h1 (found in review, Copilot PR #139): the dialog's own
+            modal title is already an h2 (getroomly-modal-title below) --
+            nesting an h1 under it reverses the heading hierarchy and, since
+            this widget embeds via Shadow DOM into an arbitrary host page,
+            would add a page-level heading inside that page's own document
+            outline. */}
+        <h3
           style={{
             margin: 'var(--gr-uv2-headline-margin-top, 20px) 0 0',
             fontSize: 'var(--gr-uv2-headline-size, 26px)',
@@ -1340,7 +1351,7 @@ export function RoomVisualizationFlow({
           }}
         >
           {headline}
-        </h1>
+        </h3>
 
         <div
           style={{
@@ -3379,6 +3390,13 @@ export function RoomVisualizationFlow({
             // original rgba(255,255,255,...) pair would be nearly invisible
             // here. See ref/ screenshot in the D2 handoff for the intended
             // look (not in the original ref/png/ set).
+            //
+            // No aria-hidden on the badge (found in review, Copilot PR
+            // #139): "AI" here is a real disclosure that this is an
+            // AI-generated visualization, not decorative branding -- a
+            // screen-reader user should hear it exactly like a sighted user
+            // sees it, same as the retailer's own launch button never hides
+            // its own "AI" badge either.
             <span
               style={{
                 display: 'inline-flex',
@@ -3388,7 +3406,6 @@ export function RoomVisualizationFlow({
               }}
             >
               <span
-                aria-hidden="true"
                 style={{
                   padding: '4px 8px',
                   borderRadius: 'var(--getroomly-radius-xs)',
