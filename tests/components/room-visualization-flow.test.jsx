@@ -229,18 +229,26 @@ describe('RoomVisualizationFlow', () => {
       expect(container.querySelector('[style*="cursor: pointer"]')).toBe(button);
     });
 
+    // The thumbnail is decorative (alt="", found in review -- Copilot PR
+    // #139: its adjacent visible product name already supplies the same
+    // text, so a real alt made screen readers announce it twice), so these
+    // locate it via the one <img> this view ever renders at a time, not an
+    // accessible name.
+    const getProductThumb = () => document.querySelector('.getroomly-upload-v2 img');
+
     test('renders the product row with thumbnail and name when product data is present', () => {
       render(<RoomVisualizationFlow {...defaultProps} />);
 
-      const thumb = screen.getByAltText(defaultProps.productName);
+      const thumb = getProductThumb();
       expect(thumb).toHaveAttribute('src', defaultProps.productImages[0]);
+      expect(thumb).toHaveAttribute('alt', '');
       expect(screen.getByText(defaultProps.productName)).toBeInTheDocument();
     });
 
     test('shows just the name, no thumbnail, when there is no product image URL -- never a broken image', () => {
       render(<RoomVisualizationFlow {...defaultProps} productImages={[]} />);
 
-      expect(screen.queryByAltText(defaultProps.productName)).not.toBeInTheDocument();
+      expect(getProductThumb()).not.toBeInTheDocument();
       expect(screen.getByText(defaultProps.productName)).toBeInTheDocument();
     });
 
@@ -248,18 +256,15 @@ describe('RoomVisualizationFlow', () => {
       render(<RoomVisualizationFlow {...defaultProps} productImages={[]} productName="" />);
 
       expect(screen.queryByText(defaultProps.productName)).not.toBeInTheDocument();
-      // No img at all, with or without an accessible name -- an empty name
-      // AND no image means nothing to show.
-      expect(document.querySelector('.getroomly-upload-v2 img')).not.toBeInTheDocument();
+      expect(getProductThumb()).not.toBeInTheDocument();
     });
 
     test('hides just the thumbnail (keeps the product name) when the image URL fails to load', () => {
       render(<RoomVisualizationFlow {...defaultProps} />);
 
-      const thumb = screen.getByAltText(defaultProps.productName);
-      fireEvent.error(thumb);
+      fireEvent.error(getProductThumb());
 
-      expect(screen.queryByAltText(defaultProps.productName)).not.toBeInTheDocument();
+      expect(getProductThumb()).not.toBeInTheDocument();
       expect(screen.getByText(defaultProps.productName)).toBeInTheDocument();
     });
 
@@ -277,8 +282,8 @@ describe('RoomVisualizationFlow', () => {
         />
       );
 
-      fireEvent.error(screen.getByAltText(defaultProps.productName));
-      expect(screen.queryByAltText(defaultProps.productName)).not.toBeInTheDocument();
+      fireEvent.error(getProductThumb());
+      expect(getProductThumb()).not.toBeInTheDocument();
 
       rerender(
         <RoomVisualizationFlow
@@ -289,8 +294,7 @@ describe('RoomVisualizationFlow', () => {
         />
       );
 
-      const newThumb = screen.getByAltText('A Different Rug');
-      expect(newThumb).toHaveAttribute('src', 'https://example.com/working.jpg');
+      expect(getProductThumb()).toHaveAttribute('src', 'https://example.com/working.jpg');
     });
 
     test('uses the carpets-specific headline/step copy when category is "carpets"', () => {

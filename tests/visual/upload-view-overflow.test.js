@@ -21,7 +21,10 @@
  *  - 320px: compact mode (max-height:820px), smallest realistic phone
  *    (360px panel - 2*20px compact padding).
  *  - 350px: regular/mobile, no compact (390px panel - 2*20px padding).
- *  - 480px: desktop (560px modal - 2*40px padding, min-width:1024px).
+ *  - 440px: desktop (found in review, Copilot PR #139: the modal's real
+ *    cap is 520px -- App.tsx's maxWidth, matching the .lg\:w-\[520px\]
+ *    class -- not the 560px the D2-Desktop reference mockup shows; 520-80
+ *    padding = 440px, not 480px).
  *
  * What this checks: individual elements never force horizontal overflow
  * (an unbreakable long word/compound wider than its container -- German and
@@ -52,7 +55,7 @@ function escapeHtml(str) {
 
 const SCREENSHOT_DIR = path.join(__dirname, '__upload_view_overflow_failures__');
 const FONT_STACK = "system-ui, 'Segoe UI', Roboto, sans-serif";
-const CONTENT_WIDTHS = [320, 350, 480];
+const CONTENT_WIDTHS = [320, 350, 440];
 const ALL_LANGUAGES = Object.keys(translations);
 
 /**
@@ -105,7 +108,7 @@ const ELEMENT_SPECS = [
           align-items:center; justify-content:center; gap:10px; font-family:${FONT_STACK};
         ">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 15V4m0 0L8 8m4-4l4 4M5 14v4a2 2 0 002 2h10a2 2 0 002-2v-4"/></svg>
-          <span>${text}</span>
+          <span id="target-text">${text}</span>
         </button>
       </div>`,
   },
@@ -167,18 +170,37 @@ describe('D2 upload view: cross-language overflow', () => {
               if (!el) {
                 throw new Error('#target not found -- spec.render() must include id="target"');
               }
+              // Found in review (Copilot, PR #139): scrollHeight ===
+              // clientHeight alone doesn't prove single-line -- a two-line
+              // label can still fit inside the button's fixed 60px height
+              // without triggering any height overflow at all. Counting the
+              // text's own rendered line boxes via Range.getClientRects()
+              // is what actually distinguishes "wrapped to 2 lines, by
+              // coincidence still ≤60px tall" from the real single-line
+              // case -- 1 rect per line, always, regardless of the
+              // container's own height.
+              const textEl = document.getElementById('target-text');
+              let lineCount = null;
+              if (textEl) {
+                const range = document.createRange();
+                range.selectNodeContents(textEl);
+                lineCount = range.getClientRects().length;
+              }
               return {
                 scrollWidth: el.scrollWidth,
                 clientWidth: el.clientWidth,
                 scrollHeight: el.scrollHeight,
                 clientHeight: el.clientHeight,
+                lineCount,
               };
             });
 
             const overflowsX = box.scrollWidth > box.clientWidth + 1;
-            // Only the no-wrap button cares about height -- wrapped text
-            // elements are SUPPOSED to grow taller with more lines.
-            const overflowsY = !spec.wrap && box.scrollHeight > box.clientHeight + 1;
+            // Only the no-wrap button cares about height/line-wrapping --
+            // wrapped text elements are SUPPOSED to grow taller with more
+            // lines.
+            const overflowsY =
+              !spec.wrap && (box.scrollHeight > box.clientHeight + 1 || box.lineCount > 1);
 
             if (overflowsX || overflowsY) {
               const safeLang = lang.replace(/[^a-z0-9]/gi, '_');

@@ -1265,6 +1265,12 @@ export function RoomVisualizationFlow({
           justifyContent: 'center',
           padding: 'var(--gr-uv2-padding, 20px)',
           textAlign: 'center',
+          // Found in review, Copilot PR #139: the modal container itself is
+          // .bg-background (#ffffff, index.css), not the #FAFAFA this
+          // design assumes -- without this, the white steps card below
+          // rendered on an equally white panel instead of the intended
+          // off-white background, losing the contrast between them.
+          backgroundColor: '#FAFAFA',
           // No explicit fontFamily -- inherits the host's own font via
           // brand.ts, same reasoning as the old dropzone root (found in
           // review, see git history).
@@ -1300,7 +1306,11 @@ export function RoomVisualizationFlow({
             {showThumb && (
               <img
                 src={productThumbUrl}
-                alt={productName}
+                // Decorative (found in review, Copilot PR #139): the
+                // product name right next to this image already supplies
+                // the same text visibly, so a real alt here made screen
+                // readers announce the product twice in a row.
+                alt=""
                 onError={() => setFailedProductThumbUrl(productThumbUrl)}
                 style={{
                   width: 'var(--gr-uv2-thumb-size, 48px)',
