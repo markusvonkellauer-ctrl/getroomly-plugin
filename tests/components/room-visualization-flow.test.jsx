@@ -4276,5 +4276,95 @@ describe('RoomVisualizationFlow', () => {
         );
       });
     });
+
+    // Result-screen purchase-intent actions (found in review with Markus:
+    // these only reached the host page via config.callbacks before this --
+    // invisible to GetRoomly's own funnel). Each test only checks the
+    // trackWidgetEvent call itself; the buttons' own mechanics (blob
+    // conversion, navigator.share, download link) are already covered
+    // elsewhere in this file.
+    describe('result-screen purchase-intent events', () => {
+      const RESULT_DATA_URL = 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=';
+
+      const renderAtResult = async () => {
+        generateRoomVisualization.mockResolvedValueOnce({ imageUrl: RESULT_DATA_URL });
+        render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
+        await act(async () => {
+          uploadFile(document.querySelector('input[type="file"]'), makeFile());
+        });
+        await waitFor(() => screen.getByText('Review Your New Room'));
+        trackWidgetEvent.mockClear();
+      };
+
+      let originalConsoleError;
+      beforeEach(() => {
+        originalConsoleError = console.error;
+        console.error = jest.fn();
+      });
+      afterEach(() => {
+        console.error = originalConsoleError;
+        delete navigator.share;
+      });
+
+      test('fires add_to_basket_clicked when Add to Basket is clicked', async () => {
+        await renderAtResult();
+
+        fireEvent.click(screen.getByText('Add to Basket'));
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'add_to_basket_clicked',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
+      test('fires favorite_clicked when the favorite button is clicked', async () => {
+        await renderAtResult();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save to favourites' }));
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'favorite_clicked',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+
+      test('fires download_clicked when Download Image is clicked', async () => {
+        const user = userEvent.setup();
+        global.URL.createObjectURL.mockReturnValueOnce('blob:mock-download-url');
+        const clickSpy = jest
+          .spyOn(HTMLAnchorElement.prototype, 'click')
+          .mockImplementation(() => {});
+        await renderAtResult();
+
+        await user.click(screen.getByText('Download Image'));
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'download_clicked',
+          expect.any(String),
+          'rug-001'
+        );
+        clickSpy.mockRestore();
+      });
+
+      test('fires share_clicked when Share is clicked', async () => {
+        const user = userEvent.setup();
+        navigator.share = jest.fn().mockResolvedValue(undefined);
+        await renderAtResult();
+
+        await user.click(screen.getByText('Share'));
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          'partner-abc',
+          'share_clicked',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+    });
   });
 });

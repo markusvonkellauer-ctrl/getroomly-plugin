@@ -7,7 +7,20 @@ export type WidgetEventType =
   | 'upload_clicked'
   | 'upload_cancelled'
   | 'upload_completed'
-  | 'result_viewed';
+  | 'result_viewed'
+  /**
+   * Result-screen purchase-intent actions -- previously only reached the
+   * host page via config.callbacks (onAddToBasket/onFavorite/onSaveShare),
+   * invisible to GetRoomly's own funnel diagnostics. download_clicked and
+   * share_clicked are the button click itself, not onSaveShare's shared
+   * download mechanics (one Share click can still fall through to a
+   * download, but which button the shopper actually pressed is the signal
+   * worth keeping distinct).
+   */
+  | 'add_to_basket_clicked'
+  | 'favorite_clicked'
+  | 'share_clicked'
+  | 'download_clicked';
 
 /**
  * Fire-and-forget report of one widget UX-funnel step to GetRoomly's own

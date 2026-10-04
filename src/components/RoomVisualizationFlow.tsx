@@ -1999,6 +1999,8 @@ export function RoomVisualizationFlow({
 
   // Result step handlers
   const handleAddToBasket = () => {
+    trackWidgetEvent(config?.apiKey, 'add_to_basket_clicked', sessionId, productId);
+
     // Call callback (works in Shadow DOM / Embed mode)
     config?.callbacks?.onAddToBasket?.(resultImage || '', productId);
 
@@ -2030,6 +2032,7 @@ export function RoomVisualizationFlow({
     const newFavoritedState = !isFavorited;
     setIsFavorited(newFavoritedState);
 
+    trackWidgetEvent(config?.apiKey, 'favorite_clicked', sessionId, productId);
     config?.callbacks?.onFavorite?.(resultImage || '', productId);
 
     window.dispatchEvent(
@@ -2162,6 +2165,7 @@ export function RoomVisualizationFlow({
   };
 
   const handleDownloadToDevice = () => {
+    trackWidgetEvent(config?.apiKey, 'download_clicked', sessionId, productId);
     triggerDownload(currentResultImage);
 
     setDownloadButtonConfirmed(true);
@@ -2202,6 +2206,7 @@ export function RoomVisualizationFlow({
       return;
     }
     isSharingRef.current = true;
+    trackWidgetEvent(config?.apiKey, 'share_clicked', sessionId, productId);
 
     const showShareConfirmation = (status: 'copied' | 'downloaded') => {
       setShareButtonStatus(status);
