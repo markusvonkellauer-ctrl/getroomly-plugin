@@ -2368,6 +2368,70 @@ describe('RoomVisualizationFlow', () => {
       expect(img.style.maxHeight).toBe('234px');
     });
 
+    // The wrapper is flex:1 1 auto, so its height follows the image whose
+    // maxHeight is fed from this very measurement. Browsers snap fractional
+    // CSS heights down to 1/64px, so storing the raw fractional value made
+    // each pass measure slightly less than the last (observed on desktop
+    // Chrome at devicePixelRatio 2: ~1/64px per frame, a few px of drift
+    // over ~5s). Whole-pixel storage ends that loop after one pass.
+    describe('fractional measurements (layout feedback loop)', () => {
+      const fireHeight = (observer, height) =>
+        act(() => {
+          observer.callback([{ contentRect: { height } }]);
+        });
+
+      test('rounds a fractional measurement to whole pixels', async () => {
+        await renderAtResult({ imageUrl: 'blob:result' });
+        const img = screen.getByAltText('New Design');
+        const observer = MockResizeObserver.instances.find(i => i.element.style.flex === '1 1 auto');
+
+        fireHeight(observer, 346.8);
+        expect(img.style.maxHeight).toBe('347px');
+
+        fireHeight(observer, 234.4);
+        expect(img.style.maxHeight).toBe('234px');
+      });
+
+      test('a run of sub-pixel shrinkage (the 1/64px creep) settles on one stable value instead of tracking it', async () => {
+        await renderAtResult({ imageUrl: 'blob:result' });
+        const img = screen.getByAltText('New Design');
+        const observer = MockResizeObserver.instances.find(i => i.element.style.flex === '1 1 auto');
+
+        // Measurements copied from the real desktop-Chrome trace: each
+        // frame reported ~1/64px less than the previous maxHeight.
+        const creep = [346.719, 346.703, 346.6875, 346.672, 346.656, 346.64, 346.625];
+        const seen = new Set();
+        for (const h of creep) {
+          fireHeight(observer, h);
+          seen.add(img.style.maxHeight);
+        }
+
+        expect(seen).toEqual(new Set(['347px']));
+      });
+
+      test('a real size change (e.g. viewport resize, footer row added) is still applied', async () => {
+        await renderAtResult({ imageUrl: 'blob:result' });
+        const img = screen.getByAltText('New Design');
+        const observer = MockResizeObserver.instances.find(i => i.element.style.flex === '1 1 auto');
+
+        fireHeight(observer, 347);
+        expect(img.style.maxHeight).toBe('347px');
+        fireHeight(observer, 312);
+        expect(img.style.maxHeight).toBe('312px');
+      });
+
+      test('whole-pixel measurements (the mobile case) are applied unchanged', async () => {
+        await renderAtResult({ imageUrl: 'blob:result' });
+        const img = screen.getByAltText('New Design');
+        const observer = MockResizeObserver.instances.find(i => i.element.style.flex === '1 1 auto');
+
+        for (const h of [150, 234, 400, 96]) {
+          fireHeight(observer, h);
+          expect(img.style.maxHeight).toBe(`${h}px`);
+        }
+      });
+    });
+
     test('a second ResizeObserver observes imageContainerRef itself, separate from resultContentRef', async () => {
       await renderAtResult({ imageUrl: 'blob:result', generationId: 'gen-1' });
 
