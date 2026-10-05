@@ -219,7 +219,19 @@ export function RoomVisualizationFlow({
     const observer = new ResizeObserver(entries => {
       const entry = entries[0];
       if (entry) {
-        setAvailableImageHeightPx(entry.contentRect.height);
+        // Whole pixels only. resultContentRef is flex:1 1 auto, so its own
+        // height follows the image it contains, and that image's height is
+        // capped by the value stored here -- a feedback loop. Browsers
+        // snap a fractional CSS height down to their 1/64px layout unit,
+        // so feeding the raw fractional measurement back in lost ~1/64px
+        // on every pass: the image, the modal and the overlay crept a few
+        // pixels over several seconds on desktop (fractional heights from
+        // devicePixelRatio 2 / Windows display scaling) before settling.
+        // An integer maxHeight lays out exactly, so the next measurement
+        // returns the same integer and the loop ends after one pass; round
+        // (not floor) so a 1/64px shortfall can't ratchet down a whole px.
+        const next = Math.round(entry.contentRect.height);
+        setAvailableImageHeightPx(prev => (prev === next ? prev : next));
       }
     });
     observer.observe(el);
