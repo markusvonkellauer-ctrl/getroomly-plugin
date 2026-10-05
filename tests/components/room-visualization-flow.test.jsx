@@ -2383,7 +2383,9 @@ describe('RoomVisualizationFlow', () => {
       test('rounds a fractional measurement to whole pixels', async () => {
         await renderAtResult({ imageUrl: 'blob:result' });
         const img = screen.getByAltText('New Design');
-        const observer = MockResizeObserver.instances.find(i => i.element.style.flex === '1 1 auto');
+        const observer = MockResizeObserver.instances.find(
+          i => i.element.style.flex === '1 1 auto'
+        );
 
         fireHeight(observer, 346.8);
         expect(img.style.maxHeight).toBe('347px');
@@ -2395,7 +2397,9 @@ describe('RoomVisualizationFlow', () => {
       test('a run of sub-pixel shrinkage (the 1/64px creep) settles on one stable value instead of tracking it', async () => {
         await renderAtResult({ imageUrl: 'blob:result' });
         const img = screen.getByAltText('New Design');
-        const observer = MockResizeObserver.instances.find(i => i.element.style.flex === '1 1 auto');
+        const observer = MockResizeObserver.instances.find(
+          i => i.element.style.flex === '1 1 auto'
+        );
 
         // Measurements copied from the real desktop-Chrome trace: each
         // frame reported ~1/64px less than the previous maxHeight.
@@ -2412,7 +2416,9 @@ describe('RoomVisualizationFlow', () => {
       test('a real size change (e.g. viewport resize, footer row added) is still applied', async () => {
         await renderAtResult({ imageUrl: 'blob:result' });
         const img = screen.getByAltText('New Design');
-        const observer = MockResizeObserver.instances.find(i => i.element.style.flex === '1 1 auto');
+        const observer = MockResizeObserver.instances.find(
+          i => i.element.style.flex === '1 1 auto'
+        );
 
         fireHeight(observer, 347);
         expect(img.style.maxHeight).toBe('347px');
@@ -2423,7 +2429,9 @@ describe('RoomVisualizationFlow', () => {
       test('whole-pixel measurements (the mobile case) are applied unchanged', async () => {
         await renderAtResult({ imageUrl: 'blob:result' });
         const img = screen.getByAltText('New Design');
-        const observer = MockResizeObserver.instances.find(i => i.element.style.flex === '1 1 auto');
+        const observer = MockResizeObserver.instances.find(
+          i => i.element.style.flex === '1 1 auto'
+        );
 
         for (const h of [150, 234, 400, 96]) {
           fireHeight(observer, h);
