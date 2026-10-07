@@ -153,6 +153,89 @@ describe('RoomVisualizationFlow', () => {
     submitFeedback.mockResolvedValue(undefined);
   });
 
+  // ─── sessionId persistence across modal remounts ──────────────────────────
+  // App.tsx only renders this component while isModalOpen is true, so a
+  // shopper closing and reopening the modal (e.g. to try a different size)
+  // fully unmounts/remounts it. The backend's findReferenceAnchor keys off
+  // sessionId to find the PREVIOUS generation for the same room photo and
+  // ground the new size against it — if sessionId isn't stable across that
+  // remount, the anchor never fires and sizing silently falls back to
+  // unreliable text-only instructions (see RUG_SCALE_GROUNDING_HISTORY.md in
+  // the backend repo). sessionId must therefore be backed by sessionStorage,
+  // not a bare per-mount useState random UUID.
+  describe('sessionId persistence', () => {
+    const STORAGE_KEY = 'getroomly-session-id';
+
+    beforeEach(() => {
+      sessionStorage.clear();
+    });
+
+    afterEach(() => {
+      sessionStorage.clear();
+    });
+
+    const getUsedSessionId = async () => {
+      const input = document.querySelector('input[type="file"]');
+      await act(async () => {
+        uploadFile(input, makeFile());
+      });
+      await waitFor(() => expect(generateRoomVisualization).toHaveBeenCalled());
+      const calls = generateRoomVisualization.mock.calls;
+      return calls[calls.length - 1][0].sessionId;
+    };
+
+    test('sessionId persists across an unmount + remount in the same tab', async () => {
+      generateRoomVisualization.mockResolvedValue({ imageUrl: 'blob:result' });
+
+      const { unmount } = render(<RoomVisualizationFlow {...defaultProps} />);
+      const firstSessionId = await getUsedSessionId();
+      expect(firstSessionId).toBeTruthy();
+      unmount();
+
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const secondSessionId = await getUsedSessionId();
+
+      expect(secondSessionId).toBe(firstSessionId);
+      expect(sessionStorage.getItem(STORAGE_KEY)).toBe(firstSessionId);
+    });
+
+    test('a fresh tab/session with no sessionStorage entry gets a valid new sessionId', async () => {
+      generateRoomVisualization.mockResolvedValue({ imageUrl: 'blob:result' });
+      expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+
+      render(<RoomVisualizationFlow {...defaultProps} />);
+      const sessionId = await getUsedSessionId();
+
+      expect(sessionId).toBeTruthy();
+      expect(typeof sessionId).toBe('string');
+      expect(sessionStorage.getItem(STORAGE_KEY)).toBe(sessionId);
+    });
+
+    test('falls back to a usable sessionId without crashing if sessionStorage throws', async () => {
+      generateRoomVisualization.mockResolvedValue({ imageUrl: 'blob:result' });
+
+      const originalGetItem = Storage.prototype.getItem;
+      const originalSetItem = Storage.prototype.setItem;
+      Storage.prototype.getItem = () => {
+        throw new Error('storage disabled');
+      };
+      Storage.prototype.setItem = () => {
+        throw new Error('storage disabled');
+      };
+
+      try {
+        expect(() => render(<RoomVisualizationFlow {...defaultProps} />)).not.toThrow();
+        const sessionId = await getUsedSessionId();
+
+        expect(sessionId).toBeTruthy();
+        expect(typeof sessionId).toBe('string');
+      } finally {
+        Storage.prototype.getItem = originalGetItem;
+        Storage.prototype.setItem = originalSetItem;
+      }
+    });
+  });
+
   // ─── Initial render ───────────────────────────────────────────────────────
 
   test('renders the upload step on mount', () => {

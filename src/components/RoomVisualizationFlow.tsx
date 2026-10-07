@@ -81,11 +81,41 @@ export function RoomVisualizationFlow({
   // instance. Feedback needs to be attributed to this specific image.
   const [generationId, setGenerationId] = useState<string | null>(null);
 
-  // One sessionId per plugin instance — sent on every generate, indexed in backend RenderLog for support tracing
-  const [sessionId] = useState<string>(
-    () =>
-      crypto.randomUUID?.() ?? `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-  );
+  // One sessionId per shopper visit — sent on every generate, indexed in
+  // backend RenderLog for support tracing. Backed by sessionStorage (not a
+  // bare useState random UUID) because App.tsx only renders this component
+  // while isModalOpen is true, so it fully unmounts/remounts every time the
+  // modal is closed and reopened (e.g. the shopper tries a different size).
+  // The backend's findReferenceAnchor keys off sessionId to find the
+  // PREVIOUS generation for the same room photo and ground the new size
+  // against it; without persistence, every remount minted a fresh sessionId
+  // with nothing tying it to the previous one, so the anchor never fired
+  // and sizing silently fell back to unreliable text-only instructions (see
+  // RUG_SCALE_GROUNDING_HISTORY.md in the backend repo). sessionStorage
+  // (not localStorage) is intentional: it already dies with the tab, which
+  // matches "one shopper visit" with no TTL logic needed.
+  //
+  // Read/write failures (privacy modes, sandboxed iframes blocking storage
+  // access — this widget is embedded on third-party partner sites) are
+  // swallowed and fall back to the previous random-UUID-per-mount behavior
+  // rather than crashing the component.
+  const [sessionId] = useState<string>(() => {
+    const STORAGE_KEY = 'getroomly-session-id';
+    try {
+      const existing = sessionStorage.getItem(STORAGE_KEY);
+      if (existing) {
+        return existing;
+      }
+      const fresh =
+        crypto.randomUUID?.() ?? `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      sessionStorage.setItem(STORAGE_KEY, fresh);
+      return fresh;
+    } catch {
+      return (
+        crypto.randomUUID?.() ?? `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      );
+    }
+  });
 
   // Read inside the two effects below via a ref, not listed as a dependency
   // — found in review: useEmbedConfig re-reads window.GetRoomlyEmbedConfig
