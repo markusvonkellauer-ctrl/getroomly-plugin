@@ -831,14 +831,17 @@ describe('RoomVisualizationFlow', () => {
     });
   });
 
-  test('the file input accepts HEIC/HEIF, so a genuinely-named .heic file is selectable at all', () => {
-    // Regression coverage for a Copilot review finding on PR #92: without
-    // HEIC/HEIF in `accept`, the OS file picker filters real .heic/.heif
-    // files out of the dialog before a selection can even happen — the new
-    // isHeicFile()/convertHeicToJpeg() handling could only ever be reached
-    // by a *mislabeled* file (e.g. HEIC bytes named photo.jpeg), never a
-    // genuinely-named one, which is the common case straight off an
-    // iPhone camera roll.
+  test('the file input accepts any image and keeps .heic/.heif selectable on every platform', () => {
+    // Two requirements pull in different directions, and both are pinned here:
+    // - Nordic Nest reported that on a Google Pixel a list of specific image
+    //   types opened only the photo picker (no file browsing, no camera), so
+    //   `accept` must be the image/* wildcard, not a list of formats.
+    // - Regression coverage for a Copilot review finding on PR #92: without
+    //   .heic/.heif the OS file picker can filter real .heic/.heif files out
+    //   of the dialog before a selection can even happen, so the
+    //   isHeicFile()/convertHeicToJpeg() handling could only ever be reached
+    //   by a *mislabeled* file, never a genuinely-named one, which is the
+    //   common case straight off an iPhone camera roll.
     render(<RoomVisualizationFlow {...defaultProps} />);
 
     const input = document.querySelector('input[type="file"]');
@@ -847,14 +850,24 @@ describe('RoomVisualizationFlow', () => {
     // than a clear "expected not null" assertion message.
     expect(input).not.toBeNull();
     const accept = input.getAttribute('accept');
-    // Same reasoning as the input itself: a null accept would otherwise
-    // fail the toContain matchers with a less clear error than an explicit
-    // "expected not null" assertion pointing at the missing attribute.
     expect(accept).not.toBeNull();
-    expect(accept).toContain('image/heic');
-    expect(accept).toContain('image/heif');
-    expect(accept).toContain('.heic');
-    expect(accept).toContain('.heif');
+    const tokens = accept.split(',').map(token => token.trim());
+    expect(tokens).toContain('image/*');
+    expect(tokens).toContain('.heic');
+    expect(tokens).toContain('.heif');
+    // The Pixel report was about a restrictive list: no specific image MIME
+    // type may creep back in next to the wildcard.
+    expect(tokens.filter(token => token.startsWith('image/') && token !== 'image/*')).toEqual([]);
+  });
+
+  test('the file input has no capture attribute, so picking an existing photo stays possible', () => {
+    // `capture` would force the camera on mobile and remove the choice of
+    // picking a photo that is already on the phone.
+    render(<RoomVisualizationFlow {...defaultProps} />);
+
+    const input = document.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+    expect(input.hasAttribute('capture')).toBe(false);
   });
 
   test('rejects invalid file type and stays on upload step', async () => {
