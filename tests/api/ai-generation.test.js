@@ -91,6 +91,24 @@ describe('AI Generation Service', () => {
       expect(result.isValid).toBe(false);
       expect(result.error).toMatch(/invalid file/i);
     });
+
+    // The file input's accept is the image/* wildcard (see the comment in
+    // RoomVisualizationFlow.tsx), so the OS picker no longer filters these
+    // out: this validator is the only thing standing between them and the
+    // upload, and each must be turned down with the user-facing message.
+    test.each([
+      ['image/gif', 'anim.gif'],
+      ['image/svg+xml', 'logo.svg'],
+      ['image/avif', 'photo.avif'],
+      ['image/tiff', 'scan.tiff'],
+      ['image/bmp', 'old.bmp'],
+    ])('rejects %s even though the file picker now lets any image through', (type, name) => {
+      const file = new File([''], name, { type });
+      Object.defineProperty(file, 'size', { value: 1024 });
+      const result = validateImageFile(file);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toMatch(/jpeg, png, or webp/i);
+    });
   });
 
   // ─── generateRoomVisualization ────────────────────────────────────────────
