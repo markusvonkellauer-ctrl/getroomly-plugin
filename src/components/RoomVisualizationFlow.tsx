@@ -1686,23 +1686,17 @@ export function RoomVisualizationFlow({
           ref={attachFileInputCancelListener}
           type="file"
           aria-describedby="getroomly-uv2-hint"
-          // Any image rather than a list of specific formats: Nordic Nest
-          // reported that on a Google Pixel a list of specific image types
-          // opened only the photo picker, with no way to browse files or
-          // take a photo. image/* is the usual way to keep the camera and
-          // file options available. Formats the plugin cannot handle (gif,
-          // svg, ...) are rejected by validateImageFile after selection,
-          // with an error message, instead of being filtered out of the
-          // dialog.
-          // .heic/.heif stay as explicit extensions on top of image/*:
-          // some desktop OSes only map image/* to extensions they have a
-          // codec registered for, and would otherwise hide a genuinely-named
-          // .heic file — the common case straight off an iPhone camera roll
-          // — so handleFileSelect's isHeicFile()/convertHeicToJpeg() could
-          // never run for it.
-          // Deliberately no `capture` attribute: it would force the camera
-          // and take away picking an existing photo.
-          accept="image/*,.heic,.heif"
+          // Includes HEIC/HEIF (both MIME types and extensions — browsers
+          // fall back to extension matching when a HEIC file's reported MIME
+          // type is empty or inconsistent, which happens often since these
+          // aren't standard web image formats) so a genuinely-named .heic
+          // file — the common case straight off an iPhone camera roll, not
+          // just a mislabeled .jpeg — is actually selectable via the file
+          // picker at all. Without this, handleFileSelect's HEIC handling
+          // (isHeicFile()/convertHeicToJpeg()) can never run for that case:
+          // the OS file picker filters non-matching files out of the dialog
+          // before a selection can even happen.
+          accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
           onChange={e => {
             // A real selection happened -- the pending-cancel check set up in
             // the dropzone's onClick above must not fire for this one.
