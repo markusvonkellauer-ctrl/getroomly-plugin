@@ -57,6 +57,7 @@ export const it: TranslationStrings = {
   downloadedAnnouncement: "L'immagine è stata scaricata.",
   shareWithFriends: 'Condividi',
   saveOrShare: 'Salva/Condividi',
+  copyImage: 'Copia immagine',
   shareTitle: '{product} – visualizzazione in una stanza',
   shareText: 'Guarda come sta {product} in una stanza!',
   copiedLabel: 'Copiato ✓',

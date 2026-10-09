@@ -55,6 +55,7 @@ export const nl: TranslationStrings = {
   downloadedAnnouncement: 'De afbeelding is gedownload.',
   shareWithFriends: 'Delen',
   saveOrShare: 'Opslaan/Delen',
+  copyImage: 'Afbeelding kopiëren',
   shareTitle: '{product} – kamervisualisatie',
   shareText: 'Kijk hoe {product} eruitziet in een kamer!',
   copiedLabel: 'Gekopieerd ✓',

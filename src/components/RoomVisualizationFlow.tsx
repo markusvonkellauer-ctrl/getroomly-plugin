@@ -10,6 +10,7 @@ import type { EmbedConfig } from '@/types/embed-config';
 import { detectLanguage, getTranslations, isSupportedLanguage } from '@/lib/i18n';
 import { convertHeicToJpeg, isHeicFile } from '@/lib/heic';
 import { dataUrlToBlob, extensionForMimeType, mimeTypeFromDataUrl } from '@/lib/data-url';
+import { toPngBlob } from '@/lib/image-convert';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { trackWidgetEvent } from '@/services/event-tracking';
 
@@ -2294,6 +2295,29 @@ export function RoomVisualizationFlow({
             })
           : null;
 
+      // Desktop (no touch screen): "Copy image" instead of the OS share
+      // sheet. Chrome on macOS accepts navigator.share() but never settles or
+      // shows the sheet for some users, which left the button looking dead
+      // (and locked it via isSharingRef); copying always gives visible
+      // feedback ("Copied ✓"). The clipboard only takes PNG everywhere, so
+      // the (usually WebP) image is converted; the promise is handed to
+      // ClipboardItem rather than awaited first, which keeps Safari's
+      // user-activation requirement satisfied. Falls back to a download.
+      if (!isTouchDevice) {
+        try {
+          if (blob && navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': toPngBlob(blob) })]);
+            showShareConfirmation('copied');
+            return;
+          }
+        } catch {
+          // Fall through to the download below.
+        }
+        triggerDownload(currentResultImage);
+        showShareConfirmation('downloaded');
+        return;
+      }
+
       if (navigator.share && blob && file) {
         try {
           await navigator.share({
@@ -3104,7 +3128,9 @@ export function RoomVisualizationFlow({
                 ? t.downloadedLabel
                 : shareOpensSaveSheet
                   ? t.saveOrShare
-                  : t.shareWithFriends}
+                  : isTouchDevice
+                    ? t.shareWithFriends
+                    : t.copyImage}
           </button>
         )}
         <button

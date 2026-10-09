@@ -56,6 +56,7 @@ export const zh: TranslationStrings = {
   downloadedAnnouncement: '图片已下载。',
   shareWithFriends: '分享',
   saveOrShare: '保存/分享',
+  copyImage: '复制图片',
   shareTitle: '{product} – 房间效果图',
   shareText: '看看{product}放在房间里的效果！',
   copiedLabel: '已复制 ✓',

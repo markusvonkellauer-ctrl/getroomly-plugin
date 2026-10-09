@@ -95,6 +95,8 @@ export interface TranslationStrings {
   shareWithFriends: string;
   /** The share button's label on touch devices that open the native share sheet, where the sheet also offers "Save image" (e.g. iOS) -- same pill and width budget as shareWithFriends. */
   saveOrShare: string;
+  /** The share button's label on desktop (no touch screen), where it copies the image to the clipboard instead of opening a share sheet. Confirmation reuses copiedLabel. */
+  copyImage: string;
   /** Title and message handed to the OS share sheet together with the image (navigator.share). `{product}` is replaced with the product's name. The message is shown as the preview on Android and is passed to the receiving app, so it must be in the shopper's language. */
   shareTitle: string;
   shareText: string;
