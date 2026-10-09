@@ -1912,6 +1912,24 @@ export function RoomVisualizationFlow({
     }
   }, [currentResultMimeType]);
 
+  // A touch-first device (phone/tablet). Where the native share sheet opens
+  // there, it also offers "Save image" (iOS: into Photos), so the Share
+  // button can honestly say "Save/Share" and a separate Download button
+  // would be redundant. On a desktop browser with the same API (Safari on
+  // macOS) the sheet has no way to save the file, so Download stays visible
+  // and the button keeps plain "Share". A media-query capability read, not a
+  // user-agent or viewport guess; memoized once, as the primary pointer
+  // doesn't change during the modal's life. Wrapped in try/catch because
+  // matchMedia is missing in some embedded/test environments.
+  const isTouchDevice = useMemo(() => {
+    try {
+      return window.matchMedia('(pointer: coarse)').matches === true;
+    } catch {
+      return false;
+    }
+  }, []);
+  const shareOpensSaveSheet = supportsNativeShare && isTouchDevice;
+
   // Depends on `step`, `showFeedback`, AND `feedbackState`: bottomControlRef's
   // wrapper only renders when both `step === 'result'` and `showFeedback`
   // are true (see renderPhotoOverlay's call site), but WHAT'S inside it
@@ -2026,7 +2044,8 @@ export function RoomVisualizationFlow({
     showFavorite,
     showSaveShare,
     // Same class of gap as showSaveShare just above, one level more
-    // specific -- found in review: supportsNativeShare hides just the
+    // specific -- found in review: shareOpensSaveSheet (supportsNativeShare on
+    // a touch device) hides just the
     // Download button (not the whole save/share row) when the CURRENT
     // image can be shared as a file, and it's derived from
     // currentResultMimeType, which follows the Before/After toggle. If
@@ -2035,7 +2054,7 @@ export function RoomVisualizationFlow({
     // toggling Before/After can show/hide Download without showSaveShare
     // itself changing, shifting the tertiary row's height the same way
     // showSaveShare's own toggle already does.
-    supportsNativeShare,
+    shareOpensSaveSheet,
     measureOverlayAnchor,
   ]);
 
@@ -2279,8 +2298,10 @@ export function RoomVisualizationFlow({
         try {
           await navigator.share({
             files: [file],
-            title: `${productName} Room Visualization`,
-            text: `Check out how the ${productName} looks in a room!`,
+            // Callback replacer, not a string: a product name containing "$&"
+            // or "$1" would otherwise be treated as a replacement pattern.
+            title: t.shareTitle.replace('{product}', () => productName),
+            text: t.shareText.replace('{product}', () => productName),
           });
           return;
         } catch (error) {
@@ -3070,7 +3091,7 @@ export function RoomVisualizationFlow({
           present -- see supportsNativeShare above for why that count can
           be two, not just three or one. */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
-        {showSaveShare && !supportsNativeShare && (
+        {showSaveShare && !shareOpensSaveSheet && (
           <button onClick={handleDownloadToDevice} style={tertiaryButtonStyle}>
             {downloadButtonConfirmed ? t.downloadedLabel : t.downloadToDevice}
           </button>
@@ -3081,7 +3102,9 @@ export function RoomVisualizationFlow({
               ? t.copiedLabel
               : shareButtonStatus === 'downloaded'
                 ? t.downloadedLabel
-                : t.shareWithFriends}
+                : shareOpensSaveSheet
+                  ? t.saveOrShare
+                  : t.shareWithFriends}
           </button>
         )}
         <button

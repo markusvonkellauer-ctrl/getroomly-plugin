@@ -192,6 +192,21 @@ const BUTTON_SPECS = [
       </div>`,
   },
   {
+    name: 'Save/Share on touch devices (tertiary row, same pill as Share with Friends)',
+    translationKey: 'saveOrShare',
+    containerWidths: [160, 106],
+    render: (text, width) => `
+      <div style="width:${width}px; box-sizing:border-box;">
+        <button id="target" style="
+          box-sizing:border-box; gap:8px; justify-content:center;
+          align-items:center; text-align:center; min-height:44px; border-radius:999px;
+          display:flex; font-size:14px; padding:10px 16px;
+          background:none; color:#6b7280; font-weight:500;
+          border:none; flex:1 1 0; min-width:0; font-family:${FONT_STACK};
+        ">${text}</button>
+      </div>`,
+  },
+  {
     // The share button's clipboard-fallback confirmation (see
     // handleShareWithFriends's 3-tier chain) -- same pill, same width
     // budget as shareWithFriends above, different translation key.
