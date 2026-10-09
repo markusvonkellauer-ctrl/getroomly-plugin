@@ -57,7 +57,7 @@ export const fr: TranslationStrings = {
   shareWithFriends: 'Partager',
   saveOrShare: 'Enregistrer/Partager',
   shareTitle: '{product} – visualisation dans une pièce',
-  shareText: 'Découvre à quoi ressemble {product} dans une pièce !',
+  shareText: 'Découvrez à quoi ressemble {product} dans une pièce !',
   copiedLabel: 'Copié ✓',
   copiedAnnouncement: "L'image a été copiée dans le presse-papiers.",
   newPhoto: 'Nouvelle photo',
