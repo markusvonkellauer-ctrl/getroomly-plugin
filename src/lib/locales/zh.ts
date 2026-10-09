@@ -55,6 +55,7 @@ export const zh: TranslationStrings = {
   downloadedLabel: '已下载 ✓',
   downloadedAnnouncement: '图片已下载。',
   shareWithFriends: '分享',
+  saveOrShare: '保存/分享',
   copiedLabel: '已复制 ✓',
   copiedAnnouncement: '图片已复制到剪贴板。',
   newPhoto: '新照片',

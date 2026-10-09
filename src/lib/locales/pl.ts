@@ -55,6 +55,7 @@ export const pl: TranslationStrings = {
   downloadedLabel: 'Pobrano ✓',
   downloadedAnnouncement: 'Obraz został pobrany.',
   shareWithFriends: 'Udostępnij',
+  saveOrShare: 'Zapisz/Udostępnij',
   copiedLabel: 'Skopiowano ✓',
   copiedAnnouncement: 'Obraz został skopiowany do schowka.',
   newPhoto: 'Nowe zdjęcie',

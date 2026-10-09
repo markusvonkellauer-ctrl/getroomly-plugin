@@ -2864,9 +2864,25 @@ describe('RoomVisualizationFlow', () => {
       await waitFor(() => screen.getByText('Review Your New Room'));
     };
 
+    // jsdom has no matchMedia; the component reads (pointer: coarse) to tell
+    // a phone/tablet from a desktop that also has the Web Share API.
+    const setPointer = (coarse) => {
+      window.matchMedia = jest.fn().mockImplementation((query) => ({
+        matches: coarse && query === '(pointer: coarse)',
+        media: query,
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+      }));
+    };
+
+    beforeEach(() => {
+      setPointer(true);
+    });
+
     afterEach(() => {
       delete navigator.share;
       delete navigator.canShare;
+      delete window.matchMedia;
     });
 
     test('shows all three tertiary buttons when navigator.share is unavailable (typical desktop)', async () => {
@@ -2920,14 +2936,14 @@ describe('RoomVisualizationFlow', () => {
       expect(screen.getByText('Download Image')).toBeInTheDocument();
     });
 
-    test('hides Download and shows only Share + New Photo when the browser can actually share this image as a file', async () => {
+    test('hides Download and shows only Save/Share + New Photo when the browser can actually share this image as a file', async () => {
       navigator.share = jest.fn().mockResolvedValue(undefined);
       navigator.canShare = jest.fn().mockReturnValue(true);
 
       await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
 
       expect(screen.queryByText('Download Image')).not.toBeInTheDocument();
-      const shareButton = screen.getByText('Share');
+      const shareButton = screen.getByText('Save/Share');
       const newPhotoButton = screen.getByText('New Photo');
       expect(shareButton).toBeInTheDocument();
       expect(newPhotoButton).toBeInTheDocument();
@@ -2940,6 +2956,35 @@ describe('RoomVisualizationFlow', () => {
       expect(newPhotoButton.style.flexGrow).toBe('1');
     });
 
+    test('labels the share button "Save/Share" on a touch device whose share sheet can save the image', async () => {
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      expect(screen.getByText('Save/Share')).toBeInTheDocument();
+      expect(screen.queryByText('Share')).not.toBeInTheDocument();
+    });
+
+    test('keeps Download and plain "Share" on a desktop browser that has the Web Share API (e.g. Safari on macOS: its share sheet cannot save the file)', async () => {
+      setPointer(false);
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      expect(screen.getByText('Download Image')).toBeInTheDocument();
+      expect(screen.getByText('Share')).toBeInTheDocument();
+      expect(screen.queryByText('Save/Share')).not.toBeInTheDocument();
+    });
+
+    test('keeps plain "Share" when native sharing is unavailable, even on a touch device', async () => {
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+
+      expect(screen.getByText('Download Image')).toBeInTheDocument();
+      expect(screen.getByText('Share')).toBeInTheDocument();
+    });
+
     test('uses MIME-only probing for canShare (no full base64 decode needed to hide Download)', async () => {
       navigator.share = jest.fn().mockResolvedValue(undefined);
       navigator.canShare = jest.fn().mockReturnValue(true);
@@ -2947,7 +2992,7 @@ describe('RoomVisualizationFlow', () => {
       await renderAtResult({ imageUrl: 'data:image/jpeg;base64,###invalid-base64###' });
 
       expect(screen.queryByText('Download Image')).not.toBeInTheDocument();
-      expect(screen.getByText('Share')).toBeInTheDocument();
+      expect(screen.getByText('Save/Share')).toBeInTheDocument();
     });
 
     test('a hidden Download button does not stop Share from working', async () => {
@@ -2956,7 +3001,7 @@ describe('RoomVisualizationFlow', () => {
       navigator.canShare = jest.fn().mockReturnValue(true);
 
       await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
-      await user.click(screen.getByText('Share'));
+      await user.click(screen.getByText('Save/Share'));
 
       expect(navigator.share).toHaveBeenCalledTimes(1);
     });
@@ -2970,7 +3015,7 @@ describe('RoomVisualizationFlow', () => {
       // Switch to "Before" -- Download is hidden, so Share is the only
       // way to save/share the currently-displayed image.
       await user.click(screen.getByRole('button', { name: 'Before' }));
-      await user.click(screen.getByText('Share'));
+      await user.click(screen.getByText('Save/Share'));
 
       const shareArg = navigator.share.mock.calls[0][0];
       // makeFile()'s upload content, decoded via the same

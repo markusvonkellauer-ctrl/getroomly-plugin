@@ -54,6 +54,7 @@ export const ja: TranslationStrings = {
   downloadedLabel: 'ダウンロード済み ✓',
   downloadedAnnouncement: '画像がダウンロードされました。',
   shareWithFriends: '共有',
+  saveOrShare: '保存/共有',
   copiedLabel: 'コピー済み ✓',
   copiedAnnouncement: '画像がクリップボードにコピーされました。',
   newPhoto: '新しい写真',

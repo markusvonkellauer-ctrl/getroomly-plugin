@@ -54,6 +54,7 @@ export const ko: TranslationStrings = {
   downloadedLabel: '다운로드됨 ✓',
   downloadedAnnouncement: '이미지가 다운로드되었습니다.',
   shareWithFriends: '공유',
+  saveOrShare: '저장/공유',
   copiedLabel: '복사됨 ✓',
   copiedAnnouncement: '이미지가 클립보드에 복사되었습니다.',
   newPhoto: '새 사진',

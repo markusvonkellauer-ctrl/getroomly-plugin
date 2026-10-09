@@ -54,6 +54,7 @@ export const sv: TranslationStrings = {
   downloadedLabel: 'Nedladdad ✓',
   downloadedAnnouncement: 'Bilden har laddats ner.',
   shareWithFriends: 'Dela',
+  saveOrShare: 'Spara/Dela',
   copiedLabel: 'Kopierad ✓',
   copiedAnnouncement: 'Bilden har kopierats till urklipp.',
   newPhoto: 'Nytt foto',
