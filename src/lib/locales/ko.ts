@@ -55,6 +55,7 @@ export const ko: TranslationStrings = {
   downloadedAnnouncement: '이미지가 다운로드되었습니다.',
   shareWithFriends: '공유',
   saveOrShare: '저장/공유',
+  copyImage: '이미지 복사',
   shareTitle: '{product} – 공간 시각화',
   shareText: '{product}이(가) 방에 어떻게 보이는지 확인해 보세요!',
   copiedLabel: '복사됨 ✓',

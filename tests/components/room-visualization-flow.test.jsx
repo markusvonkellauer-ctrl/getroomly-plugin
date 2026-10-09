@@ -34,9 +34,27 @@ jest.mock('../../src/services/event-tracking', () => ({
 }));
 
 import { trackWidgetEvent } from '../../src/services/event-tracking';
+import { toPngBlob } from '../../src/lib/image-convert';
 
 const mockHeicTo = jest.fn();
 jest.mock('heic-to/csp', () => ({ heicTo: (...args) => mockHeicTo(...args) }));
+
+// jsdom has no canvas/createImageBitmap, so PNG conversion for "Copy image" is
+// stubbed; the real helper is a thin canvas wrapper.
+jest.mock('../../src/lib/image-convert', () => ({
+  toPngBlob: jest.fn(async () => new Blob(['png-bytes'], { type: 'image/png' })),
+}));
+
+// jsdom has no matchMedia; the component reads (pointer: coarse) to tell a
+// phone/tablet from a desktop.
+const mockPointer = coarse => {
+  window.matchMedia = jest.fn().mockImplementation(query => ({
+    matches: coarse && query === '(pointer: coarse)',
+    media: query,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+  }));
+};
 
 global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
 global.URL.revokeObjectURL = jest.fn();
@@ -2953,7 +2971,7 @@ describe('RoomVisualizationFlow', () => {
       expect(screen.queryByText('Share')).not.toBeInTheDocument();
     });
 
-    test('keeps Download and plain "Share" on a desktop browser that has the Web Share API (e.g. Safari on macOS: its share sheet cannot save the file)', async () => {
+    test('on a desktop browser that has the Web Share API, shows Download and "Copy Image" (not the share sheet button)', async () => {
       setPointer(false);
       navigator.share = jest.fn().mockResolvedValue(undefined);
       navigator.canShare = jest.fn().mockReturnValue(true);
@@ -2961,7 +2979,8 @@ describe('RoomVisualizationFlow', () => {
       await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
 
       expect(screen.getByText('Download Image')).toBeInTheDocument();
-      expect(screen.getByText('Share')).toBeInTheDocument();
+      expect(screen.getByText('Copy Image')).toBeInTheDocument();
+      expect(screen.queryByText('Share')).not.toBeInTheDocument();
       expect(screen.queryByText('Save/Share')).not.toBeInTheDocument();
     });
 
@@ -3288,10 +3307,14 @@ describe('RoomVisualizationFlow', () => {
     beforeEach(() => {
       originalConsoleError = console.error;
       console.error = jest.fn();
+      // These tests cover the touch-device path (native share, then the
+      // clipboard/download fallbacks); desktop is covered separately below.
+      mockPointer(true);
     });
     afterEach(() => {
       console.error = originalConsoleError;
       delete navigator.share;
+      delete window.matchMedia;
     });
 
     test('decodes the data: URL synchronously (no fetch) and calls navigator.share with a File, when available', async () => {
@@ -3460,6 +3483,120 @@ describe('RoomVisualizationFlow', () => {
     });
 
     // ─── Tier 2: clipboard (new) ───────────────────────────────────────────
+
+    describe('desktop (no touch screen): "Copy Image" instead of the share sheet', () => {
+      beforeEach(() => {
+        mockPointer(false);
+        toPngBlob.mockClear();
+        global.ClipboardItem = class {
+          constructor(items) {
+            this.items = items;
+          }
+        };
+      });
+      afterEach(() => {
+        delete navigator.clipboard;
+        delete global.ClipboardItem;
+      });
+
+      const mockClipboard = write => {
+        Object.defineProperty(navigator, 'clipboard', {
+          value: { write },
+          configurable: true,
+        });
+      };
+
+      test('labels the button "Copy Image" and copies a PNG to the clipboard, showing "Copied ✓"', async () => {
+        const user = userEvent.setup();
+        const clipboardWrite = jest.fn().mockResolvedValue(undefined);
+        mockClipboard(clipboardWrite);
+        const clickSpy = jest
+          .spyOn(HTMLAnchorElement.prototype, 'click')
+          .mockImplementation(() => {});
+
+        await renderAtResult({ imageUrl: RESULT_DATA_URL });
+        const copyButton = screen.getByText('Copy Image');
+        await user.click(copyButton);
+
+        expect(clipboardWrite).toHaveBeenCalledTimes(1);
+        // The PNG is handed over as a promise (keeps Safari's user
+        // activation intact), so resolve it before checking its type.
+        const payload = clipboardWrite.mock.calls[0][0][0].items['image/png'];
+        // A promise, not an already-awaited blob: awaiting the conversion
+        // before constructing the ClipboardItem would lose Safari's user
+        // activation.
+        expect(typeof payload.then).toBe('function');
+        const png = await payload;
+        expect(png.type).toBe('image/png');
+        // The original (jpeg) image is what gets converted.
+        expect(toPngBlob).toHaveBeenCalledTimes(1);
+        expect(toPngBlob.mock.calls[0][0].type).toBe('image/jpeg');
+        expect(copyButton).toHaveTextContent('Copied ✓');
+        expect(clickSpy).not.toHaveBeenCalled();
+
+        clickSpy.mockRestore();
+      });
+
+      test('never opens the native share sheet, even when the browser has the Web Share API', async () => {
+        const user = userEvent.setup();
+        navigator.share = jest.fn().mockResolvedValue(undefined);
+        navigator.canShare = jest.fn().mockReturnValue(true);
+        mockClipboard(jest.fn().mockResolvedValue(undefined));
+
+        await renderAtResult({ imageUrl: RESULT_DATA_URL });
+        await user.click(screen.getByText('Copy Image'));
+
+        expect(navigator.share).not.toHaveBeenCalled();
+        delete navigator.canShare;
+      });
+
+      test('falls back to downloading when the clipboard write fails, showing "Downloaded ✓"', async () => {
+        const user = userEvent.setup();
+        mockClipboard(jest.fn().mockRejectedValue(new Error('not allowed')));
+        const clickSpy = jest
+          .spyOn(HTMLAnchorElement.prototype, 'click')
+          .mockImplementation(() => {});
+
+        await renderAtResult({ imageUrl: RESULT_DATA_URL });
+        const copyButton = screen.getByText('Copy Image');
+        await user.click(copyButton);
+
+        expect(clickSpy).toHaveBeenCalledTimes(1);
+        expect(copyButton).toHaveTextContent('Downloaded ✓');
+
+        clickSpy.mockRestore();
+      });
+
+      test('falls back to downloading when the browser has no clipboard image API', async () => {
+        const user = userEvent.setup();
+        delete global.ClipboardItem;
+        const clickSpy = jest
+          .spyOn(HTMLAnchorElement.prototype, 'click')
+          .mockImplementation(() => {});
+
+        await renderAtResult({ imageUrl: RESULT_DATA_URL });
+        await user.click(screen.getByText('Copy Image'));
+
+        expect(clickSpy).toHaveBeenCalledTimes(1);
+
+        clickSpy.mockRestore();
+      });
+
+      test('still tracks share_clicked', async () => {
+        const user = userEvent.setup();
+        mockClipboard(jest.fn().mockResolvedValue(undefined));
+
+        await renderAtResult({ imageUrl: RESULT_DATA_URL });
+        await user.click(screen.getByText('Copy Image'));
+
+        expect(trackWidgetEvent).toHaveBeenCalledWith(
+          undefined,
+          'share_clicked',
+          expect.any(String),
+          'rug-001'
+        );
+      });
+    });
 
     describe('tier 2: clipboard fallback', () => {
       afterEach(() => {
@@ -4603,6 +4740,7 @@ describe('RoomVisualizationFlow', () => {
 
       test('fires share_clicked when Share is clicked', async () => {
         const user = userEvent.setup();
+        mockPointer(true);
         navigator.share = jest.fn().mockResolvedValue(undefined);
         await renderAtResult();
 

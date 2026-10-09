@@ -55,6 +55,7 @@ export const fi: TranslationStrings = {
   downloadedAnnouncement: 'Kuva on ladattu.',
   shareWithFriends: 'Jaa',
   saveOrShare: 'Tallenna/Jaa',
+  copyImage: 'Kopioi kuva',
   shareTitle: '{product} – huonevisualisointi',
   shareText: 'Katso, miltä {product} näyttää huoneessa!',
   copiedLabel: 'Kopioitu ✓',
