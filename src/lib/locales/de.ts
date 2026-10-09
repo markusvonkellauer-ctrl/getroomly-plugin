@@ -56,6 +56,8 @@ export const de: TranslationStrings = {
   downloadedAnnouncement: 'Das Bild wurde heruntergeladen.',
   shareWithFriends: 'Teilen',
   saveOrShare: 'Speichern/Teilen',
+  shareTitle: '{product} – Raumvisualisierung',
+  shareText: 'Schau mal, wie {product} in einem Raum aussieht!',
   copiedLabel: 'Kopiert ✓',
   copiedAnnouncement: 'Das Bild wurde in die Zwischenablage kopiert.',
   newPhoto: 'Neues Foto',

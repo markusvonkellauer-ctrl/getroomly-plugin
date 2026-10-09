@@ -3006,6 +3006,56 @@ describe('RoomVisualizationFlow', () => {
       expect(navigator.share).toHaveBeenCalledTimes(1);
     });
 
+    test('passes a share title and message in English, with the product name filled in', async () => {
+      const user = userEvent.setup();
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult({ imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' });
+      await user.click(screen.getByText('Save/Share'));
+
+      const shareArg = navigator.share.mock.calls[0][0];
+      expect(shareArg.title).toBe('Test Rug Room Visualization');
+      expect(shareArg.text).toBe('Check out how the Test Rug looks in a room!');
+    });
+
+    test('passes the share title and message in the configured language, not English', async () => {
+      const user = userEvent.setup();
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      // renderAtResult waits for the English heading, so render directly.
+      generateRoomVisualization.mockResolvedValueOnce({
+        imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=',
+      });
+      render(<RoomVisualizationFlow {...defaultProps} config={{ language: 'sv' }} />);
+      await act(async () => {
+        uploadFile(document.querySelector('input[type="file"]'), makeFile());
+      });
+      await waitFor(() => screen.getByText('Granska ditt nya rum'));
+      await user.click(screen.getByText('Spara/Dela'));
+
+      const shareArg = navigator.share.mock.calls[0][0];
+      expect(shareArg.title).toBe('Test Rug – rumsvisualisering');
+      expect(shareArg.text).toBe('Så här ser Test Rug ut i ett rum!');
+    });
+
+    test('a product name containing $ replacement patterns is inserted literally', async () => {
+      const user = userEvent.setup();
+      navigator.share = jest.fn().mockResolvedValue(undefined);
+      navigator.canShare = jest.fn().mockReturnValue(true);
+
+      await renderAtResult(
+        { imageUrl: 'data:image/jpeg;base64,ZmFrZS1yZXN1bHQtaW1hZ2U=' },
+        { productName: 'Rug $& $1 200x300' }
+      );
+      await user.click(screen.getByText('Save/Share'));
+
+      expect(navigator.share.mock.calls[0][0].text).toBe(
+        'Check out how the Rug $& $1 200x300 looks in a room!'
+      );
+    });
+
     test('Share sends the image currently selected via the Before/After toggle, not always the result image', async () => {
       const user = userEvent.setup();
       navigator.share = jest.fn().mockResolvedValue(undefined);

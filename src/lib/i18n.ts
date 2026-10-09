@@ -95,6 +95,9 @@ export interface TranslationStrings {
   shareWithFriends: string;
   /** The share button's label on touch devices that open the native share sheet, where the sheet also offers "Save image" (e.g. iOS) -- same pill and width budget as shareWithFriends. */
   saveOrShare: string;
+  /** Title and message handed to the OS share sheet together with the image (navigator.share). `{product}` is replaced with the product's name. The message is shown as the preview on Android and is passed to the receiving app, so it must be in the shopper's language. */
+  shareTitle: string;
+  shareText: string;
   /** The share button's own label swaps to this short confirmation (e.g. "Kopierad ✓") for 2400ms when its clipboard fallback succeeds (see handleShareWithFriends's 3-tier chain: native share sheet -> clipboard -> download). */
   copiedLabel: string;
   /** Visually-hidden role="status" aria-live="polite" text announced alongside copiedLabel -- same reasoning as downloadedAnnouncement above. */

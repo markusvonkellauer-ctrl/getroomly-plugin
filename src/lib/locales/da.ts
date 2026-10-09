@@ -55,6 +55,8 @@ export const da: TranslationStrings = {
   downloadedAnnouncement: 'Billedet er downloadet.',
   shareWithFriends: 'Del',
   saveOrShare: 'Gem/Del',
+  shareTitle: '{product} – rumvisualisering',
+  shareText: 'Se, hvordan {product} ser ud i et rum!',
   copiedLabel: 'Kopieret ✓',
   copiedAnnouncement: 'Billedet er kopieret til udklipsholderen.',
   newPhoto: 'Nyt foto',

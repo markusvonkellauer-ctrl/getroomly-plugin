@@ -55,6 +55,8 @@ export const el: TranslationStrings = {
   downloadedAnnouncement: 'Η εικόνα έχει ληφθεί.',
   shareWithFriends: 'Κοινοποίηση',
   saveOrShare: 'Αποθήκευση/Κοινοποίηση',
+  shareTitle: '{product} – οπτικοποίηση στον χώρο',
+  shareText: 'Δες πώς φαίνεται το {product} σε ένα δωμάτιο!',
   copiedLabel: 'Αντιγράφηκε ✓',
   copiedAnnouncement: 'Η εικόνα έχει αντιγραφεί στο πρόχειρο.',
   newPhoto: 'Νέα φωτογραφία',
