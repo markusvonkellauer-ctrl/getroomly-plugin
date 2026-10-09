@@ -54,6 +54,7 @@ export const no: TranslationStrings = {
   downloadedLabel: 'Lastet ned ✓',
   downloadedAnnouncement: 'Bildet er lastet ned.',
   shareWithFriends: 'Del',
+  saveOrShare: 'Lagre/Del',
   copiedLabel: 'Kopiert ✓',
   copiedAnnouncement: 'Bildet er kopiert til utklippstavlen.',
   newPhoto: 'Nytt bilde',

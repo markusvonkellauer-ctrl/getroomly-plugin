@@ -54,6 +54,7 @@ export const fi: TranslationStrings = {
   downloadedLabel: 'Ladattu ✓',
   downloadedAnnouncement: 'Kuva on ladattu.',
   shareWithFriends: 'Jaa',
+  saveOrShare: 'Tallenna/Jaa',
   copiedLabel: 'Kopioitu ✓',
   copiedAnnouncement: 'Kuva on kopioitu leikepöydälle.',
   newPhoto: 'Uusi kuva',

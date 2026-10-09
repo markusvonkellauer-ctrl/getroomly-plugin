@@ -54,6 +54,7 @@ export const nl: TranslationStrings = {
   downloadedLabel: 'Gedownload ✓',
   downloadedAnnouncement: 'De afbeelding is gedownload.',
   shareWithFriends: 'Delen',
+  saveOrShare: 'Opslaan/Delen',
   copiedLabel: 'Gekopieerd ✓',
   copiedAnnouncement: 'De afbeelding is gekopieerd naar het klembord.',
   newPhoto: 'Nieuwe foto',

@@ -55,6 +55,7 @@ export const es: TranslationStrings = {
   downloadedLabel: 'Descargado ✓',
   downloadedAnnouncement: 'La imagen se ha descargado.',
   shareWithFriends: 'Compartir',
+  saveOrShare: 'Guardar/Compartir',
   copiedLabel: 'Copiado ✓',
   copiedAnnouncement: 'La imagen se ha copiado al portapapeles.',
   newPhoto: 'Nueva foto',

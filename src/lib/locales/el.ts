@@ -54,6 +54,7 @@ export const el: TranslationStrings = {
   downloadedLabel: 'Έγινε λήψη ✓',
   downloadedAnnouncement: 'Η εικόνα έχει ληφθεί.',
   shareWithFriends: 'Κοινοποίηση',
+  saveOrShare: 'Αποθήκευση/Κοινοποίηση',
   copiedLabel: 'Αντιγράφηκε ✓',
   copiedAnnouncement: 'Η εικόνα έχει αντιγραφεί στο πρόχειρο.',
   newPhoto: 'Νέα φωτογραφία',

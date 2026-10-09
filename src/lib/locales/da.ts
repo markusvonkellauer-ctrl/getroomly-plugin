@@ -54,6 +54,7 @@ export const da: TranslationStrings = {
   downloadedLabel: 'Downloadet ✓',
   downloadedAnnouncement: 'Billedet er downloadet.',
   shareWithFriends: 'Del',
+  saveOrShare: 'Gem/Del',
   copiedLabel: 'Kopieret ✓',
   copiedAnnouncement: 'Billedet er kopieret til udklipsholderen.',
   newPhoto: 'Nyt foto',
