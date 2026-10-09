@@ -2304,8 +2304,10 @@ export function RoomVisualizationFlow({
         try {
           await navigator.share({
             files: [file],
-            title: `${productName} Room Visualization`,
-            text: `Check out how the ${productName} looks in a room!`,
+            // Callback replacer, not a string: a product name containing "$&"
+            // or "$1" would otherwise be treated as a replacement pattern.
+            title: t.shareTitle.replace('{product}', () => productName),
+            text: t.shareText.replace('{product}', () => productName),
           });
           return;
         } catch (error) {

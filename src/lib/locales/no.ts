@@ -55,6 +55,8 @@ export const no: TranslationStrings = {
   downloadedAnnouncement: 'Bildet er lastet ned.',
   shareWithFriends: 'Del',
   saveOrShare: 'Lagre/Del',
+  shareTitle: '{product} – romvisualisering',
+  shareText: 'Se hvordan {product} ser ut i et rom!',
   copiedLabel: 'Kopiert ✓',
   copiedAnnouncement: 'Bildet er kopiert til utklippstavlen.',
   newPhoto: 'Nytt bilde',
