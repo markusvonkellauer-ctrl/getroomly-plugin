@@ -2866,8 +2866,8 @@ describe('RoomVisualizationFlow', () => {
 
     // jsdom has no matchMedia; the component reads (pointer: coarse) to tell
     // a phone/tablet from a desktop that also has the Web Share API.
-    const setPointer = (coarse) => {
-      window.matchMedia = jest.fn().mockImplementation((query) => ({
+    const setPointer = coarse => {
+      window.matchMedia = jest.fn().mockImplementation(query => ({
         matches: coarse && query === '(pointer: coarse)',
         media: query,
         addEventListener: jest.fn(),
