@@ -3521,7 +3521,12 @@ describe('RoomVisualizationFlow', () => {
         expect(clipboardWrite).toHaveBeenCalledTimes(1);
         // The PNG is handed over as a promise (keeps Safari's user
         // activation intact), so resolve it before checking its type.
-        const png = await clipboardWrite.mock.calls[0][0][0].items['image/png'];
+        const payload = clipboardWrite.mock.calls[0][0][0].items['image/png'];
+        // A promise, not an already-awaited blob: awaiting the conversion
+        // before constructing the ClipboardItem would lose Safari's user
+        // activation.
+        expect(typeof payload.then).toBe('function');
+        const png = await payload;
         expect(png.type).toBe('image/png');
         // The original (jpeg) image is what gets converted.
         expect(toPngBlob).toHaveBeenCalledTimes(1);
