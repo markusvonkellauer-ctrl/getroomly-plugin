@@ -3593,7 +3593,8 @@ describe('RoomVisualizationFlow', () => {
           undefined,
           'share_clicked',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
       });
     });
@@ -4011,6 +4012,24 @@ describe('RoomVisualizationFlow', () => {
   // end to end.
 
   describe('widget UX-funnel event tracking', () => {
+    test('sends the product category with the funnel events, so they can be split by product type', () => {
+      render(
+        <RoomVisualizationFlow
+          {...defaultProps}
+          category="Soffor"
+          config={{ apiKey: 'partner-abc' }}
+        />
+      );
+
+      expect(trackWidgetEvent).toHaveBeenCalledWith(
+        'partner-abc',
+        'widget_opened',
+        expect.any(String),
+        'rug-001',
+        'Soffor'
+      );
+    });
+
     test("fires widget_opened on mount, with this session's sessionId and productId", () => {
       render(<RoomVisualizationFlow {...defaultProps} config={{ apiKey: 'partner-abc' }} />);
 
@@ -4018,7 +4037,8 @@ describe('RoomVisualizationFlow', () => {
         'partner-abc',
         'widget_opened',
         expect.any(String),
-        'rug-001'
+        'rug-001',
+        'Carpet'
       );
     });
 
@@ -4038,7 +4058,8 @@ describe('RoomVisualizationFlow', () => {
         'partner-abc',
         'widget_closed',
         openedSessionId,
-        'rug-001'
+        'rug-001',
+        'Carpet'
       );
     });
 
@@ -4106,7 +4127,8 @@ describe('RoomVisualizationFlow', () => {
         'partner-abc',
         'widget_closed',
         openedSessionId,
-        'rug-001'
+        'rug-001',
+        'Carpet'
       );
     });
 
@@ -4120,7 +4142,8 @@ describe('RoomVisualizationFlow', () => {
         'partner-abc',
         'terms_clicked',
         expect.any(String),
-        'rug-001'
+        'rug-001',
+        'Carpet'
       );
     });
 
@@ -4136,7 +4159,8 @@ describe('RoomVisualizationFlow', () => {
         'partner-abc',
         'upload_clicked',
         expect.any(String),
-        'rug-001'
+        'rug-001',
+        'Carpet'
       );
     });
 
@@ -4153,7 +4177,8 @@ describe('RoomVisualizationFlow', () => {
         'partner-abc',
         'upload_clicked',
         expect.any(String),
-        'rug-001'
+        'rug-001',
+        'Carpet'
       );
     });
 
@@ -4215,7 +4240,8 @@ describe('RoomVisualizationFlow', () => {
         'partner-abc',
         'upload_completed',
         expect.any(String),
-        'rug-001'
+        'rug-001',
+        'Carpet'
       );
     });
 
@@ -4279,7 +4305,8 @@ describe('RoomVisualizationFlow', () => {
           'partner-abc',
           'upload_cancelled',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
       });
 
@@ -4316,7 +4343,8 @@ describe('RoomVisualizationFlow', () => {
           'partner-abc',
           'upload_cancelled',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
       });
 
@@ -4363,7 +4391,8 @@ describe('RoomVisualizationFlow', () => {
           'partner-abc',
           'upload_cancelled',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
       });
 
@@ -4438,7 +4467,8 @@ describe('RoomVisualizationFlow', () => {
           'partner-abc',
           'upload_cancelled',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
       });
 
@@ -4539,7 +4569,8 @@ describe('RoomVisualizationFlow', () => {
           'partner-abc',
           'upload_cancelled',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
       });
 
@@ -4583,7 +4614,8 @@ describe('RoomVisualizationFlow', () => {
           'partner-abc',
           'result_viewed',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
       });
     });
@@ -4604,7 +4636,8 @@ describe('RoomVisualizationFlow', () => {
           'partner-abc',
           'result_viewed',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
       });
       trackWidgetEvent.mockClear();
@@ -4702,7 +4735,8 @@ describe('RoomVisualizationFlow', () => {
           'partner-abc',
           'add_to_basket_clicked',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
       });
 
@@ -4715,7 +4749,8 @@ describe('RoomVisualizationFlow', () => {
           'partner-abc',
           'favorite_clicked',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
       });
 
@@ -4733,7 +4768,8 @@ describe('RoomVisualizationFlow', () => {
           'partner-abc',
           'download_clicked',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
         clickSpy.mockRestore();
       });
@@ -4750,7 +4786,8 @@ describe('RoomVisualizationFlow', () => {
           'partner-abc',
           'share_clicked',
           expect.any(String),
-          'rug-001'
+          'rug-001',
+          'Carpet'
         );
       });
     });
