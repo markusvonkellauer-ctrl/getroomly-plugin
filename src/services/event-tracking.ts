@@ -38,11 +38,26 @@ export type WidgetEventType =
  * functions already follow for the same reason (must never crash the host
  * page).
  */
+/**
+ * The partner's category for the product, in the shape the backend accepts
+ * (POST /v1/event: a string of at most 128 characters). Anything else (not a
+ * string, blank) is left out rather than sent: the backend answers 400 to an
+ * invalid body and the whole event would be lost, and category is optional.
+ */
+export function normalizeEventCategory(category: unknown): string | undefined {
+  if (typeof category !== 'string') {
+    return undefined;
+  }
+  const trimmed = category.trim();
+  return trimmed === '' ? undefined : trimmed.slice(0, 128);
+}
+
 export function trackWidgetEvent(
   apiKey: string | undefined,
   eventType: WidgetEventType,
   sessionId: string,
-  productId?: string
+  productId?: string,
+  category?: string
 ): void {
   try {
     const key = apiKey || AppConfig.ai.defaultApiKey;
@@ -56,7 +71,13 @@ export function trackWidgetEvent(
         'Content-Type': 'application/json',
         'X-API-Key': key,
       },
-      body: JSON.stringify({ eventType, sessionId, productId }),
+      // category lets GetRoomly split the funnel by product type (sent only when valid).
+      body: JSON.stringify({
+        eventType,
+        sessionId,
+        productId,
+        category: normalizeEventCategory(category),
+      }),
     }).catch(err => {
       console.warn('[Plugin] Failed to report widget event:', eventType, err);
     });

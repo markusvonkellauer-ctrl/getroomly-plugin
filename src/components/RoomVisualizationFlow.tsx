@@ -131,9 +131,9 @@ export function RoomVisualizationFlow({
   // written during render — see react-hooks/refs), so it's already current
   // by the time any effect declared below it runs on the same commit,
   // including this same render's own widget_opened/result_viewed effects.
-  const latestWidgetIdentityRef = useRef({ apiKey: config?.apiKey, productId });
+  const latestWidgetIdentityRef = useRef({ apiKey: config?.apiKey, productId, category });
   useEffect(() => {
-    latestWidgetIdentityRef.current = { apiKey: config?.apiKey, productId };
+    latestWidgetIdentityRef.current = { apiKey: config?.apiKey, productId, category };
   });
 
   // widget_opened/widget_closed — this component only mounts while the
@@ -159,10 +159,10 @@ export function RoomVisualizationFlow({
   // sharing the same sessionId. Capturing once keeps both calls on the
   // identity that was actually active for this open/close lifecycle.
   useEffect(() => {
-    const { apiKey, productId: pid } = latestWidgetIdentityRef.current;
-    trackWidgetEvent(apiKey, 'widget_opened', sessionId, pid);
+    const { apiKey, productId: pid, category: cat } = latestWidgetIdentityRef.current;
+    trackWidgetEvent(apiKey, 'widget_opened', sessionId, pid, cat);
     return () => {
-      trackWidgetEvent(apiKey, 'widget_closed', sessionId, pid);
+      trackWidgetEvent(apiKey, 'widget_closed', sessionId, pid, cat);
     };
   }, [sessionId]);
 
@@ -594,7 +594,7 @@ export function RoomVisualizationFlow({
           return;
         }
         filePickerPendingRef.current = false;
-        trackWidgetEvent(config?.apiKey, 'upload_cancelled', sessionId, productId);
+        trackWidgetEvent(config?.apiKey, 'upload_cancelled', sessionId, productId, category);
       };
       node.addEventListener('cancel', handleNativeCancel);
       return () => {
@@ -611,7 +611,7 @@ export function RoomVisualizationFlow({
         }
       };
     },
-    [config?.apiKey, sessionId, productId]
+    [config?.apiKey, sessionId, productId, category]
   );
 
   // Plain write in the cleanup (no read of a prior ref value), so a pending
@@ -689,7 +689,7 @@ export function RoomVisualizationFlow({
           filePickerAttemptTokenRef.current === attemptToken
         ) {
           filePickerPendingRef.current = false;
-          trackWidgetEvent(config?.apiKey, 'upload_cancelled', sessionId, productId);
+          trackWidgetEvent(config?.apiKey, 'upload_cancelled', sessionId, productId, category);
         }
       }, 300);
     };
@@ -704,7 +704,7 @@ export function RoomVisualizationFlow({
       window.removeEventListener('focus', maybeReportCancelled);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [config?.apiKey, sessionId, productId]);
+  }, [config?.apiKey, sessionId, productId, category]);
 
   // Sophisticated loading progress effect (matches original frontend exactly)
   useEffect(() => {
@@ -765,8 +765,8 @@ export function RoomVisualizationFlow({
   // a result the shopper never re-viewed.
   useEffect(() => {
     if (step === 'result') {
-      const { apiKey, productId: pid } = latestWidgetIdentityRef.current;
-      trackWidgetEvent(apiKey, 'result_viewed', sessionId, pid);
+      const { apiKey, productId: pid, category: cat } = latestWidgetIdentityRef.current;
+      trackWidgetEvent(apiKey, 'result_viewed', sessionId, pid, cat);
     }
   }, [step, sessionId]);
 
@@ -973,7 +973,7 @@ export function RoomVisualizationFlow({
       const dataUrl = reader.result;
       uploadedImageRef.current = dataUrl;
       setUploadedImage(dataUrl);
-      trackWidgetEvent(config?.apiKey, 'upload_completed', sessionId, productId);
+      trackWidgetEvent(config?.apiKey, 'upload_completed', sessionId, productId, category);
       handleGenerate(imageFile);
     };
     reader.onerror = () => {
@@ -1027,7 +1027,7 @@ export function RoomVisualizationFlow({
 
   const handleOpenTerms = () => {
     setShowTermsDialog(true);
-    trackWidgetEvent(config?.apiKey, 'terms_clicked', sessionId, productId);
+    trackWidgetEvent(config?.apiKey, 'terms_clicked', sessionId, productId, category);
   };
 
   // Pinch-to-zoom helpers (non-passive listeners required for e.preventDefault())
@@ -1335,7 +1335,7 @@ export function RoomVisualizationFlow({
             // No visible drag-over affordance by design (brief: "do not add
             // new visible UI for it") -- the single button is the only
             // visible upload trigger.
-            trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId);
+            trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId, category);
             const event = { target: { files: [file] } } as any;
             handleFileSelect(event);
           }
@@ -1564,7 +1564,7 @@ export function RoomVisualizationFlow({
             cursor: 'pointer',
           }}
           onClick={() => {
-            trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId);
+            trackWidgetEvent(config?.apiKey, 'upload_clicked', sessionId, productId, category);
             // Flips on the standing window-focus listener below, which
             // reports upload_cancelled if the shopper backs out of the
             // native picker without choosing a photo. The bumped token lets
@@ -2061,7 +2061,7 @@ export function RoomVisualizationFlow({
 
   // Result step handlers
   const handleAddToBasket = () => {
-    trackWidgetEvent(config?.apiKey, 'add_to_basket_clicked', sessionId, productId);
+    trackWidgetEvent(config?.apiKey, 'add_to_basket_clicked', sessionId, productId, category);
 
     // Call callback (works in Shadow DOM / Embed mode)
     config?.callbacks?.onAddToBasket?.(resultImage || '', productId);
@@ -2094,7 +2094,7 @@ export function RoomVisualizationFlow({
     const newFavoritedState = !isFavorited;
     setIsFavorited(newFavoritedState);
 
-    trackWidgetEvent(config?.apiKey, 'favorite_clicked', sessionId, productId);
+    trackWidgetEvent(config?.apiKey, 'favorite_clicked', sessionId, productId, category);
     config?.callbacks?.onFavorite?.(resultImage || '', productId);
 
     window.dispatchEvent(
@@ -2227,7 +2227,7 @@ export function RoomVisualizationFlow({
   };
 
   const handleDownloadToDevice = () => {
-    trackWidgetEvent(config?.apiKey, 'download_clicked', sessionId, productId);
+    trackWidgetEvent(config?.apiKey, 'download_clicked', sessionId, productId, category);
     triggerDownload(currentResultImage);
 
     setDownloadButtonConfirmed(true);
@@ -2268,7 +2268,7 @@ export function RoomVisualizationFlow({
       return;
     }
     isSharingRef.current = true;
-    trackWidgetEvent(config?.apiKey, 'share_clicked', sessionId, productId);
+    trackWidgetEvent(config?.apiKey, 'share_clicked', sessionId, productId, category);
 
     const showShareConfirmation = (status: 'copied' | 'downloaded') => {
       setShareButtonStatus(status);
